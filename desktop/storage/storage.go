@@ -22,7 +22,7 @@ func AppDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	dbDir := filepath.Join(upath, "prism")
+	dbDir := filepath.Join(upath, appDirName)
 	if err := os.MkdirAll(dbDir, 0700); err != nil {
 		return "", err
 	}

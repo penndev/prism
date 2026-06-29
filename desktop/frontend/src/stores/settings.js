@@ -59,10 +59,18 @@ export const useSettingsStore = defineStore("settings", {
             ...this.system,
             ...(storedSettings.system ?? {}),
           };
+        }else{
+          // 强制设置默认语言环境
+          if(navigator.language.startsWith("zh")){
+            this.system.language = "zh-CN";
+          }else{
+            this.system.language = "en";
+          }
         }
         const save = debounce(this.save, 800)
         this.$subscribe(save);
         // 设置初始语言
+        console.log("初始语言", this.system.language);
         await subscribeLocaleEvents(this.system.language);
       } catch (error) {
         notification.error({

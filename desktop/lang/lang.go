@@ -5,6 +5,7 @@ import (
 	"desktop/internal"
 	"embed"
 	"encoding/json"
+	"errors"
 	"path"
 	"sort"
 	"sync"
@@ -48,7 +49,7 @@ func New() (*Lang, error) {
 		bundles[id] = m
 	}
 	l := &Lang{
-		locale:  "",
+		locale:  "en",
 		bundles: bundles,
 	}
 	if _, ok := bundles[l.locale]; !ok {
@@ -87,7 +88,7 @@ func (l *Lang) SetLocale(locale string) error {
 	l.mu.Lock()
 	if _, ok := l.bundles[locale]; !ok {
 		l.mu.Unlock()
-		return errUnknownLocale(locale)
+		return errors.New("locale not found: " + locale)
 	}
 	l.locale = locale
 	l.mu.Unlock()
@@ -124,14 +125,4 @@ func (l *Lang) Bundle(locale string) map[string]string {
 		out[k] = v
 	}
 	return out
-}
-
-type unknownLocaleError string
-
-func errUnknownLocale(locale string) error {
-	return unknownLocaleError(locale)
-}
-
-func (e unknownLocaleError) Error() string {
-	return "unknown locale: " + string(e)
 }
