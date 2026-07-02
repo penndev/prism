@@ -13,7 +13,17 @@
             <ThunderboltOutlined />
           </a-button>
         </a-tooltip>
-        <a-tooltip title="打开订阅节点批量编辑页面">
+        <a-tooltip :title="t('serverList.sortByLatency')">
+          <a-button
+            type="text"
+            size="small"
+            :disabled="servers.length === 0"
+            @click="sortByLatency"
+          >
+            <SortAscendingOutlined />
+          </a-button>
+        </a-tooltip>
+        <a-tooltip :title="t('serverList.openSubscribeEditor')">
           <a-button type="text" size="small" @click="openSubscribeEditor">
             <EditOutlined />
           </a-button>
@@ -161,6 +171,7 @@ import {
   DeleteOutlined,
   EditOutlined,
   PlusOutlined,
+  SortAscendingOutlined,
   ThunderboltOutlined,
 } from "@ant-design/icons-vue";
 import { theme, message } from "ant-design-vue";
@@ -172,6 +183,7 @@ import { useSettingsStore } from "@/stores/settings";
 import { t } from "@/locale";
 import { useServerPing } from "./servepanel/ServerPing";
 import { useServerEditor } from "./servepanel/ServerEditor";
+import { useServerSort } from "./servepanel/ServerSort";
 import { withRuntimeIds } from "@/utils";
 
 const { token } = theme.useToken();
@@ -226,19 +238,20 @@ async function openSubscribeEditor() {
   const host = rawHost === "0.0.0.0" || rawHost === "" ? "127.0.0.1" : rawHost;
   const port = Number(settingsStore.proxy.port);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    message.warning("请先配置正确的本地代理端口");
+    message.warning(t("settings.pacNeedPort"));
     return;
   }
   const url = `http://${host}:${port}/subscribe/`;
   try {
     await OpenExternalURL(url);
   } catch (e) {
-    message.error(e?.message || "打开浏览器失败");
+    message.error(e?.message || t("settings.pacOpenFailed"));
   }
 }
 
 const { latencyById, pingingAll, pingAllServers, getLatencyClass } =
   useServerPing(servers);
+const { sortByLatency } = useServerSort(servers, latencyById, persistServers);
 const { edit, editRef, deleteModal, proxySchemes } = useServerEditor(
   servers,
   latencyById,
