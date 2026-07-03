@@ -4,6 +4,7 @@ import { notification } from "ant-design-vue";
 import { debounce } from "@/utils";
 import { t, subscribeLocaleEvents, languageLocale } from "@/locale";
 import { Bundle } from "@bindings/desktop/lang/lang";
+import { Enable, Disable } from "@bindings/desktop/autostart/autostart";
 
 export const useSettingsStore = defineStore("settings", {
   state: () => ({
@@ -33,7 +34,12 @@ export const useSettingsStore = defineStore("settings", {
         // 设置切换语言环境
         languageLocale.value = await Bundle(
           this.system.language
-        ) 
+        );
+        if (this.system.startupOnBoot) {
+          await Enable();
+        } else {
+          await Disable();
+        }
         notification.success({
           message: t("settings.saveSuccess"),
           placement: "topRight",
@@ -69,9 +75,14 @@ export const useSettingsStore = defineStore("settings", {
         }
         const save = debounce(this.save, 800)
         this.$subscribe(save);
-        // 设置初始语言
+        // 设置初始语言与开机启动
         console.log("初始语言", this.system.language);
         await subscribeLocaleEvents(this.system.language);
+        if (this.system.startupOnBoot) {
+          await Enable();
+        } else {
+          await Disable();
+        }
       } catch (error) {
         notification.error({
           message: t("settings.loadError"),

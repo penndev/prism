@@ -1,6 +1,7 @@
 package main
 
 import (
+	"desktop/autostart"
 	"desktop/build"
 	"desktop/internal"
 	"desktop/lang"
@@ -29,6 +30,7 @@ func main() {
 		application.NewService(proxy.New()),
 		application.NewService(&internal.AppConst{}),
 		application.NewService(&proxy.ProxyPing{}),
+		application.NewService(&autostart.Autostart{}),
 	})
 	if err != nil {
 		panic(err)
