@@ -55,10 +55,12 @@
 import { ref, watch, computed } from "vue";
 import { useServerStore } from "../stores/server";
 import { useSettingsStore } from "@/stores/settings";
+import { Storage } from "@bindings/desktop/storage";
 import { SetStart, SetStop, SetRemote, SetMode } from "@bindings/desktop/proxy/proxy";
 import { t } from "@/locale";
 import { theme, message } from "ant-design-vue";
 import { OpenExternalURL } from "@bindings/desktop/internal/appconst";
+import { stripForStorage } from "@/utils";
 
 const { token } = theme.useToken();
 
@@ -130,22 +132,21 @@ watch(
 watch(
   () => serverStore.selectedServer,
   async (server) => {
-    if (server?.host && server?.protocol) {
-      try {
+    try {
+      if (server?.host && server?.protocol) {
+        await Storage.SetSelectedServer(stripForStorage(server));
         const user = server.username || "";
         const pass = server.password || "";
         await SetRemote(`${server.protocol}://${user}:${pass}@${server.host}`);
-      } catch (e) {
-        message.error(e?.message || t("serverList.operationFailed"));
-      }
-    } else {
-      try {
+      } else {
+        await Storage.ClearSelectedServer();
         await SetStop();
-      } catch (e) {
-        message.error(e?.message || t("serverList.operationFailed"));
       }
+    } catch (e) {
+      message.error(e?.message || t("serverList.operationFailed"));
     }
   },
+  { immediate: true },
 );
 // 切换代理服务器代理端口IP地址
 watch(

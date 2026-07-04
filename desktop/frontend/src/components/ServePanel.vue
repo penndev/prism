@@ -184,30 +184,18 @@ import { t } from "@/locale";
 import { useServerPing } from "./servepanel/ServerPing";
 import { useServerEditor } from "./servepanel/ServerEditor";
 import { useServerSort } from "./servepanel/ServerSort";
-import { withRuntimeIds } from "@/utils";
+import { withRuntimeIds, stripForStorage, stripServerListForStorage } from "@/utils";
 
 const { token } = theme.useToken();
 
 const servers = ref([]);
-
-/** 从存储原始数据去掉运行时字段 */
-function normalizeRawServers(raw) {
-  return (Array.isArray(raw) ? raw : []).map((row) => {
-    const { id: _i, __id: _x, ...rest } = /** @type {any} */ (row);
-    return rest;
-  });
-}
-
-/** 写入 storage 前去掉 __id 等 */
-function stripForStorage(row) {
-  const { id: _i, __id: _x, ...rest } = /** @type {any} */ (row);
-  return rest;
-}
+const serverStore = useServerStore();
+const { selectedServer } = storeToRefs(serverStore);
 
 async function loadServers() {
   try {
     const raw = await Storage.GetServers();
-    servers.value = withRuntimeIds(normalizeRawServers(raw));
+    servers.value = withRuntimeIds(stripServerListForStorage(raw));
   } catch {
     message.error(t("serverList.loadFailed"));
   }
@@ -216,15 +204,6 @@ async function loadServers() {
 async function persistServers() {
   await Storage.SetServers(servers.value.map(stripForStorage));
 }
-
-onMounted(async () => {
-  await loadServers();
-  const appConfig = await AppConfig();
-  Events.On(appConfig.EventNameServersChanged, loadServers);
-});
-
-const serverStore = useServerStore();
-const { selectedServer } = storeToRefs(serverStore);
 
 function isServerSelected(server) {
   if (!selectedServer.value) return false;
@@ -258,6 +237,19 @@ const { edit, editRef, deleteModal, proxySchemes } = useServerEditor(
   persistServers,
   selectedServer,
 );
+
+onMounted(async () => {
+  await loadServers();
+  Object.assign(latencyById.value, serverStore.restoredLatencies);
+  if (serverStore.selectedServer) {
+    const match = servers.value.find(
+      (s) => s.__id === serverStore.selectedServer.__id,
+    );
+    if (match) serverStore.selectedServer = match;
+  }
+  const appConfig = await AppConfig();
+  Events.On(appConfig.EventNameServersChanged, loadServers);
+});
 </script>
 
 <style scoped lang="scss">

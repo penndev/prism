@@ -49,3 +49,15 @@ export function withRuntimeIds(serverList) {
     return { ...server, __id };
   });
 }
+
+/** 写入 storage 前去掉 __id 等运行时字段 */
+export function stripForStorage(row) {
+  if (!row) return row;
+  const { id: _i, __id: _x, ...rest } = /** @type {any} */ (row);
+  return rest;
+}
+
+/** 从 storage 读出的列表去掉运行时字段 */
+export function stripServerListForStorage(raw) {
+  return (Array.isArray(raw) ? raw : []).map(stripForStorage);
+}

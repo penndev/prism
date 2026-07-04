@@ -39,7 +39,8 @@ type PACConfig struct {
 }
 
 const (
-	KeySettings = "settings"
-	KeyServers  = "servers"
-	KeyPAC      = "pac"
+	KeySettings       = "settings"
+	KeyServers        = "servers"
+	KeyPAC            = "pac"
+	KeySelectedServer = "selectedServer"
 )

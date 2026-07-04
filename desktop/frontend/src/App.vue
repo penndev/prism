@@ -1,6 +1,6 @@
 <template>
   <a-config-provider :theme="antdThemeConfig">
-    <div class="layout">
+    <div v-if="appReady" class="layout">
       <div class="main">
         <div class="app" :style="mainStyle">
           <header class="app-hd">
@@ -27,12 +27,14 @@ import {
   ref,
   computed,
   watch,
+  onBeforeMount,
   onMounted,
   onBeforeUnmount,
 } from "vue";
 import { theme } from "ant-design-vue";
 import { Window } from "@wailsio/runtime";
 import { useSettingsStore } from "@/stores/settings";
+import { useServerStore } from "@/stores/server";
 import { t } from "@/locale";
 import ActionPanel from "./components/ActionPanel.vue";
 import ServePanel from "./components/ServePanel.vue";
@@ -41,6 +43,7 @@ import BottomBar from "./components/BottomBar.vue";
 import { startAxisResize } from "@/utils";
 
 const settingsStore = useSettingsStore();
+const serverStore = useServerStore();
 const { token } = theme.useToken();
 const colorScheme = window.matchMedia("(prefers-color-scheme: dark)");
 const prefersColor = ref(colorScheme.matches);
@@ -63,6 +66,7 @@ const SPLIT_WINDOW_OUTER_WIDTH = SPLIT_MIN_INNER + 40;
 
 const extensionVisible = ref(true);
 const mainWidth = ref(MAIN_MIN);
+const appReady = ref(false);
 
 const mainStyle = computed(() =>
   extensionVisible.value
@@ -113,9 +117,14 @@ function onSystemColorChange(e) {
   prefersColor.value = e.matches;
 }
 
+onBeforeMount(async () => {
+  await settingsStore.init();
+  await serverStore.init();
+  appReady.value = true;
+});
+
 onMounted(async () => {
   colorScheme.addEventListener("change", onSystemColorChange);
-  await settingsStore.init();
   applyLayoutToWindow();
   window.addEventListener("resize", applyLayoutToWindow);
 });

@@ -80,6 +80,28 @@ func (s *Storage) GetPACConfig() (*PACConfig, error) {
 	return &out, nil
 }
 
+func (s *Storage) SetSelectedServer(v ServerEntry) error {
+	return s.putJSON(KeySelectedServer, v)
+}
+
+// ClearSelectedServer 清除已保存的当前连接节点。
+func (s *Storage) ClearSelectedServer() error {
+	return s.db.Update(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte(bucketName))
+		return b.Delete([]byte(KeySelectedServer))
+	})
+}
+
+// GetSelectedServer 无记录时返回 nil, nil。
+func (s *Storage) GetSelectedServer() (*ServerEntry, error) {
+	var out ServerEntry
+	ok, err := s.getJSON(KeySelectedServer, &out)
+	if err != nil || !ok {
+		return nil, err
+	}
+	return &out, nil
+}
+
 func (s *Storage) putJSON(key string, v any) error {
 	if key == "" {
 		return errors.New("key不能为空")
