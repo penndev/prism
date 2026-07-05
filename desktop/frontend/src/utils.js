@@ -41,23 +41,23 @@ export function startAxisResize(e, opts) {
   document.addEventListener("mouseup", onUp);
 }
 
-/** 为列表项生成稳定 __id，用于选择与延迟映射 */
-export function withRuntimeIds(serverList) {
-  const list = Array.isArray(serverList) ? serverList : [];
-  return list.map((server) => {
-    const __id = `${server.host}|${server.protocol}|${server.username}|${server.password}`;
-    return { ...server, __id };
-  });
-}
-
-/** 写入 storage 前去掉 __id 等运行时字段 */
+/** 写入 storage 前剥离所有 _ 开头的运行时字段（如 _id、_latency） */
 export function stripForStorage(row) {
-  if (!row) return row;
-  const { id: _i, __id: _x, ...rest } = /** @type {any} */ (row);
-  return rest;
+  if (!row || typeof row !== "object") return row;
+  return Object.fromEntries(
+    Object.entries(row).filter(([key]) => !key.startsWith("_")),
+  );
 }
 
-/** 从 storage 读出的列表去掉运行时字段 */
-export function stripServerListForStorage(raw) {
-  return (Array.isArray(raw) ? raw : []).map(stripForStorage);
+/** 拓展服务器 item：补全 _id（代理 URL）并保留 _latency 等运行时字段 */
+export function extendServerItem(row) {
+  const persisted = stripForStorage(row);
+  const protocol = persisted.protocol.toLowerCase();
+  const username = persisted.username || "";
+  const password = persisted.password || "";
+  return {
+    ...persisted,
+    _id: `${protocol}://${username}:${password}@${persisted.host}`,
+    ...(row._latency !== undefined ? { _latency: row._latency } : {}),
+  };
 }
