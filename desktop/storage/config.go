@@ -3,8 +3,9 @@ package storage
 
 // Settings 与前端 settings store 持久化 JSON 一致。
 type Settings struct {
-	Proxy  ProxySettings  `json:"proxy"`
-	System SystemSettings `json:"system"`
+	Proxy       ProxySettings       `json:"proxy"`
+	LatencyTest LatencyTestSettings `json:"latencyTest"`
+	System      SystemSettings      `json:"system"`
 }
 
 type ProxySettings struct {
@@ -12,8 +13,13 @@ type ProxySettings struct {
 	Port     int    `json:"port"`
 	Username string `json:"username"`
 	Password string `json:"password"`
-	// LatencyTestHost 延迟探测用的 HTTP 目标，形如 host、host:port（默认 80）。
-	LatencyTestHost string `json:"latencyTestHost"`
+}
+
+type LatencyTestSettings struct {
+	// Host 延迟探测用的 HTTP 目标，形如 host、host:port（默认 80）。
+	Host string `json:"host"`
+	// SortAfterPing 测速完成后按延迟从低到高排序。
+	SortAfterPing bool `json:"sortAfterPing"`
 }
 
 type SystemSettings struct {

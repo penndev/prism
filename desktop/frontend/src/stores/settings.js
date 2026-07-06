@@ -11,9 +11,12 @@ export const useSettingsStore = defineStore("settings", {
     proxy: {
       host: "127.0.0.1",
       port: 1080,
-      latencyTestHost: "google.com",
       username: "",
       password: "",
+    },
+    latencyTest: {
+      host: "google.com",
+      sortAfterPing: true,
     },
     system: {
       language: '',
@@ -29,6 +32,7 @@ export const useSettingsStore = defineStore("settings", {
       try {
         await Storage.SetSettings({
           proxy: this.proxy,
+          latencyTest: this.latencyTest,
           system: this.system,
         });
         // 设置切换语言环境
@@ -57,10 +61,28 @@ export const useSettingsStore = defineStore("settings", {
       try {
         const storedSettings = await Storage.GetSettings();
         if (storedSettings) {
+          const storedProxy = storedSettings.proxy ?? {};
           this.proxy = {
             ...this.proxy,
-            ...(storedSettings.proxy ?? {}),
-          }; 
+            host: storedProxy.host ?? this.proxy.host,
+            port: storedProxy.port ?? this.proxy.port,
+            username: storedProxy.username ?? this.proxy.username,
+            password: storedProxy.password ?? this.proxy.password,
+          };
+
+          const storedLatencyTest = storedSettings.latencyTest ?? {};
+          this.latencyTest = {
+            ...this.latencyTest,
+            host:
+              storedLatencyTest.host ??
+              storedProxy.latencyTestHost ??
+              this.latencyTest.host,
+            sortAfterPing:
+              storedLatencyTest.sortAfterPing ??
+              storedProxy.sortByLatencyAfterPing ??
+              this.latencyTest.sortAfterPing,
+          };
+
           this.system = {
             ...this.system,
             ...(storedSettings.system ?? {}),

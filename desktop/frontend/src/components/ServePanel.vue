@@ -6,26 +6,22 @@
           <a-button
             type="text"
             size="small"
+            class="card-extra-btn"
             :loading="pingingAll"
             :disabled="servers.length === 0"
             @click="pingAllServers"
           >
-            <ThunderboltOutlined />
-          </a-button>
-        </a-tooltip>
-        <a-tooltip :title="t('serverList.sortByLatency')">
-          <a-button
-            type="text"
-            size="small"
-            :disabled="servers.length === 0"
-            @click="sortByLatency"
-          >
-            <SortAscendingOutlined />
+            <SignalFilled />
           </a-button>
         </a-tooltip>
         <a-tooltip :title="t('serverList.openSubscribeEditor')">
-          <a-button type="text" size="small" @click="openSubscribeEditor">
-            <EditOutlined />
+          <a-button
+            type="text"
+            size="small"
+            class="card-extra-btn"
+            @click="openSubscribeEditor"
+          >
+            <EditFilled />
           </a-button>
         </a-tooltip>
       </div>
@@ -172,10 +168,10 @@ import { ref, reactive, onMounted } from "vue";
 import {
   CheckCircleFilled,
   DeleteOutlined,
+  EditFilled,
   EditOutlined,
   PlusOutlined,
-  SortAscendingOutlined,
-  ThunderboltOutlined,
+  SignalFilled,
 } from "@ant-design/icons-vue";
 import { theme, Modal, message } from "ant-design-vue";
 import { Storage } from "@bindings/desktop/storage";
@@ -189,7 +185,7 @@ import { Events } from "@wailsio/runtime";
 import { useServerStore } from "@/stores/server";
 import { useSettingsStore } from "@/stores/settings";
 import { t } from "@/locale";
-import { stripForStorage, extendServerItem } from "@/utils";
+import { extendServerItem, stripForStorage } from "@/utils";
 
 const { token } = theme.useToken();
 
@@ -222,7 +218,7 @@ function isServerSelected(server) {
 async function pingAllServers() {
   if (servers.value.length === 0) return;
 
-  const latencyHost = (settingsStore.proxy.latencyTestHost || "").trim();
+  const latencyHost = (settingsStore.latencyTest.host || "").trim();
   if (!latencyHost) {
     message.warning(t("settings.latencyTestHostRequired"));
     return;
@@ -243,6 +239,13 @@ async function pingAllServers() {
         }
       }),
     );
+    if (settingsStore.latencyTest.sortAfterPing) {
+      try {
+        await applyLatencySort();
+      } catch {
+        message.error(t("serverList.operationFailed"));
+      }
+    }
     message.success(t("serverList.pingAllDone"));
   } finally {
     pingingAll.value = false;
@@ -264,26 +267,14 @@ function latencySortKey(server) {
   return [0, latency];
 }
 
-async function sortByLatency() {
-  const hasData = servers.value.some((s) => s._latency !== undefined);
-  if (!hasData) {
-    message.warning(t("serverList.sortByLatencyNoData"));
-    return;
-  }
-
+async function applyLatencySort() {
   servers.value = [...servers.value].sort((a, b) => {
     const [rankA, valueA] = latencySortKey(a);
     const [rankB, valueB] = latencySortKey(b);
     if (rankA !== rankB) return rankA - rankB;
     return valueA - valueB;
   });
-
-  try {
-    await persistServers();
-    message.success(t("serverList.sortByLatencyDone"));
-  } catch {
-    message.error(t("serverList.operationFailed"));
-  }
+  await persistServers();
 }
 
 // --- 新增 / 编辑 / 删除 ---
@@ -462,6 +453,19 @@ onMounted(async () => {
     display: inline-flex;
     align-items: center;
     gap: 4px;
+
+    .card-extra-btn {
+      width: 24px;
+      height: 24px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+
+      .anticon {
+        font-size: 14px;
+      }
+    }
   }
 
   .list {

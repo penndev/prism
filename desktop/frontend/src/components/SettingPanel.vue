@@ -38,12 +38,22 @@
               allow-clear
             />
           </a-form-item>
+
+          <div class="section-title">{{ t("settings.latencyTest") }}</div>
           <a-form-item :label="t('settings.latencyTestHost')">
             <a-input
-              v-model:value="settingsStore.proxy.latencyTestHost"
+              v-model:value="settingsStore.latencyTest.host"
               :placeholder="t('settings.latencyTestHostPlaceholder')"
               allow-clear
             />
+          </a-form-item>
+          <a-form-item :label="t('settings.sortByLatencyAfterPing')">
+            <a-switch
+              v-model:checked="settingsStore.latencyTest.sortAfterPing"
+            />
+            <span class="setting-desc">
+              {{ t("settings.sortByLatencyAfterPingDesc") }}
+            </span>
           </a-form-item>
 
           <div class="section-title">{{ t("settings.system") }}</div>

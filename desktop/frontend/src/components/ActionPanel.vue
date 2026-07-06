@@ -71,7 +71,7 @@ import { theme, message } from "ant-design-vue";
 import { useServerStore } from "../stores/server";
 import { useSettingsStore } from "@/stores/settings";
 import { t } from "@/locale";
-import { extendServerItem } from "@/utils";
+import { extendServerItem, debounce } from "@/utils";
 
 import { Storage } from "@bindings/desktop/storage";
 import {
@@ -164,7 +164,7 @@ watch(
       } else {
         // 清理选中服务器，下次启动不自动登录了。
         await Storage.ClearSelectedServer();
-        await SetStop();
+        // await SetStop(); web服务需要一直驻留。
       }
     } catch (e) {
       message.error(e?.message || t("serverList.operationFailed"));
@@ -176,14 +176,14 @@ watch(
 /** 本地代理监听地址变更时重启 SetStart */
 watch(
   () => settingsStore.proxy,
-  async () => {
+  debounce(async () => {
     const { host, port, username, password } = settingsStore.proxy;
     try {
       await SetStart(`${host}:${port}`, username, password);
     } catch (e) {
       message.error(e?.message || t("serverList.operationFailed"));
     }
-  },
+  }, 1000),
   { deep: true, immediate: true },
 );
 </script>
