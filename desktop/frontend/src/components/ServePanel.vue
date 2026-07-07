@@ -7,11 +7,11 @@
             type="text"
             size="small"
             class="card-extra-btn"
-            :loading="pingingAll"
-            :disabled="servers.length === 0"
+            :disabled="pingingAll || servers.length === 0"
             @click="pingAllServers"
           >
-            <SignalFilled />
+            <LoadingOutlined v-if="pingingAll" spin />
+            <SignalFilled v-else />
           </a-button>
         </a-tooltip>
         <a-tooltip :title="t('serverList.openSubscribeEditor')">
@@ -170,6 +170,7 @@ import {
   DeleteOutlined,
   EditFilled,
   EditOutlined,
+  LoadingOutlined,
   PlusOutlined,
   SignalFilled,
 } from "@ant-design/icons-vue";
