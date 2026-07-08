@@ -5,8 +5,8 @@ import (
 	"desktop/lang"
 	"desktop/web"
 	"errors"
-	"net"
 	"net/url"
+	"sync/atomic"
 	"time"
 
 	"github.com/penndev/prism/proxy"
@@ -22,16 +22,17 @@ type Proxy struct {
 	// 远程代理信息，用于检查心跳。
 	remoteURL *url.URL
 	// tun用
-	dev *tun.Tun
+	dev        *tun.Tun
+	readBytes  uint64
+	writeBytes uint64
 }
 
 func (p *Proxy) SetStart(host, user, pass string) error {
 	if p.HandleConnect == nil {
 		handle := transport.Local()
-		p.HandleConnect = func(conn net.Conn, network, address string) error {
+		p.HandleConnect = p.bindHandleConnect(handle, func(network, address string) {
 			internal.App.Event.Emit(internal.AppConfig.LogTypeName_LOG, "local -> "+network+" "+address)
-			return handle(conn, network, address)
-		}
+		})
 	}
 	dialerOnce.Do(func() {
 		go func() {
@@ -86,10 +87,9 @@ func (p *Proxy) SetRemote(remote string) error {
 		"SetRemote-> "+p.remoteURL.Scheme+"://"+p.remoteURL.User.String()+"@"+p.remoteURL.Host,
 	)
 	handle, err := HandleConnect(p.remoteURL)
-	p.HandleConnect = func(conn net.Conn, network, address string) error {
+	p.HandleConnect = p.bindHandleConnect(handle, func(network, address string) {
 		internal.App.Event.Emit(internal.AppConfig.LogTypeName_LOG, p.remoteURL.Scheme+" -> "+network+" "+address)
-		return handle(conn, network, address)
-	}
+	})
 	if err != nil {
 		internal.App.Event.Emit(internal.AppConfig.LogTypeName_LOG, "SetRemote error: "+err.Error())
 		return err
@@ -175,7 +175,9 @@ func (p *Proxy) SetStop() {
 }
 
 func (p *Proxy) TrafficBytes() (read uint64, write uint64) {
-	return p.Server.TrafficBytes()
+	read = atomic.LoadUint64(&p.readBytes)
+	write = atomic.LoadUint64(&p.writeBytes)
+	return
 }
 
 func New() *Proxy {
