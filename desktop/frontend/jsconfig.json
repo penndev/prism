@@ -1,14 +1,13 @@
 {
   "compilerOptions": {
-    "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"],
-      "@bindings/*": ["bindings/*"]
+      "@/*": ["./src/*"],
+      "@bindings/*": ["./bindings/*"]
     },
     "target": "ESNext",
     "module": "ESNext",
     "checkJs": true,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "lib": ["DOM", "DOM.Iterable", "ESNext"]
   },
   "include": ["src", "bindings"],
