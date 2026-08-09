@@ -3,45 +3,42 @@
 #
 # The lines below are called `modelines`. See `:help modeline`
 
-name: "prism-desktop"
+name: "prism"
 arch: ${GOARCH}
 platform: "linux"
 version: "0.0.1"
 section: "default"
 priority: "extra"
 maintainer: ${GIT_COMMITTER_NAME} <${GIT_COMMITTER_EMAIL}>
-description: "Socks5 代理桌面应用"
-vendor: "Socks5"
-homepage: "https://wails.io"
+description: "Prism 代理桌面应用"
+vendor: "Prism"
+homepage: "https://github.com/penndev/prism"
 license: "MIT"
 release: "1"
 
 contents:
-  - src: "./bin/prism-desktop"
-    dst: "/usr/local/bin/prism-desktop"
+  - src: "./bin/Prism"
+    dst: "/usr/local/bin/Prism"
   - src: "./build/appicon.png"
-    dst: "/usr/share/icons/hicolor/128x128/apps/prism-desktop.png"
-  - src: "./build/linux/prism-desktop.desktop"
-    dst: "/usr/share/applications/prism-desktop.desktop"
+    dst: "/usr/share/icons/hicolor/128x128/apps/Prism.png"
+  - src: "./build/linux/Prism.desktop"
+    dst: "/usr/share/applications/Prism.desktop"
 
-# Default dependencies for Debian 12/Ubuntu 22.04+ with WebKit 4.1
+# Wails v3 default: GTK4 + WebKitGTK 6.0
 depends:
-  - libgtk-3-0
-  - libwebkit2gtk-4.1-0
+  - libgtk-4-1
+  - libwebkitgtk-6.0-4
 
-# Distribution-specific overrides for different package formats and WebKit versions
 overrides:
-  # RPM packages for RHEL/CentOS/AlmaLinux/Rocky Linux (WebKit 4.0)
   rpm:
     depends:
-      - gtk3
-      - webkit2gtk4.1
-  
-  # Arch Linux packages (WebKit 4.1)  
+      - gtk4
+      - webkitgtk6.0
+
   archlinux:
     depends:
-      - gtk3
-      - webkit2gtk-4.1
+      - gtk4
+      - webkitgtk-6.0
 
 # scripts section to ensure desktop database is updated after install
 scripts:

@@ -1,0 +1,149 @@
+name: Desktop
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  WAILS3_VERSION: v3.0.0-alpha.82
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: desktop
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows amd64
+            os: windows-latest
+            goos: windows
+            artifact: Prism-windows-amd64
+          - name: macOS arm64
+            os: macos-latest
+            goos: darwin
+            artifact: Prism-darwin-arm64
+          - name: Linux amd64
+            os: ubuntu-24.04
+            goos: linux
+            artifact: Prism-linux-amd64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: desktop/go.mod
+          cache-dependency-path: |
+            go.sum
+            desktop/go.sum
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: desktop/frontend/package-lock.json
+
+      - name: Install Linux dependencies
+        if: matrix.goos == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            pkg-config \
+            libgtk-4-dev \
+            libwebkitgtk-6.0-dev \
+            libwayland-dev
+
+      - name: Install NSIS
+        if: matrix.goos == 'windows'
+        shell: pwsh
+        run: |
+          choco install nsis -y --no-progress
+          echo "C:\Program Files (x86)\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Install Task
+        uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Wails3 CLI
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@${{ env.WAILS3_VERSION }}
+
+      - name: Package (Windows)
+        if: matrix.goos == 'windows'
+        run: wails3 package
+
+      - name: Package (macOS)
+        if: matrix.goos == 'darwin'
+        run: wails3 package
+
+      - name: Package (Linux)
+        if: matrix.goos == 'linux'
+        # AppImage/AUR 在 CI 里依赖较多且易失败；发布 deb/rpm + 二进制
+        run: |
+          wails3 task linux:create:deb
+          wails3 task linux:create:rpm
+
+      - name: Collect artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          case "${{ matrix.goos }}" in
+            windows)
+              cp bin/*-installer.exe dist/ 2>/dev/null || true
+              cp bin/Prism.exe "dist/${{ matrix.artifact }}.exe"
+              ;;
+            darwin)
+              ditto -c -k --sequesterRsrc --keepParent "bin/Prism.app" "dist/${{ matrix.artifact }}.app.zip"
+              ;;
+            linux)
+              cp bin/*.deb dist/ 2>/dev/null || true
+              cp bin/*.rpm dist/ 2>/dev/null || true
+              cp bin/Prism "dist/${{ matrix.artifact }}"
+              ;;
+          esac
+          ls -la dist
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: desktop/dist/*
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
