@@ -58,6 +58,7 @@ jobs:
           cache: npm
           cache-dependency-path: desktop/frontend/package-lock.json
 
+      # alpha.82 编译 wails3 CLI / Linux 应用需要 GTK3 + WebKit2GTK 4.1
       - name: Install Linux dependencies
         if: matrix.goos == 'linux'
         run: |
@@ -65,9 +66,8 @@ jobs:
           sudo apt-get install -y \
             build-essential \
             pkg-config \
-            libgtk-4-dev \
-            libwebkitgtk-6.0-dev \
-            libwayland-dev
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev
 
       - name: Install NSIS
         if: matrix.goos == 'windows'
@@ -85,17 +85,12 @@ jobs:
       - name: Install Wails3 CLI
         run: go install github.com/wailsapp/wails/v3/cmd/wails3@${{ env.WAILS3_VERSION }}
 
-      - name: Package (Windows)
-        if: matrix.goos == 'windows'
-        run: wails3 package
-
-      - name: Package (macOS)
-        if: matrix.goos == 'darwin'
+      - name: Package (Windows / macOS)
+        if: matrix.goos != 'linux'
         run: wails3 package
 
       - name: Package (Linux)
         if: matrix.goos == 'linux'
-        # AppImage/AUR 在 CI 里依赖较多且易失败；发布 deb/rpm + 二进制
         run: |
           wails3 task linux:create:deb
           wails3 task linux:create:rpm
