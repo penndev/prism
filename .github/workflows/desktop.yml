@@ -34,10 +34,6 @@ jobs:
             os: macos-latest
             goos: darwin
             artifact: Prism-darwin-arm64
-          - name: Linux amd64
-            os: ubuntu-24.04
-            goos: linux
-            artifact: Prism-linux-amd64
 
     steps:
       - name: Checkout
@@ -58,17 +54,6 @@ jobs:
           cache: npm
           cache-dependency-path: desktop/frontend/package-lock.json
 
-      # alpha.82 编译 wails3 CLI / Linux 应用需要 GTK3 + WebKit2GTK 4.1
-      - name: Install Linux dependencies
-        if: matrix.goos == 'linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            pkg-config \
-            libgtk-3-dev \
-            libwebkit2gtk-4.1-dev
-
       - name: Install NSIS
         if: matrix.goos == 'windows'
         shell: pwsh
@@ -85,15 +70,8 @@ jobs:
       - name: Install Wails3 CLI
         run: go install github.com/wailsapp/wails/v3/cmd/wails3@${{ env.WAILS3_VERSION }}
 
-      - name: Package (Windows / macOS)
-        if: matrix.goos != 'linux'
+      - name: Package
         run: wails3 package
-
-      - name: Package (Linux)
-        if: matrix.goos == 'linux'
-        run: |
-          wails3 task linux:create:deb
-          wails3 task linux:create:rpm
 
       - name: Collect artifacts
         shell: bash
@@ -107,11 +85,6 @@ jobs:
               ;;
             darwin)
               ditto -c -k --sequesterRsrc --keepParent "bin/Prism.app" "dist/${{ matrix.artifact }}.app.zip"
-              ;;
-            linux)
-              cp bin/*.deb dist/ 2>/dev/null || true
-              cp bin/*.rpm dist/ 2>/dev/null || true
-              cp bin/Prism "dist/${{ matrix.artifact }}"
               ;;
           esac
           ls -la dist
