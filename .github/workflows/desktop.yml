@@ -80,11 +80,20 @@ jobs:
           mkdir -p dist
           case "${{ matrix.goos }}" in
             windows)
-              cp bin/*-installer.exe dist/ 2>/dev/null || true
-              cp bin/Prism.exe "dist/${{ matrix.artifact }}.exe"
+              installer="$(ls bin/*-installer.exe | head -n 1)"
+              cp "$installer" "dist/${{ matrix.artifact }}-installer.exe"
               ;;
             darwin)
-              ditto -c -k --sequesterRsrc --keepParent "bin/Prism.app" "dist/${{ matrix.artifact }}.app.zip"
+              STAGE="$(mktemp -d)"
+              cp -R "bin/Prism.app" "$STAGE/"
+              ln -s /Applications "$STAGE/Applications"
+              hdiutil create \
+                -volname "Prism" \
+                -srcfolder "$STAGE" \
+                -ov \
+                -format UDZO \
+                "dist/${{ matrix.artifact }}.dmg"
+              rm -rf "$STAGE"
               ;;
           esac
           ls -la dist

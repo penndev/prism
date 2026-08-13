@@ -3,8 +3,6 @@ package proxy
 import (
 	"net"
 	"sync/atomic"
-
-	"github.com/penndev/prism/transport"
 )
 
 type countConn struct {
@@ -34,14 +32,5 @@ func (p *Proxy) wrapConn(conn net.Conn) net.Conn {
 		Conn:       conn,
 		readBytes:  &p.readBytes,
 		writeBytes: &p.writeBytes,
-	}
-}
-
-func (p *Proxy) bindHandleConnect(handle transport.HandleConnect, log func(network, address string)) transport.HandleConnect {
-	return func(conn net.Conn, network, address string) error {
-		if log != nil {
-			log(network, address)
-		}
-		return handle(p.wrapConn(conn), network, address)
 	}
 }

@@ -44,9 +44,18 @@ type PACConfig struct {
 	PACTemplate string `json:"pacTemplate"`
 }
 
+// RuleConfig 规则配置（Web 页维护；桌面端展示状态提示）。
+type RuleConfig struct {
+	// Mode: global=全局代理，proxy=代理某些区域，bypass=绕过某些区域。
+	Mode string `json:"mode"`
+	// AreaIDs 选中的地域 ID 列表（global 时可为空）。
+	AreaIDs []uint32 `json:"areaIds"`
+}
+
 const (
 	KeySettings       = "settings"
 	KeyServers        = "servers"
 	KeyPAC            = "pac"
+	KeyRule           = "rule"
 	KeySelectedServer = "selectedServer"
 )

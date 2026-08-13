@@ -75,7 +75,6 @@ func pickLocalIPForTarget(targetHost string) (net.IP, error) {
 }
 
 func (p *Proxy) updateDialer() {
-
 	localIP, err := pickLocalIPForTarget(net.JoinHostPort(p.remoteURL.Hostname(), p.remoteURL.Port()))
 	if err != nil {
 		internal.App.Event.Emit(

@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title id="titleDocument">规则管理</title>
+  <link rel="icon" href="/subscribe/logo.png" type="image/png">
+  <link rel="stylesheet" href="rule.css">
+</head>
+<body>
+  <div class="page">
+    <header class="page-head">
+      <div class="brand">
+        <img class="brand-logo" src="/subscribe/logo.png" width="38" height="38" alt="Prism">
+        <div>
+          <h1 id="titleMain">Prism 规则管理</h1>
+          <p id="titleDesc">先准备 ipregion.db，再按类型维护规则。</p>
+        </div>
+      </div>
+    </header>
+
+    <section class="panel" id="panelDb">
+      <h2 id="sectionDbTitle">IP 地域库</h2>
+      <p id="sectionDbDesc" class="subline">页面优先展示库信息；若不存在，请下载或上传 <code>ipregion.db</code>。</p>
+      <div id="dbReady" class="db-block" hidden>
+        <div id="dbStatus" class="status-box ok has-path-tip" title="">-</div>
+      </div>
+      <div id="dbMissing" class="db-block" hidden>
+        <div id="dbMissingHint" class="status-box warn has-path-tip" title="">未找到 ipregion.db，请下载或上传。</div>
+        <div class="row">
+          <input id="dbUrl" type="url" placeholder="https://.../ipregion.db" spellcheck="false">
+          <button id="btnDownload" class="primary" type="button">下载</button>
+        </div>
+        <div class="row">
+          <input id="dbFile" type="file" accept=".db,application/octet-stream">
+          <button id="btnUpload" type="button">上传文件</button>
+        </div>
+      </div>
+      <div class="row">
+        <span id="dbMsg" class="muted"></span>
+      </div>
+    </section>
+
+    <section class="panel" id="panelRules">
+      <h2 id="sectionRulesTitle">规则</h2>
+      <p id="sectionRulesDesc" class="subline">按类型分区管理；当前仅支持地域规则。</p>
+
+      <div class="rule-section" id="geoSection">
+        <div class="rule-section-head">
+          <h3 id="geoTitle">地域规则</h3>
+          <p id="geoDesc" class="subline">三种模式互斥：全局代理，或代理某些区域，或绕过某些区域。</p>
+        </div>
+
+        <div id="geoDisabled" class="status-box warn" hidden>请先准备 ipregion.db，再设置地域规则。</div>
+
+        <div id="geoEnabled" hidden>
+          <div class="mode-row">
+            <label class="mode-option">
+              <input type="radio" name="geoMode" value="global" checked>
+              <span id="labelModeGlobal">全局代理</span>
+            </label>
+            <label class="mode-option">
+              <input type="radio" name="geoMode" value="proxy">
+              <span id="labelModeProxy">代理某些区域</span>
+            </label>
+            <label class="mode-option">
+              <input type="radio" name="geoMode" value="bypass">
+              <span id="labelModeBypass">绕过某些区域</span>
+            </label>
+          </div>
+
+          <div id="areaPicker" class="area-picker" hidden>
+            <div class="row">
+              <input id="areaFilter" type="text" placeholder="搜索国家/地区">
+              <span id="selectedCount" class="muted"></span>
+            </div>
+            <div id="areaChecks" class="area-checks"></div>
+          </div>
+
+          <div class="row">
+            <span id="geoMsg" class="muted"></span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script src="/common/app-ui.js"></script>
+  <script src="/common/i18n.js"></script>
+  <script>
+    const I18N = (window.WEB_I18N && window.WEB_I18N.rule) || {};
+    const APP_CONFIG_DEFAULT = window.WebAppUI.APP_CONFIG_DEFAULT;
+    const translate = window.WebAppUI.createTranslator(I18N, 'zh-CN');
+    let currentLang = APP_CONFIG_DEFAULT.language;
+
+    let areas = [];
+    let areaIds = [];
+    let saveTimer = null;
+    let saving = false;
+
+    const dbReady = document.getElementById('dbReady');
+    const dbMissing = document.getElementById('dbMissing');
+    const dbStatus = document.getElementById('dbStatus');
+    const dbMissingHint = document.getElementById('dbMissingHint');
+    const dbUrlEl = document.getElementById('dbUrl');
+    const dbFileEl = document.getElementById('dbFile');
+    const dbMsg = document.getElementById('dbMsg');
+    const btnDownload = document.getElementById('btnDownload');
+    const btnUpload = document.getElementById('btnUpload');
+    const geoDisabled = document.getElementById('geoDisabled');
+    const geoEnabled = document.getElementById('geoEnabled');
+    const areaPicker = document.getElementById('areaPicker');
+    const areaFilter = document.getElementById('areaFilter');
+    const areaChecks = document.getElementById('areaChecks');
+    const selectedCount = document.getElementById('selectedCount');
+    const geoMsg = document.getElementById('geoMsg');
+
+    function t(key, params) {
+      return translate(currentLang, key, params);
+    }
+
+    function formatSize(n) {
+      n = Number(n) || 0;
+      if (n < 1024) return n + ' B';
+      if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+      return (n / (1024 * 1024)).toFixed(2) + ' MB';
+    }
+
+    async function api(url, opt = {}) {
+      const resp = await fetch(url, opt);
+      if (!resp.ok) throw new Error(await resp.text());
+      const ct = resp.headers.get('content-type') || '';
+      if (ct.includes('application/json')) return await resp.json();
+      return await resp.text();
+    }
+
+    async function loadAppConfig() {
+      const cfg = await window.WebAppUI.fetchAppConfig(api);
+      currentLang = window.WebAppUI.normalizeLanguage(I18N, cfg.language, 'zh-CN');
+      window.WebAppUI.applyTheme(cfg.themeMode || APP_CONFIG_DEFAULT.themeMode);
+    }
+
+    function applyI18n() {
+      document.title = t('title.document');
+      document.getElementById('titleMain').textContent = t('title.main');
+      document.getElementById('titleDesc').textContent = t('title.desc');
+      document.getElementById('sectionDbTitle').textContent = t('section.db.title');
+      document.getElementById('sectionDbDesc').innerHTML = t('section.db.desc');
+      document.getElementById('sectionRulesTitle').textContent = t('section.rules.title');
+      document.getElementById('sectionRulesDesc').textContent = t('section.rules.desc');
+      document.getElementById('geoTitle').textContent = t('geo.title');
+      document.getElementById('geoDesc').textContent = t('geo.desc');
+      document.getElementById('labelModeGlobal').textContent = t('geo.mode.global');
+      document.getElementById('labelModeProxy').textContent = t('geo.mode.proxy');
+      document.getElementById('labelModeBypass').textContent = t('geo.mode.bypass');
+      areaFilter.placeholder = t('area.filter');
+      dbUrlEl.placeholder = t('db.url.placeholder');
+      btnDownload.textContent = t('button.download');
+      btnUpload.textContent = t('button.upload');
+      geoDisabled.textContent = t('geo.needDb');
+      dbMissingHint.textContent = t('db.status.missingHint');
+      updateSelectedCount();
+    }
+
+    function getMode() {
+      const node = document.querySelector('input[name="geoMode"]:checked');
+      return node ? node.value : 'global';
+    }
+
+    function setMode(mode) {
+      const value = mode === 'proxy' || mode === 'bypass' ? mode : 'global';
+      const node = document.querySelector('input[name="geoMode"][value="' + value + '"]');
+      if (node) node.checked = true;
+      syncModeUI();
+    }
+
+    function syncModeUI() {
+      const mode = getMode();
+      areaPicker.hidden = mode === 'global';
+      renderAreaChecks();
+      updateSelectedCount();
+    }
+
+    function selectedAreaIds() {
+      return Array.from(areaChecks.querySelectorAll('input[type="checkbox"]:checked'))
+        .map((el) => Number(el.value))
+        .filter((id) => id > 0);
+    }
+
+    function updateSelectedCount() {
+      const mode = getMode();
+      if (mode === 'global') {
+        selectedCount.textContent = '';
+        return;
+      }
+      const n = selectedAreaIds().length;
+      selectedCount.textContent = t('geo.selectedCount', { count: n });
+    }
+
+    function buildPayloadFromUI() {
+      const mode = getMode();
+      const ids = mode === 'global' ? areaIds.slice() : selectedAreaIds();
+      return { mode, areaIds: ids };
+    }
+
+    function renderAreaChecks() {
+      const filter = (areaFilter.value || '').trim().toLowerCase();
+      const selected = new Set((Array.isArray(areaIds) ? areaIds : []).map(Number));
+
+      areaChecks.innerHTML = '';
+      for (const a of areas) {
+        const name = String(a.name || '');
+        if (filter && !name.toLowerCase().includes(filter) && !String(a.id).includes(filter)) {
+          continue;
+        }
+        const label = document.createElement('label');
+        label.className = 'area-check';
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.value = String(a.id);
+        input.checked = selected.has(Number(a.id));
+        input.addEventListener('change', onAreaCheckChange);
+        const span = document.createElement('span');
+        span.textContent = name;
+        label.appendChild(input);
+        label.appendChild(span);
+        areaChecks.appendChild(label);
+      }
+      updateSelectedCount();
+    }
+
+    function setGeoEnabled(enabled) {
+      geoDisabled.hidden = enabled;
+      geoEnabled.hidden = !enabled;
+    }
+
+    function setPathTip(el, path) {
+      const p = (path || '').trim();
+      if (p) {
+        el.title = t('db.path.tip', { path: p });
+        el.classList.add('has-path-tip');
+      } else {
+        el.removeAttribute('title');
+        el.classList.remove('has-path-tip');
+      }
+    }
+
+    function renderDbStatus(st) {
+      if (st && st.exists) {
+        dbReady.hidden = false;
+        dbMissing.hidden = true;
+        dbStatus.textContent = t('db.status.ready', {
+          size: formatSize(st.size),
+          version: st.version || '-',
+          remark: st.remark || '-',
+          areas: st.areas || 0,
+          v4: st.v4 || 0,
+          v6: st.v6 || 0
+        });
+        setPathTip(dbStatus, st.path || '');
+        setGeoEnabled(true);
+      } else {
+        dbReady.hidden = true;
+        dbMissing.hidden = false;
+        dbMissingHint.textContent = t('db.status.missingHint');
+        setPathTip(dbMissingHint, st && st.path ? st.path : '');
+        setGeoEnabled(false);
+      }
+    }
+
+    async function loadDb() {
+      const st = await api('/rule/api/db');
+      renderDbStatus(st);
+      return st;
+    }
+
+    async function loadAreas() {
+      try {
+        areas = await api('/rule/api/areas');
+        if (!Array.isArray(areas)) areas = [];
+        renderAreaChecks();
+      } catch (e) {
+        areas = [];
+        renderAreaChecks();
+        geoMsg.textContent = e.message;
+      }
+    }
+
+    async function loadConfig() {
+      const cfg = await api('/rule/api/config');
+      areaIds = Array.isArray(cfg.areaIds) ? cfg.areaIds.map(Number).filter((id) => id > 0) : [];
+      setMode(cfg.mode || 'global');
+    }
+
+    async function saveConfig(payload) {
+      if (saving) return;
+      saving = true;
+      geoMsg.textContent = t('status.saving');
+      try {
+        const res = await api('/rule/api/config', {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        areaIds = Array.isArray(res.areaIds) ? res.areaIds.map(Number).filter((id) => id > 0) : payload.areaIds;
+        geoMsg.textContent = t('status.saved');
+        updateSelectedCount();
+      } catch (e) {
+        geoMsg.textContent = e.message;
+        throw e;
+      } finally {
+        saving = false;
+      }
+    }
+
+    function scheduleSaveFromUI() {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(async () => {
+        try {
+          await saveConfig(buildPayloadFromUI());
+        } catch (_) {}
+      }, 200);
+    }
+
+    async function onModeChange() {
+      syncModeUI();
+      try {
+        await saveConfig(buildPayloadFromUI());
+        renderAreaChecks();
+      } catch (_) {
+        renderAreaChecks();
+      }
+    }
+
+    function onAreaCheckChange() {
+      areaIds = selectedAreaIds();
+      updateSelectedCount();
+      scheduleSaveFromUI();
+    }
+
+    async function downloadDb() {
+      const url = dbUrlEl.value.trim();
+      if (!url) {
+        dbMsg.textContent = t('db.error.noUrl');
+        return;
+      }
+      btnDownload.disabled = true;
+      dbMsg.textContent = t('db.status.downloading');
+      try {
+        const res = await api('/rule/api/db/download', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ url })
+        });
+        renderDbStatus(res.db || await api('/rule/api/db'));
+        dbMsg.textContent = t('db.status.downloaded');
+        await loadAreas();
+        syncModeUI();
+      } catch (e) {
+        dbMsg.textContent = e.message;
+      } finally {
+        btnDownload.disabled = false;
+      }
+    }
+
+    async function uploadDb() {
+      const file = dbFileEl.files && dbFileEl.files[0];
+      if (!file) {
+        dbMsg.textContent = t('db.error.noFile');
+        return;
+      }
+      btnUpload.disabled = true;
+      dbMsg.textContent = t('db.status.uploading');
+      try {
+        const fd = new FormData();
+        fd.append('file', file);
+        const resp = await fetch('/rule/api/db/upload', { method: 'POST', body: fd });
+        if (!resp.ok) throw new Error(await resp.text());
+        const res = await resp.json();
+        renderDbStatus(res.db || await api('/rule/api/db'));
+        dbMsg.textContent = t('db.status.uploaded');
+        await loadAreas();
+        syncModeUI();
+      } catch (e) {
+        dbMsg.textContent = e.message;
+      } finally {
+        btnUpload.disabled = false;
+      }
+    }
+
+    document.querySelectorAll('input[name="geoMode"]').forEach((el) => {
+      el.addEventListener('change', onModeChange);
+    });
+    areaFilter.addEventListener('input', renderAreaChecks);
+    btnDownload.addEventListener('click', downloadDb);
+    btnUpload.addEventListener('click', uploadDb);
+
+    (async function bootstrap() {
+      await loadAppConfig();
+      applyI18n();
+      try {
+        const st = await loadDb();
+        await loadConfig();
+        if (st && st.exists) {
+          await loadAreas();
+          syncModeUI();
+        }
+      } catch (e) {
+        dbMsg.textContent = e.message;
+      }
+    })();
+  </script>
+</body>
+</html>

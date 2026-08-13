@@ -2,16 +2,12 @@ package proxy
 
 import (
 	"desktop/internal"
-	"desktop/lang"
 	"desktop/web"
-	"errors"
 	"net/url"
 	"sync/atomic"
 	"time"
 
 	"github.com/penndev/prism/proxy"
-	"github.com/penndev/prism/route"
-	"github.com/penndev/prism/stack"
 	"github.com/penndev/prism/transport"
 	"github.com/penndev/prism/tun"
 )
@@ -27,16 +23,17 @@ type Proxy struct {
 	writeBytes uint64
 }
 
+var localHandle = transport.Local()
+
 func (p *Proxy) SetStart(host, user, pass string) error {
 	if p.HandleConnect == nil {
-		handle := transport.Local()
-		p.HandleConnect = p.bindHandleConnect(handle, func(network, address string) {
+		p.HandleConnect = p.handleConnectHook(localHandle, func(network, address string) {
 			internal.App.Event.Emit(internal.AppConfig.LogTypeName_LOG, "local -> "+network+" "+address)
 		})
 	}
 	dialerOnce.Do(func() {
 		go func() {
-			// 循环设置检查心跳。设置出网网卡的IP。来应对网络变化。
+			// 循环设置检查心跳。设置出网网卡的IP。来应对网络变化。比如无线切有线
 			// 检查应对的目标服务器是 p.remoteURL
 			for {
 				if p.remoteURL == nil { // 等待设置远程代理信息。
@@ -87,53 +84,13 @@ func (p *Proxy) SetRemote(remote string) error {
 		"SetRemote-> "+p.remoteURL.Scheme+"://"+p.remoteURL.User.String()+"@"+p.remoteURL.Host,
 	)
 	handle, err := HandleConnect(p.remoteURL)
-	p.HandleConnect = p.bindHandleConnect(handle, func(network, address string) {
+	p.HandleConnect = p.handleConnectHook(handle, func(network, address string) {
 		internal.App.Event.Emit(internal.AppConfig.LogTypeName_LOG, p.remoteURL.Scheme+" -> "+network+" "+address)
 	})
 	if err != nil {
 		internal.App.Event.Emit(internal.AppConfig.LogTypeName_LOG, "SetRemote error: "+err.Error())
 		return err
 	}
-	return nil
-}
-
-func (p *Proxy) setModeTun() error {
-	if p.remoteURL == nil || p.remoteURL.Host == "" {
-		return errors.New(lang.DefaultLang.T("proxy.tun.noNode"))
-	}
-	if !tunPermission() {
-		return nil
-	}
-	if p.dev != nil {
-		p.dev.Close()
-		internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "tun dev close success")
-	}
-	var err error
-	p.dev, err = tun.New(tun.Options{
-		Name:   TUN_NAME,
-		MTU:    TUN_MTU,
-		Offset: TUN_OFFSET,
-	})
-	if err != nil {
-		internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "tun.New: "+err.Error())
-		return errors.New(lang.DefaultLang.T("proxy.tun.startFailed"))
-	}
-	stack.New(stack.Option{
-		EndPoint: p.dev,
-		HandleTCP: func(f *stack.ForwarderTCPRequest) {
-			internal.App.Event.Emit(internal.AppConfig.LogTypeName_LOG, "tun -> "+f.RemoteAddr.Network()+" "+f.RemoteAddr.String())
-			p.HandleConnect(f.Conn, f.RemoteAddr.Network(), f.RemoteAddr.String())
-		},
-		HandlerUDP: func(f *stack.ForwarderUDPRequest) {
-			internal.App.Event.Emit(internal.AppConfig.LogTypeName_LOG, "tun -> "+f.RemoteAddr.Network()+" "+f.RemoteAddr.String())
-			p.HandleConnect(f.Conn, f.RemoteAddr.Network(), f.RemoteAddr.String())
-		},
-	})
-	route.Start(route.Options{
-		DevName:      p.dev.Name(),
-		DevIP:        TUN_IP,
-		RouteAddress: Routes,
-	})
 	return nil
 }
 
@@ -145,28 +102,19 @@ func (p *Proxy) SetMode(mode string) error {
 	var err error
 	switch mode {
 	case "tun":
-		err = p.setModeTun()
+		err = p.startTunDev()
 	default:
-		if p.dev != nil {
-			p.dev.Close()
-			internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "tun dev close success")
-		}
+		p.closeTunDev()
 	}
 	if err != nil {
 		internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, err.Error())
 		return err
 	}
-	return nil
+	return err
 }
 
 func (p *Proxy) SetStop() {
-	if p.dev != nil {
-		p.dev.Close()
-		internal.App.Event.Emit(
-			internal.AppConfig.LogTypeName_STATUS,
-			"tun dev close success",
-		)
-	}
+	p.closeTunDev()
 	p.Server.Close()
 	internal.App.Event.Emit(
 		internal.AppConfig.LogTypeName_STATUS,
@@ -183,6 +131,5 @@ func (p *Proxy) TrafficBytes() (read uint64, write uint64) {
 func New() *Proxy {
 	p := &Proxy{}
 	p.HandlerFunc = web.Route
-	// 获取配置的代理服务器信息
 	return p
 }

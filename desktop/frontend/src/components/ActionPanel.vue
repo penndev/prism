@@ -36,7 +36,7 @@
       </a-radio-button>
     </a-radio-group>
 
-    <!-- PAC 脚本：编辑器入口与脚本 URL -->
+    <!-- PAC / 规则：编辑器入口 -->
     <div class="proxy-pac-section">
       <div class="proxy-pac-line">
         <span class="proxy-pac-tag">{{ t("settings.pacTitle") }}</span>
@@ -60,13 +60,28 @@
           {{ t("settings.pacScriptUrl") }}
         </a>
       </div>
+      <div class="proxy-pac-line">
+        <span class="proxy-pac-tag">{{ t("settings.ruleTitle") }}</span>
+        <span class="proxy-pac-dot">·</span>
+        <a
+          href="#"
+          class="proxy-pac-link proxy-pac-js"
+          :class="{ 'is-disabled': !webBaseURL }"
+          @click.prevent="openRuleEditor"
+        >
+          {{ t("settings.ruleOpenEditor") }}
+        </a>
+        <span class="proxy-pac-dot">·</span>
+        <span class="proxy-rule-status">{{ ruleStatusText }}</span>
+      </div>
     </div>
   </a-card>
 </template>
 
 <script setup>
-import { ref, watch, computed } from "vue";
+import { ref, watch, computed, onMounted, onUnmounted } from "vue";
 import { theme, message } from "ant-design-vue";
+import { Events } from "@wailsio/runtime";
 
 import { useServerStore } from "../stores/server";
 import { useSettingsStore } from "@/stores/settings";
@@ -74,21 +89,21 @@ import { t } from "@/locale";
 import { extendServerItem, debounce } from "@/utils";
 
 import { Storage } from "@bindings/desktop/storage";
+import { SetStart, SetRemote, SetMode } from "@bindings/desktop/proxy/proxy";
 import {
-  SetStart,
-  SetStop,
-  SetRemote,
-  SetMode,
-} from "@bindings/desktop/proxy/proxy";
-import { OpenExternalURL } from "@bindings/desktop/internal/appconst";
+  AppConfig,
+  OpenExternalURL,
+} from "@bindings/desktop/internal/appconst";
 
 const { token } = theme.useToken();
 const settingsStore = useSettingsStore();
 const serverStore = useServerStore();
 
 const proxyMode = ref("manual");
+const ruleMode = ref("global"); // unset | match | bypass | mixed
+let ruleEventOff = null;
 
-/** 本地代理 Web 服务根地址，用于打开 PAC 编辑器 */
+/** 本地代理 Web 服务根地址，用于打开 PAC / 规则编辑器 */
 const webBaseURL = computed(() => {
   const rawHost = (settingsStore.proxy.host || "").trim();
   const host =
@@ -107,6 +122,39 @@ const pacScriptURL = computed(() =>
   webBaseURL.value ? `${webBaseURL.value}/pac.js` : "",
 );
 
+const ruleStatusText = computed(() => {
+  switch (ruleMode.value) {
+    case "match":
+      return t("settings.ruleStatus.match");
+    case "bypass":
+      return t("settings.ruleStatus.bypass");
+    case "mixed":
+      return `${t("settings.ruleStatus.match")} / ${t("settings.ruleStatus.bypass")}`;
+    default:
+      return t("settings.ruleStatus.unset");
+  }
+});
+
+function deriveRuleStatus(cfg) {
+  switch (cfg?.mode) {
+    case "proxy":
+      return "match";
+    case "bypass":
+      return "bypass";
+    default:
+      return "global";
+  }
+}
+
+async function loadRuleStatus() {
+  try {
+    const cfg = await Storage.GetRuleConfig();
+    ruleMode.value = deriveRuleStatus(cfg);
+  } catch {
+    ruleMode.value = "global";
+  }
+}
+
 /** 在浏览器中打开 PAC 编辑器页面 */
 async function openPacEditor() {
   if (!webBaseURL.value) {
@@ -116,6 +164,20 @@ async function openPacEditor() {
 
   try {
     await OpenExternalURL(`${webBaseURL.value}/pac/`);
+  } catch (e) {
+    message.error(e?.message || t("settings.pacOpenFailed"));
+  }
+}
+
+/** 在浏览器中打开地域规则编辑器 */
+async function openRuleEditor() {
+  if (!webBaseURL.value) {
+    message.warning(t("settings.pacNeedPort"));
+    return;
+  }
+
+  try {
+    await OpenExternalURL(`${webBaseURL.value}/rule/`);
   } catch (e) {
     message.error(e?.message || t("settings.pacOpenFailed"));
   }
@@ -135,6 +197,25 @@ async function copyPacScriptURL() {
     message.error(t("settings.pacCopyFailed"));
   }
 }
+
+onMounted(async () => {
+  await loadRuleStatus();
+  try {
+    const appConst = await AppConfig();
+    ruleEventOff = Events.On(appConst.EventNameRuleChanged, () => {
+      loadRuleStatus();
+    });
+  } catch {
+    // ignore
+  }
+});
+
+onUnmounted(() => {
+  if (typeof ruleEventOff === "function") {
+    ruleEventOff();
+    ruleEventOff = null;
+  }
+});
 
 /** 切换代理模式时通知后端 SetMode */
 watch(
@@ -257,7 +338,7 @@ watch(
     }
   }
 
-  /* PAC 链接区 */
+  /* PAC / 规则链接区 */
   .proxy-pac-section {
     margin-top: 2px;
     padding-top: 6px;
@@ -273,6 +354,10 @@ watch(
     gap: 0 2px;
   }
 
+  .proxy-pac-line + .proxy-pac-line {
+    margin-top: 4px;
+  }
+
   .proxy-pac-tag {
     color: v-bind("token.colorTextSecondary");
   }
@@ -281,6 +366,10 @@ watch(
     color: v-bind("token.colorTextQuaternary");
     user-select: none;
     padding: 0 3px;
+  }
+
+  .proxy-rule-status {
+    color: v-bind("token.colorTextSecondary");
   }
 
   .proxy-pac-link {

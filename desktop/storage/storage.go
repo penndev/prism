@@ -80,6 +80,20 @@ func (s *Storage) GetPACConfig() (*PACConfig, error) {
 	return &out, nil
 }
 
+func (s *Storage) SetRuleConfig(v RuleConfig) error {
+	return s.putJSON(KeyRule, v)
+}
+
+// GetRuleConfig 无记录时返回 nil, nil。
+func (s *Storage) GetRuleConfig() (*RuleConfig, error) {
+	var out RuleConfig
+	ok, err := s.getJSON(KeyRule, &out)
+	if err != nil || !ok {
+		return nil, err
+	}
+	return &out, nil
+}
+
 func (s *Storage) SetSelectedServer(v ServerEntry) error {
 	return s.putJSON(KeySelectedServer, v)
 }
