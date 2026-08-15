@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string-array name="nodeInputType">
-        <item>@string/home_node_input_type_tcp</item>
-        <item>@string/home_node_input_type_udp</item>
-        <item>@string/home_node_input_type_all</item>
-    </string-array>
-</resources>

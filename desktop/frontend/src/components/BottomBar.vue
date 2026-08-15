@@ -54,7 +54,7 @@ import { ArrowDownOutlined, ArrowUpOutlined } from "@ant-design/icons-vue";
 import { t } from "@/locale";
 import StatusPanel from "./bottombar/StatusPanel.vue";
 import LogPanel from "./bottombar/LogPanel.vue";
-import { TrafficBytes } from "@bindings/desktop/proxy/proxy";
+import { TrafficBytes } from "@bindings/desktop/internal/proxy/proxy";
 import { startAxisResize } from "@/utils";
 
 const PANEL_HEIGHT_MIN = 80;

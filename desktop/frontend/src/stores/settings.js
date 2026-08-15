@@ -1,10 +1,10 @@
 import { defineStore } from "pinia";
-import { Storage } from "@bindings/desktop/storage";
+import { Storage } from "@bindings/desktop/internal/storage";
 import { notification } from "ant-design-vue";
 import { debounce } from "@/utils";
 import { t, subscribeLocaleEvents, languageLocale } from "@/locale";
-import { Bundle } from "@bindings/desktop/lang/lang";
-import { Enable, Disable } from "@bindings/desktop/autostart/autostart";
+import { Bundle } from "@bindings/desktop/internal/lang/lang";
+import { Enable, Disable } from "@bindings/desktop/internal/autostart/autostart";
 
 export const useSettingsStore = defineStore("settings", {
   state: () => ({

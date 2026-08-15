@@ -1,12 +1,12 @@
 package main
 
 import (
-	"desktop/autostart"
 	"desktop/build"
 	"desktop/internal"
-	"desktop/lang"
-	"desktop/proxy"
-	"desktop/storage"
+	"desktop/internal/autostart"
+	"desktop/internal/lang"
+	"desktop/internal/proxy"
+	"desktop/internal/storage"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )

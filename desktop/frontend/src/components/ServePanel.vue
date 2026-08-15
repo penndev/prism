@@ -175,13 +175,13 @@ import {
   SignalFilled,
 } from "@ant-design/icons-vue";
 import { theme, Modal, message } from "ant-design-vue";
-import { Storage } from "@bindings/desktop/storage";
+import { Storage } from "@bindings/desktop/internal/storage";
 import {
   AppConfig,
   OpenExternalURL,
   ProxyScheme,
 } from "@bindings/desktop/internal/appconst";
-import { TestServer } from "@bindings/desktop/proxy/proxyping";
+import { TestServer } from "@bindings/desktop/internal/proxy/proxyping";
 import { Events } from "@wailsio/runtime";
 import { useServerStore } from "@/stores/server";
 import { useSettingsStore } from "@/stores/settings";

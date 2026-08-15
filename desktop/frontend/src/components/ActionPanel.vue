@@ -98,13 +98,13 @@ import { useSettingsStore } from "@/stores/settings";
 import { t } from "@/locale";
 import { extendServerItem, debounce } from "@/utils";
 
-import { Storage } from "@bindings/desktop/storage";
+import { Storage } from "@bindings/desktop/internal/storage";
 import {
   SetStart,
   SetRemote,
   SetMode,
   GetRuleStatus,
-} from "@bindings/desktop/proxy/proxy";
+} from "@bindings/desktop/internal/proxy/proxy";
 import {
   AppConfig,
   OpenExternalURL,

@@ -1,5 +1,5 @@
 import { ref } from "vue";
-import { Bundle, CurrentLocale, SetLocale } from "@bindings/desktop/lang/lang";
+import { Bundle, CurrentLocale, SetLocale } from "@bindings/desktop/internal/lang/lang";
 import { Events } from "@wailsio/runtime";
 import { AppConfig } from "@bindings/desktop/internal/appconst";
 

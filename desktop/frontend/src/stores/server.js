@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { Storage } from "@bindings/desktop/storage";
+import { Storage } from "@bindings/desktop/internal/storage";
 import { stripForStorage } from "@/utils";
 
 export const useServerStore = defineStore("server", {

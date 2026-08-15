@@ -35,15 +35,6 @@ type Option struct {
 	EndPoint   stack.LinkEndpoint
 }
 
-const (
-	tcpRXBufMinSize = tcp.MinBufferSize
-	tcpRXBufDefSize = tcp.DefaultReceiveBufferSize // 1MiB
-	tcpRXBufMaxSize = 8 << 20                      // 8MiB，与 sing-tun 一致
-	tcpTXBufMinSize = tcp.MinBufferSize
-	tcpTXBufDefSize = tcp.DefaultSendBufferSize // 1MiB
-	tcpTXBufMaxSize = 6 << 20                   // 6MiB，与 sing-tun 一致
-)
-
 func New(option Option) {
 	s := stack.New(stack.Options{
 		NetworkProtocols: []stack.NetworkProtocolFactory{
