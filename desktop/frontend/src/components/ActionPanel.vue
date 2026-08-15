@@ -69,10 +69,20 @@
           :class="{ 'is-disabled': !webBaseURL }"
           @click.prevent="openRuleEditor"
         >
-          {{ t("settings.ruleOpenEditor") }}
+          {{ ruleModeText }}
         </a>
-        <span class="proxy-pac-dot">·</span>
-        <span class="proxy-rule-status">{{ ruleStatusText }}</span>
+        <template v-if="ruleAreaNamesText">
+          <span class="proxy-pac-dot">·</span>
+          <a
+            href="#"
+            class="proxy-pac-link proxy-pac-js proxy-rule-areas"
+            :class="{ 'is-disabled': !webBaseURL }"
+            :title="ruleAreaNamesText"
+            @click.prevent="openRuleEditor"
+          >
+            {{ ruleAreaNamesText }}
+          </a>
+        </template>
       </div>
     </div>
   </a-card>
@@ -89,7 +99,12 @@ import { t } from "@/locale";
 import { extendServerItem, debounce } from "@/utils";
 
 import { Storage } from "@bindings/desktop/storage";
-import { SetStart, SetRemote, SetMode } from "@bindings/desktop/proxy/proxy";
+import {
+  SetStart,
+  SetRemote,
+  SetMode,
+  GetRuleStatus,
+} from "@bindings/desktop/proxy/proxy";
 import {
   AppConfig,
   OpenExternalURL,
@@ -100,7 +115,8 @@ const settingsStore = useSettingsStore();
 const serverStore = useServerStore();
 
 const proxyMode = ref("manual");
-const ruleMode = ref("global"); // unset | match | bypass | mixed
+const ruleMode = ref("global"); // global | match | bypass
+const ruleAreaNames = ref([]);
 let ruleEventOff = null;
 
 /** 本地代理 Web 服务根地址，用于打开 PAC / 规则编辑器 */
@@ -122,18 +138,20 @@ const pacScriptURL = computed(() =>
   webBaseURL.value ? `${webBaseURL.value}/pac.js` : "",
 );
 
-const ruleStatusText = computed(() => {
+const ruleModeText = computed(() => {
   switch (ruleMode.value) {
     case "match":
       return t("settings.ruleStatus.match");
     case "bypass":
       return t("settings.ruleStatus.bypass");
-    case "mixed":
-      return `${t("settings.ruleStatus.match")} / ${t("settings.ruleStatus.bypass")}`;
     default:
-      return t("settings.ruleStatus.unset");
+      return t("settings.ruleStatus.global");
   }
 });
+
+const ruleAreaNamesText = computed(() =>
+  (ruleAreaNames.value || []).filter(Boolean).join(", "),
+);
 
 function deriveRuleStatus(cfg) {
   switch (cfg?.mode) {
@@ -148,10 +166,14 @@ function deriveRuleStatus(cfg) {
 
 async function loadRuleStatus() {
   try {
-    const cfg = await Storage.GetRuleConfig();
-    ruleMode.value = deriveRuleStatus(cfg);
+    const status = await GetRuleStatus();
+    ruleMode.value = deriveRuleStatus(status);
+    ruleAreaNames.value = Array.isArray(status?.areaNames)
+      ? status.areaNames
+      : [];
   } catch {
     ruleMode.value = "global";
+    ruleAreaNames.value = [];
   }
 }
 
@@ -368,8 +390,12 @@ watch(
     padding: 0 3px;
   }
 
-  .proxy-rule-status {
-    color: v-bind("token.colorTextSecondary");
+  a.proxy-pac-link.proxy-rule-areas {
+    flex: 1 1 80px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .proxy-pac-link {

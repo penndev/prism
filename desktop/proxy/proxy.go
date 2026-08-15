@@ -2,6 +2,8 @@ package proxy
 
 import (
 	"desktop/internal"
+	"desktop/ipregion"
+	"desktop/storage"
 	"desktop/web"
 	"net/url"
 	"sync/atomic"
@@ -126,6 +128,30 @@ func (p *Proxy) TrafficBytes() (read uint64, write uint64) {
 	read = atomic.LoadUint64(&p.readBytes)
 	write = atomic.LoadUint64(&p.writeBytes)
 	return
+}
+
+// RuleStatus 主页面展示用的地域规则摘要。
+type RuleStatus struct {
+	Mode      string   `json:"mode"`
+	AreaNames []string `json:"areaNames"`
+}
+
+func (p *Proxy) GetRuleStatus() RuleStatus {
+	out := RuleStatus{Mode: "global", AreaNames: []string{}}
+	st := storage.DefaultStorage
+	if st == nil {
+		return out
+	}
+	cfg, err := st.GetRuleConfig()
+	if err != nil || cfg == nil {
+		return out
+	}
+	switch cfg.Mode {
+	case "proxy", "bypass":
+		out.Mode = cfg.Mode
+		out.AreaNames = ipregion.Names(cfg.AreaIDs)
+	}
+	return out
 }
 
 func New() *Proxy {

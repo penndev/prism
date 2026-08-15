@@ -112,6 +112,29 @@ func Find(ip string) (gopkg.Info, error) {
 	return s.Find(ip)
 }
 
+// Names 按地域 ID 查询名称；找不到的 ID 会被跳过。
+func Names(ids []uint32) []string {
+	out := make([]string, 0, len(ids))
+	if len(ids) == 0 {
+		return out
+	}
+	s, err := Open()
+	if err != nil {
+		return out
+	}
+	for _, id := range ids {
+		if id == 0 {
+			continue
+		}
+		a, ok := s.Area(id)
+		if !ok || a.Name == "" {
+			continue
+		}
+		out = append(out, a.Name)
+	}
+	return out
+}
+
 // InAreas 判断 address（host 或 host:port）是否属于给定地域 ID（含上级）。
 // 无法解析或不在列表中时返回 false。
 func InAreas(address string, areaIDs []uint32) bool {

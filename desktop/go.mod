@@ -3,7 +3,7 @@ module desktop
 go 1.25.5
 
 require (
-	github.com/penndev/gopkg v0.5.0
+	github.com/penndev/gopkg v0.5.1
 	github.com/penndev/prism v0.0.0
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
 	github.com/wailsapp/wails/v3 v3.0.0-alpha.82

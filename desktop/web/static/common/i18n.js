@@ -157,9 +157,9 @@ window.WEB_I18N = {
       "db.status.ready": "已就绪 · {size} · v{version} · {remark} · areas={areas} v4={v4} v6={v6}",
       "db.path.tip": "文件位置：{path}",
       "db.status.downloading": "下载中...",
-      "db.status.downloaded": "下载完成",
+      "db.status.downloaded": "下载完成，已切换为全局代理",
       "db.status.uploading": "上传中...",
-      "db.status.uploaded": "上传完成",
+      "db.status.uploaded": "上传完成，已切换为全局代理",
       "db.error.noFile": "请先选择文件",
       "db.error.noUrl": "请填写下载地址"
     },
@@ -188,9 +188,9 @@ window.WEB_I18N = {
       "db.status.ready": "Ready · {size} · v{version} · {remark} · areas={areas} v4={v4} v6={v6}",
       "db.path.tip": "Path: {path}",
       "db.status.downloading": "Downloading...",
-      "db.status.downloaded": "Download complete",
+      "db.status.downloaded": "Download complete. Switched to global proxy.",
       "db.status.uploading": "Uploading...",
-      "db.status.uploaded": "Upload complete",
+      "db.status.uploaded": "Upload complete. Switched to global proxy.",
       "db.error.noFile": "Please choose a file first",
       "db.error.noUrl": "Please enter a download URL"
     }

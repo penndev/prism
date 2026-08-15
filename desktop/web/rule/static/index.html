@@ -355,6 +355,7 @@
         renderDbStatus(res.db || await api('/rule/api/db'));
         dbMsg.textContent = t('db.status.downloaded');
         await loadAreas();
+        await loadConfig();
         syncModeUI();
       } catch (e) {
         dbMsg.textContent = e.message;
@@ -380,6 +381,7 @@
         renderDbStatus(res.db || await api('/rule/api/db'));
         dbMsg.textContent = t('db.status.uploaded');
         await loadAreas();
+        await loadConfig();
         syncModeUI();
       } catch (e) {
         dbMsg.textContent = e.message;

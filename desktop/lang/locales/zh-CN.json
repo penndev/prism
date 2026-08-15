@@ -33,6 +33,7 @@
   "settings.ruleTitle": "规则",
   "settings.ruleOpenEditor": "管理",
   "settings.ruleStatus.unset": "未设置",
+  "settings.ruleStatus.global": "全局代理",
   "settings.ruleStatus.match": "代理区域",
   "settings.ruleStatus.bypass": "绕过区域",
   "settings.startupOnBoot": "开机启动",

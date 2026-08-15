@@ -33,6 +33,7 @@
   "settings.ruleTitle": "Rules",
   "settings.ruleOpenEditor": "Manage",
   "settings.ruleStatus.unset": "Not set",
+  "settings.ruleStatus.global": "Global proxy",
   "settings.ruleStatus.match": "Proxy region",
   "settings.ruleStatus.bypass": "Bypass region",
   "settings.startupOnBoot": "Launch at startup",

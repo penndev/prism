@@ -68,6 +68,18 @@ func emitRuleChanged() {
 	internal.App.Event.Emit(internal.AppConfig.EventNameRuleChanged, time.Now().UnixMilli())
 }
 
+// resetRuleToGlobal 库文件更新后切回全局代理并清空已选地域。
+func resetRuleToGlobal() {
+	st := storage.DefaultStorage
+	if st == nil {
+		return
+	}
+	_ = st.SetRuleConfig(storage.RuleConfig{
+		Mode:    "global",
+		AreaIDs: []uint32{},
+	})
+}
+
 func dbStatusJSON(st ipregion.Status) map[string]any {
 	return map[string]any{
 		"exists":  st.Exists,
@@ -100,7 +112,11 @@ func HandleRuleConfig(w http.ResponseWriter, r *http.Request) {
 		out := normalizeConfig(cfg.Mode, cfg.AreaIDs)
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(out)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"mode":      out.Mode,
+			"areaIds":   out.AreaIDs,
+			"areaNames": ipregion.Names(out.AreaIDs),
+		})
 	case http.MethodPut, http.MethodPost:
 		var payload configPayload
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
@@ -167,6 +183,7 @@ func HandleRuleDBDownload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	resetRuleToGlobal()
 	emitRuleChanged()
 	status, _ := ipregion.StatusOf()
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -196,6 +213,7 @@ func HandleRuleDBUpload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	resetRuleToGlobal()
 	emitRuleChanged()
 	status, _ := ipregion.StatusOf()
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")

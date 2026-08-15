@@ -1,7 +1,9 @@
 package stack
 
 import (
+	"log"
 	"net"
+	"runtime"
 
 	"gvisor.dev/gvisor/pkg/tcpip"
 	"gvisor.dev/gvisor/pkg/tcpip/adapters/gonet"
@@ -33,6 +35,15 @@ type Option struct {
 	EndPoint   stack.LinkEndpoint
 }
 
+const (
+	tcpRXBufMinSize = tcp.MinBufferSize
+	tcpRXBufDefSize = tcp.DefaultReceiveBufferSize // 1MiB
+	tcpRXBufMaxSize = 8 << 20                      // 8MiB，与 sing-tun 一致
+	tcpTXBufMinSize = tcp.MinBufferSize
+	tcpTXBufDefSize = tcp.DefaultSendBufferSize // 1MiB
+	tcpTXBufMaxSize = 6 << 20                   // 6MiB，与 sing-tun 一致
+)
+
 func New(option Option) {
 	s := stack.New(stack.Options{
 		NetworkProtocols: []stack.NetworkProtocolFactory{
@@ -46,6 +57,22 @@ func New(option Option) {
 			icmp.NewProtocol6,
 		},
 	})
+
+	nicID := tcpip.NICID(s.NextNICID())
+	s.CreateNICWithOptions(nicID, option.EndPoint, stack.NICOptions{})
+	s.SetPromiscuousMode(nicID, true)
+	s.SetSpoofing(nicID, true)
+	s.SetRouteTable([]tcpip.Route{
+		{Destination: header.IPv4EmptySubnet, NIC: nicID},
+		{Destination: header.IPv6EmptySubnet, NIC: nicID},
+	})
+
+	// Windows 上 RACK 会让 gVisor TCP 严重掉速，sing-tun / sing-box 同样关掉。
+	if runtime.GOOS == "windows" {
+		if err := s.SetTransportProtocolOption(tcp.ProtocolNumber, new(tcpip.TCPRecovery)); err != nil {
+			log.Fatal("TCPRecovery: ", err)
+		}
+	}
 
 	// handle TCP setting
 	if option.HandleTCP != nil {
@@ -96,21 +123,4 @@ func New(option Option) {
 		})
 		s.SetTransportProtocolHandler(udp.ProtocolNumber, udpForwarder.HandlePacket)
 	}
-
-	nicID := tcpip.NICID(s.NextNICID())
-	s.CreateNICWithOptions(nicID, option.EndPoint, stack.NICOptions{
-		Disabled: false,
-	})
-	s.SetPromiscuousMode(nicID, true)
-	s.SetSpoofing(nicID, true)
-	s.SetRouteTable([]tcpip.Route{
-		{
-			Destination: header.IPv4EmptySubnet,
-			NIC:         nicID,
-		},
-		{
-			Destination: header.IPv6EmptySubnet,
-			NIC:         nicID,
-		},
-	})
 }
