@@ -52,6 +52,12 @@ type RuleConfig struct {
 	AreaIDs []uint32 `json:"areaIds"`
 }
 
+// RuleStatus 主页面展示用的地域规则摘要。
+type RuleStatus struct {
+	Mode      string   `json:"mode"`
+	AreaNames []string `json:"areaNames"`
+}
+
 const (
 	KeySettings       = "settings"
 	KeyServers        = "servers"

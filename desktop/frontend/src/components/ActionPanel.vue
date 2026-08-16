@@ -1,6 +1,6 @@
 <template>
   <a-card class="proxy-panel" :title="t('proxy.title')">
-    <!-- 当前选中的代理服务器 -->
+    <!-- ĺ˝ĺéä¸­çäťŁçćĺĄĺ¨ -->
     <div class="proxy-current-server">
       <span class="proxy-label">{{ t("proxy.currentServerLabel") }}</span>
       <span class="proxy-value">
@@ -21,12 +21,12 @@
       </a-button>
     </div>
 
-    <!-- 未选服务器时的提示 -->
+    <!-- ćŞéćĺĄĺ¨ćśçćç¤ş -->
     <div v-if="!serverStore.selectedServer" class="proxy-mode-tip">
       {{ t("proxy.selectTip") }}
     </div>
 
-    <!-- 代理模式：手动 / TUN -->
+    <!-- äťŁçć¨Ąĺźďźćĺ¨ / TUN -->
     <a-radio-group v-model:value="proxyMode" class="proxy-mode-group">
       <a-radio-button value="manual">
         {{ t("proxy.mode.manual") }}
@@ -36,11 +36,11 @@
       </a-radio-button>
     </a-radio-group>
 
-    <!-- PAC / 规则：编辑器入口 -->
+    <!-- PAC / č§ĺďźçźčžĺ¨ĺĽĺŁ -->
     <div class="proxy-pac-section">
       <div class="proxy-pac-line">
         <span class="proxy-pac-tag">{{ t("settings.pacTitle") }}</span>
-        <span class="proxy-pac-dot">·</span>
+        <span class="proxy-pac-dot" aria-hidden="true"></span>
         <a
           href="#"
           class="proxy-pac-link proxy-pac-js"
@@ -49,7 +49,7 @@
         >
           {{ t("settings.pacOpenEditor") }}
         </a>
-        <span class="proxy-pac-dot">·</span>
+        <span class="proxy-pac-dot" aria-hidden="true"></span>
         <a
           href="#"
           class="proxy-pac-link proxy-pac-js"
@@ -62,7 +62,7 @@
       </div>
       <div class="proxy-pac-line">
         <span class="proxy-pac-tag">{{ t("settings.ruleTitle") }}</span>
-        <span class="proxy-pac-dot">·</span>
+        <span class="proxy-pac-dot" aria-hidden="true"></span>
         <a
           href="#"
           class="proxy-pac-link proxy-pac-js"
@@ -72,7 +72,7 @@
           {{ ruleModeText }}
         </a>
         <template v-if="ruleAreaNamesText">
-          <span class="proxy-pac-dot">·</span>
+          <span class="proxy-pac-dot" aria-hidden="true"></span>
           <a
             href="#"
             class="proxy-pac-link proxy-pac-js proxy-rule-areas"
@@ -103,7 +103,6 @@ import {
   SetStart,
   SetRemote,
   SetMode,
-  GetRuleStatus,
 } from "@bindings/desktop/internal/proxy/proxy";
 import {
   AppConfig,
@@ -119,7 +118,7 @@ const ruleMode = ref("global"); // global | match | bypass
 const ruleAreaNames = ref([]);
 let ruleEventOff = null;
 
-/** 本地代理 Web 服务根地址，用于打开 PAC / 规则编辑器 */
+/** ćŹĺ°äťŁç Web ćĺĄć šĺ°ĺďźç¨äşćĺź PAC / č§ĺçźčžĺ¨ */
 const webBaseURL = computed(() => {
   const rawHost = (settingsStore.proxy.host || "").trim();
   const host =
@@ -133,7 +132,7 @@ const webBaseURL = computed(() => {
   return `http://${host}:${port}`;
 });
 
-/** PAC 脚本对外 URL（供浏览器/系统引用） */
+/** PAC čćŹĺŻšĺ¤ URLďźäžćľč§ĺ¨/çłťçťĺźç¨ďź */
 const pacScriptURL = computed(() =>
   webBaseURL.value ? `${webBaseURL.value}/pac.js` : "",
 );
@@ -166,7 +165,7 @@ function deriveRuleStatus(cfg) {
 
 async function loadRuleStatus() {
   try {
-    const status = await GetRuleStatus();
+    const status = await Storage.GetRuleStatus();
     ruleMode.value = deriveRuleStatus(status);
     ruleAreaNames.value = Array.isArray(status?.areaNames)
       ? status.areaNames
@@ -177,7 +176,7 @@ async function loadRuleStatus() {
   }
 }
 
-/** 在浏览器中打开 PAC 编辑器页面 */
+/** ĺ¨ćľč§ĺ¨ä¸­ćĺź PAC çźčžĺ¨éĄľé˘ */
 async function openPacEditor() {
   if (!webBaseURL.value) {
     message.warning(t("settings.pacNeedPort"));
@@ -191,7 +190,7 @@ async function openPacEditor() {
   }
 }
 
-/** 在浏览器中打开地域规则编辑器 */
+/** ĺ¨ćľč§ĺ¨ä¸­ćĺźĺ°ĺč§ĺçźčžĺ¨ */
 async function openRuleEditor() {
   if (!webBaseURL.value) {
     message.warning(t("settings.pacNeedPort"));
@@ -205,7 +204,7 @@ async function openRuleEditor() {
   }
 }
 
-/** 复制 PAC 脚本 URL 到剪贴板 */
+/** ĺ¤ĺś PAC čćŹ URL ĺ°ĺŞč´´ćż */
 async function copyPacScriptURL() {
   if (!pacScriptURL.value) {
     message.warning(t("settings.pacNeedPort"));
@@ -239,7 +238,7 @@ onUnmounted(() => {
   }
 });
 
-/** 切换代理模式时通知后端 SetMode */
+/** ĺć˘äťŁçć¨ĄĺźćśéçĽĺçŤŻ SetMode */
 watch(
   proxyMode,
   async (mode, prevMode) => {
@@ -256,7 +255,7 @@ watch(
   { immediate: true },
 );
 
-/** 选中/取消服务器时：持久化选择并设置/停止远程代理 */
+/** éä¸­/ĺćśćĺĄĺ¨ćśďźćäšĺéćŠĺšśčŽžç˝Ž/ĺć­˘čżç¨äťŁç */
 watch(
   () => serverStore.selectedServer,
   async (server) => {
@@ -265,9 +264,9 @@ watch(
         await Storage.SetSelectedServer(server);
         await SetRemote(extendServerItem(server)._id);
       } else {
-        // 清理选中服务器，下次启动不自动登录了。
+        // ć¸çéä¸­ćĺĄĺ¨ďźä¸ćŹĄĺŻĺ¨ä¸čŞĺ¨çťĺ˝äşă
         await Storage.ClearSelectedServer();
-        // await SetStop(); web服务需要一直驻留。
+        // await SetStop(); webćĺĄéčŚä¸ç´éŠťçă
       }
     } catch (e) {
       message.error(e?.message || t("serverList.operationFailed"));
@@ -276,7 +275,7 @@ watch(
   { immediate: true },
 );
 
-/** 本地代理监听地址变更时重启 SetStart */
+/** ćŹĺ°äťŁççĺŹĺ°ĺĺć´ćśéĺŻ SetStart */
 watch(
   () => settingsStore.proxy,
   debounce(async () => {
@@ -292,7 +291,7 @@ watch(
 </script>
 
 <style lang="scss" scoped>
-/* 代理控制卡片 */
+/* äťŁçć§ĺśĺĄç */
 .proxy-panel {
   flex-shrink: 0;
   border-radius: 10px;
@@ -312,7 +311,7 @@ watch(
     padding: 12px;
   }
 
-  /* 当前服务器行 */
+  /* ĺ˝ĺćĺĄĺ¨čĄ */
   .proxy-current-server {
     margin-bottom: 6px;
     padding: 3px 6px;
@@ -341,14 +340,14 @@ watch(
     }
   }
 
-  /* 未选服务器提示 */
+  /* ćŞéćĺĄĺ¨ćç¤ş */
   .proxy-mode-tip {
     font-size: 13px;
     color: v-bind("token.colorTextSecondary");
     padding: 4px 0;
   }
 
-  /* 模式切换按钮组 */
+  /* ć¨Ąĺźĺć˘ćéŽçť */
   .proxy-mode-group {
     width: 100%;
     margin-bottom: 6px;
@@ -360,7 +359,7 @@ watch(
     }
   }
 
-  /* PAC / 规则链接区 */
+  /* PAC / č§ĺéžćĽĺş */
   .proxy-pac-section {
     margin-top: 2px;
     padding-top: 6px;
@@ -388,6 +387,10 @@ watch(
     color: v-bind("token.colorTextQuaternary");
     user-select: none;
     padding: 0 3px;
+
+    &::before {
+      content: "\00b7";
+    }
   }
 
   a.proxy-pac-link.proxy-rule-areas {

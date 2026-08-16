@@ -259,7 +259,7 @@ function getLatencyClass(latency) {
   return "latency-bad";
 }
 
-// --- 按延迟排序 ---
+// --- æŒ‰å»¶è¿ŸæŽ’åº� ---
 
 function latencySortKey(server) {
   const latency = server._latency;
@@ -278,7 +278,7 @@ async function applyLatencySort() {
   await persistServers();
 }
 
-// --- 新增 / 编辑 / 删除 ---
+// --- æ–°å¢ž / ç¼–è¾‘ / åˆ é™¤ ---
 
 const edit = reactive({
   visible: false,
@@ -296,7 +296,8 @@ const edit = reactive({
     host: [
       { required: true, message: t("serverList.validateHostRequired") },
       {
-        pattern: /^[^:]+:\d{1,5}$/,
+        // IPv4/域名: host:port；IPv6: [addr]:port
+        pattern: /^(\[[^\]]+\]|[^:\[\]]+):\d{1,5}$/,
         message: t("serverList.validateHostFormat"),
       },
     ],
@@ -388,7 +389,7 @@ function deleteModal(item) {
   });
 }
 
-// --- 订阅编辑器 ---
+// --- è®¢é˜…ç¼–è¾‘å™¨ ---
 
 async function openSubscribeEditor() {
   const rawHost = (settingsStore.proxy.host || "").trim();

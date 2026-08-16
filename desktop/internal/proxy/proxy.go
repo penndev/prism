@@ -2,13 +2,10 @@ package proxy
 
 import (
 	"desktop/internal"
-	"desktop/internal/ipregion"
-	"desktop/internal/storage"
 	"desktop/internal/tun"
 	"desktop/internal/web"
 	"net/url"
 	"sync/atomic"
-	"time"
 
 	"github.com/penndev/prism/proxy"
 	"github.com/penndev/prism/transport"
@@ -33,21 +30,8 @@ func (p *Proxy) SetStart(host, user, pass string) error {
 			internal.App.Event.Emit(internal.AppConfig.LogTypeName_LOG, "local -> "+network+" "+address)
 		})
 	}
-	dialerOnce.Do(func() {
-		go func() {
-			// 循环设置检查心跳。设置出网网卡的IP。来应对网络变化。比如无线切有线
-			// 检查应对的目标服务器是 p.remoteURL
-			for {
-				if p.remoteURL == nil { // 等待设置远程代理信息。
-					time.Sleep(1 * time.Second)
-					continue
-				} else {
-					p.updateDialer()
-					time.Sleep(10 * time.Second)
-				}
-			}
-		}()
-	})
+	// 更新处理网卡。
+	go p.updateDialer()
 
 	internal.App.Event.Emit(
 		internal.AppConfig.LogTypeName_STATUS,
@@ -128,30 +112,6 @@ func (p *Proxy) TrafficBytes() (read uint64, write uint64) {
 	read = atomic.LoadUint64(&p.readBytes)
 	write = atomic.LoadUint64(&p.writeBytes)
 	return
-}
-
-// RuleStatus 主页面展示用的地域规则摘要。
-type RuleStatus struct {
-	Mode      string   `json:"mode"`
-	AreaNames []string `json:"areaNames"`
-}
-
-func (p *Proxy) GetRuleStatus() RuleStatus {
-	out := RuleStatus{Mode: "global", AreaNames: []string{}}
-	st := storage.DefaultStorage
-	if st == nil {
-		return out
-	}
-	cfg, err := st.GetRuleConfig()
-	if err != nil || cfg == nil {
-		return out
-	}
-	switch cfg.Mode {
-	case "proxy", "bypass":
-		out.Mode = cfg.Mode
-		out.AreaNames = ipregion.Names(cfg.AreaIDs)
-	}
-	return out
 }
 
 func New() *Proxy {

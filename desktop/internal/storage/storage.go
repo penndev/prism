@@ -1,4 +1,4 @@
-// 封装类似 sqlite 的 bbolt 数据库给前端持久化数据使用。
+// ĺ°čŁçąťäźź sqlite ç bbolt ć°ćŽĺşçťĺçŤŻćäšĺć°ćŽä˝żç¨ă
 package storage
 
 import (
@@ -33,7 +33,7 @@ func (s *Storage) SetSettings(v Settings) error {
 	return s.putJSON(KeySettings, v)
 }
 
-// GetSettings 无记录时返回 nil, nil。
+// GetSettings ć čŽ°ĺ˝ćśčżĺ nil, nilă
 func (s *Storage) GetSettings() (*Settings, error) {
 	var out Settings
 	ok, err := s.getJSON(KeySettings, &out)
@@ -53,7 +53,7 @@ func (s *Storage) SetServers(servers []ServerEntry) error {
 	return s.putJSON(KeyServers, servers)
 }
 
-// GetServers 无记录时返回空切片。
+// GetServers ć čŽ°ĺ˝ćśčżĺçŠşĺçă
 func (s *Storage) GetServers() ([]ServerEntry, error) {
 	var out []ServerEntry
 	ok, err := s.getJSON(KeyServers, &out)
@@ -70,7 +70,7 @@ func (s *Storage) SetPACConfig(v PACConfig) error {
 	return s.putJSON(KeyPAC, v)
 }
 
-// GetPACConfig 无记录时返回 nil, nil。
+// GetPACConfig ć čŽ°ĺ˝ćśčżĺ nil, nilă
 func (s *Storage) GetPACConfig() (*PACConfig, error) {
 	var out PACConfig
 	ok, err := s.getJSON(KeyPAC, &out)
@@ -84,7 +84,7 @@ func (s *Storage) SetRuleConfig(v RuleConfig) error {
 	return s.putJSON(KeyRule, v)
 }
 
-// GetRuleConfig 无记录时返回 nil, nil。
+// GetRuleConfig ć čŽ°ĺ˝ćśčżĺ nil, nilă
 func (s *Storage) GetRuleConfig() (*RuleConfig, error) {
 	var out RuleConfig
 	ok, err := s.getJSON(KeyRule, &out)
@@ -94,11 +94,34 @@ func (s *Storage) GetRuleConfig() (*RuleConfig, error) {
 	return &out, nil
 }
 
+var ruleAreaNames func(ids []uint32) []string
+
+// SetRuleAreaNames 由 ipregion 注册展示名解析，避免 storage 反向依赖 ipregion。
+func SetRuleAreaNames(fn func(ids []uint32) []string) {
+	ruleAreaNames = fn
+}
+
+func (s *Storage) GetRuleStatus() RuleStatus {
+	out := RuleStatus{Mode: "global", AreaNames: []string{}}
+	cfg, err := s.GetRuleConfig()
+	if err != nil || cfg == nil {
+		return out
+	}
+	switch cfg.Mode {
+	case "proxy", "bypass":
+		out.Mode = cfg.Mode
+		if ruleAreaNames != nil {
+			out.AreaNames = ruleAreaNames(cfg.AreaIDs)
+		}
+	}
+	return out
+}
+
 func (s *Storage) SetSelectedServer(v ServerEntry) error {
 	return s.putJSON(KeySelectedServer, v)
 }
 
-// ClearSelectedServer 清除已保存的当前连接节点。
+// ClearSelectedServer ć¸é¤ĺˇ˛äżĺ­çĺ˝ĺčżćĽčçšă
 func (s *Storage) ClearSelectedServer() error {
 	return s.db.Update(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte(bucketName))
@@ -106,7 +129,7 @@ func (s *Storage) ClearSelectedServer() error {
 	})
 }
 
-// GetSelectedServer 无记录时返回 nil, nil。
+// GetSelectedServer ć čŽ°ĺ˝ćśčżĺ nil, nilă
 func (s *Storage) GetSelectedServer() (*ServerEntry, error) {
 	var out ServerEntry
 	ok, err := s.getJSON(KeySelectedServer, &out)
@@ -118,7 +141,7 @@ func (s *Storage) GetSelectedServer() (*ServerEntry, error) {
 
 func (s *Storage) putJSON(key string, v any) error {
 	if key == "" {
-		return errors.New("key不能为空")
+		return errors.New("keyä¸č˝ä¸şçŠş")
 	}
 	data, err := json.Marshal(v)
 	if err != nil {
@@ -132,7 +155,7 @@ func (s *Storage) putJSON(key string, v any) error {
 
 func (s *Storage) getJSON(key string, dest any) (found bool, err error) {
 	if key == "" {
-		return false, errors.New("key不能为空")
+		return false, errors.New("keyä¸č˝ä¸şçŠş")
 	}
 	err = s.db.View(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte(bucketName))

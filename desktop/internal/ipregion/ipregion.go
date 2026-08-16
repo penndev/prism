@@ -1,5 +1,5 @@
-// Package ipregion 封装应用内 ipregion.db 的打开与查询，供规则页与连接分流共用。
-// 库文件的下载/上传由 web 层负责写入 DBPath 后调用 Reset。
+// Package ipregion å°è£åºç¨å ipregion.db çæå¼ä¸æ¥è¯¢ï¼ä¾è§åé¡µä¸è¿æ¥åæµå±ç¨ã
+// åºæä»¶çä¸è½½/ä¸ä¼ ç± web å±è´è´£åå¥ DBPath åè°ç¨ Resetã
 package ipregion
 
 import (
@@ -15,7 +15,7 @@ import (
 
 const DBName = "ipregion.db"
 
-// Status 库文件状态。
+// Status åºæä»¶ç¶æã
 type Status struct {
 	Exists  bool   `json:"exists"`
 	Path    string `json:"path"`
@@ -32,6 +32,10 @@ var (
 	searcher *gopkg.Searcher
 )
 
+func init() {
+	storage.SetRuleAreaNames(Names)
+}
+
 func DBPath() (string, error) {
 	dir, err := storage.AppDir()
 	if err != nil {
@@ -40,7 +44,7 @@ func DBPath() (string, error) {
 	return filepath.Join(dir, DBName), nil
 }
 
-// Reset 关闭并清空缓存的 Searcher（库文件更新后调用）。
+// Reset å³é­å¹¶æ¸ç©ºç¼å­ç Searcherï¼åºæä»¶æ´æ°åè°ç¨ï¼ã
 func Reset() {
 	mu.Lock()
 	defer mu.Unlock()
@@ -50,14 +54,14 @@ func Reset() {
 	}
 }
 
-// Get 返回已打开的 Searcher，未打开时为 nil。
+// Get è¿åå·²æå¼ç Searcherï¼æªæå¼æ¶ä¸º nilã
 func Get() *gopkg.Searcher {
 	mu.Lock()
 	defer mu.Unlock()
 	return searcher
 }
 
-// Open 打开应用配置目录下的 ipregion.db（带缓存）。
+// Open æå¼åºç¨éç½®ç®å½ä¸ç ipregion.dbï¼å¸¦ç¼å­ï¼ã
 func Open() (*gopkg.Searcher, error) {
 	mu.Lock()
 	defer mu.Unlock()
@@ -69,17 +73,17 @@ func Open() (*gopkg.Searcher, error) {
 		return nil, err
 	}
 	if _, err := os.Stat(path); err != nil {
-		return nil, fmt.Errorf("未找到 ipregion.db，请先下载或上传")
+		return nil, fmt.Errorf("æªæ¾å° ipregion.dbï¼è¯·åä¸è½½æä¸ä¼ ")
 	}
 	s, err := gopkg.Open(path)
 	if err != nil {
-		return nil, fmt.Errorf("打开 ipregion.db 失败: %w", err)
+		return nil, fmt.Errorf("æå¼ ipregion.db å¤±è´¥: %w", err)
 	}
 	searcher = s
 	return searcher, nil
 }
 
-// StatusOf 返回库状态。
+// StatusOf è¿ååºç¶æã
 func StatusOf() (Status, error) {
 	path, err := DBPath()
 	if err != nil {
@@ -103,7 +107,7 @@ func StatusOf() (Status, error) {
 	return out, nil
 }
 
-// Find 查询 IP 地域信息。
+// Find æ¥è¯¢ IP å°åä¿¡æ¯ã
 func Find(ip string) (gopkg.Info, error) {
 	s, err := Open()
 	if err != nil {
@@ -112,7 +116,7 @@ func Find(ip string) (gopkg.Info, error) {
 	return s.Find(ip)
 }
 
-// Names 按地域 ID 查询名称；找不到的 ID 会被跳过。
+// Names æå°å ID æ¥è¯¢åç§°ï¼æ¾ä¸å°ç ID ä¼è¢«è·³è¿ã
 func Names(ids []uint32) []string {
 	out := make([]string, 0, len(ids))
 	if len(ids) == 0 {
@@ -135,8 +139,8 @@ func Names(ids []uint32) []string {
 	return out
 }
 
-// InAreas 判断 address（host 或 host:port）是否属于给定地域 ID（含上级）。
-// 无法解析或不在列表中时返回 false。
+// InAreas å¤æ­ addressï¼host æ host:portï¼æ¯å¦å±äºç»å®å°å IDï¼å«ä¸çº§ï¼ã
+// æ æ³è§£ææä¸å¨åè¡¨ä¸­æ¶è¿å falseã
 func InAreas(address string, areaIDs []uint32) bool {
 	if len(areaIDs) == 0 {
 		return false
