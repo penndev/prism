@@ -1,5 +1,5 @@
-// Package ipregion å°è£åºç¨å ipregion.db çæå¼ä¸æ¥è¯¢ï¼ä¾è§åé¡µä¸è¿æ¥åæµå±ç¨ã
-// åºæä»¶çä¸è½½/ä¸ä¼ ç± web å±è´è´£åå¥ DBPath åè°ç¨ Resetã
+// Package ipregion 封装应用内 ipregion.db 的打开与查询，供规则页与连接分流共用。
+// 库文件的下载/上传由 web 层负责写入 DBPath 后调用 Reset。
 package ipregion
 
 import (
@@ -15,7 +15,7 @@ import (
 
 const DBName = "ipregion.db"
 
-// Status åºæä»¶ç¶æã
+// Status 库文件状态。
 type Status struct {
 	Exists  bool   `json:"exists"`
 	Path    string `json:"path"`
@@ -44,7 +44,7 @@ func DBPath() (string, error) {
 	return filepath.Join(dir, DBName), nil
 }
 
-// Reset å³é­å¹¶æ¸ç©ºç¼å­ç Searcherï¼åºæä»¶æ´æ°åè°ç¨ï¼ã
+// Reset 关闭并清空缓存的 Searcher（库文件更新后调用）。
 func Reset() {
 	mu.Lock()
 	defer mu.Unlock()
@@ -54,14 +54,14 @@ func Reset() {
 	}
 }
 
-// Get è¿åå·²æå¼ç Searcherï¼æªæå¼æ¶ä¸º nilã
+// Get 返回已打开的 Searcher，未打开时为 nil。
 func Get() *gopkg.Searcher {
 	mu.Lock()
 	defer mu.Unlock()
 	return searcher
 }
 
-// Open æå¼åºç¨éç½®ç®å½ä¸ç ipregion.dbï¼å¸¦ç¼å­ï¼ã
+// Open 打开应用配置目录下的 ipregion.db（带缓存）。
 func Open() (*gopkg.Searcher, error) {
 	mu.Lock()
 	defer mu.Unlock()
@@ -73,17 +73,17 @@ func Open() (*gopkg.Searcher, error) {
 		return nil, err
 	}
 	if _, err := os.Stat(path); err != nil {
-		return nil, fmt.Errorf("æªæ¾å° ipregion.dbï¼è¯·åä¸è½½æä¸ä¼ ")
+		return nil, fmt.Errorf("未找到 ipregion.db，请先下载或上传")
 	}
 	s, err := gopkg.Open(path)
 	if err != nil {
-		return nil, fmt.Errorf("æå¼ ipregion.db å¤±è´¥: %w", err)
+		return nil, fmt.Errorf("打开 ipregion.db 失败: %w", err)
 	}
 	searcher = s
 	return searcher, nil
 }
 
-// StatusOf è¿ååºç¶æã
+// StatusOf 返回库状态。
 func StatusOf() (Status, error) {
 	path, err := DBPath()
 	if err != nil {
@@ -107,7 +107,7 @@ func StatusOf() (Status, error) {
 	return out, nil
 }
 
-// Find æ¥è¯¢ IP å°åä¿¡æ¯ã
+// Find 查询 IP 地域信息。
 func Find(ip string) (gopkg.Info, error) {
 	s, err := Open()
 	if err != nil {
@@ -116,7 +116,7 @@ func Find(ip string) (gopkg.Info, error) {
 	return s.Find(ip)
 }
 
-// Names æå°å ID æ¥è¯¢åç§°ï¼æ¾ä¸å°ç ID ä¼è¢«è·³è¿ã
+// Names 按地域 ID 查询名称；找不到的 ID 会被跳过。
 func Names(ids []uint32) []string {
 	out := make([]string, 0, len(ids))
 	if len(ids) == 0 {
@@ -139,8 +139,37 @@ func Names(ids []uint32) []string {
 	return out
 }
 
-// InAreas å¤æ­ addressï¼host æ host:portï¼æ¯å¦å±äºç»å®å°å IDï¼å«ä¸çº§ï¼ã
-// æ æ³è§£ææä¸å¨åè¡¨ä¸­æ¶è¿å falseã
+type AreaNode struct {
+	ID       uint32     `json:"id"`
+	ParentID uint32     `json:"parent_id"`
+	Name     string     `json:"name"`
+	Children []AreaNode `json:"children,omitempty"`
+}
+
+func AreaTree() ([]AreaNode, error) {
+	s, err := Open()
+	if err != nil {
+		return nil, err
+	}
+	return buildAreaTree(s, 0), nil
+}
+
+func buildAreaTree(s *gopkg.Searcher, parentID uint32) []AreaNode {
+	src := s.Areas(parentID)
+	out := make([]AreaNode, 0, len(src))
+	for _, a := range src {
+		out = append(out, AreaNode{
+			ID:       a.ID,
+			ParentID: a.ParentID,
+			Name:     a.Name,
+			Children: buildAreaTree(s, a.ID),
+		})
+	}
+	return out
+}
+
+// InAreas 判断 address（host 或 host:port）是否属于给定地域 ID（含上级）。
+// 无法解析或不在列表中时返回 false。
 func InAreas(address string, areaIDs []uint32) bool {
 	if len(areaIDs) == 0 {
 		return false

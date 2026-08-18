@@ -211,7 +211,29 @@ button:disabled {
 }
 
 .db-block {
-  margin-top: 0.4rem;
+  margin: 0.75rem 0 1rem;
+}
+
+.db-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.4rem;
+}
+
+.db-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.db-head button {
+  padding: 0.28rem 0.65rem;
+  font-size: 12px;
+}
+
+.db-block .status-box {
+  margin-top: 0;
 }
 
 .rule-section {
@@ -221,7 +243,9 @@ button:disabled {
 }
 
 .rule-section:first-of-type {
-  margin-top: 0.5rem;
+  margin-top: 0.35rem;
+  padding-top: 0.35rem;
+  border-top: 0;
 }
 
 .rule-section-head h3 {
@@ -265,9 +289,34 @@ button:disabled {
   border-radius: 8px;
   background: var(--surface-soft);
   padding: 0.45rem 0.55rem;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 0.35rem 0.75rem;
+}
+
+.area-node-row {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  min-height: 26px;
+}
+
+.area-toggle {
+  width: 1.15rem;
+  flex-shrink: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.area-toggle.is-empty {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.area-children {
+  padding-left: 1.15rem;
 }
 
 .area-check {

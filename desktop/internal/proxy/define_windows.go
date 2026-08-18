@@ -17,12 +17,17 @@ const TUN_MTU = 0
 const TUN_OFFSET = 0
 
 var TUN_IP netip.Prefix
+var TUN_IP6 netip.Prefix
 var Routes []netip.Prefix
 
 // 自定义网卡GUID 方便wintun复用
 func init() {
 	TUN_IP = netip.MustParsePrefix("172.19.0.1/32")
-	Routes = []netip.Prefix{netip.MustParsePrefix("0.0.0.0/0")}
+	TUN_IP6 = netip.MustParsePrefix("fd19::1/128")
+	Routes = []netip.Prefix{
+		netip.MustParsePrefix("0.0.0.0/0"),
+		netip.MustParsePrefix("::/0"),
+	}
 	// 设置tun设备名称标识和guid
 	tun.WintunTunnelType = TUN_NAME
 	tun.WintunStaticRequestedGUID = &windows.GUID{

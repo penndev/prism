@@ -14,36 +14,13 @@
         <img class="brand-logo" src="/subscribe/logo.png" width="38" height="38" alt="Prism">
         <div>
           <h1 id="titleMain">Prism 规则管理</h1>
-          <p id="titleDesc">先准备 ipregion.db，再按类型维护规则。</p>
+          <p id="titleDesc">按类型分区管理；当前仅支持地域规则。</p>
         </div>
       </div>
     </header>
 
-    <section class="panel" id="panelDb">
-      <h2 id="sectionDbTitle">IP 地域库</h2>
-      <p id="sectionDbDesc" class="subline">页面优先展示库信息；若不存在，请下载或上传 <code>ipregion.db</code>。</p>
-      <div id="dbReady" class="db-block" hidden>
-        <div id="dbStatus" class="status-box ok has-path-tip" title="">-</div>
-      </div>
-      <div id="dbMissing" class="db-block" hidden>
-        <div id="dbMissingHint" class="status-box warn has-path-tip" title="">未找到 ipregion.db，请下载或上传。</div>
-        <div class="row">
-          <input id="dbUrl" type="url" placeholder="https://.../ipregion.db" spellcheck="false">
-          <button id="btnDownload" class="primary" type="button">下载</button>
-        </div>
-        <div class="row">
-          <input id="dbFile" type="file" accept=".db,application/octet-stream">
-          <button id="btnUpload" type="button">上传文件</button>
-        </div>
-      </div>
-      <div class="row">
-        <span id="dbMsg" class="muted"></span>
-      </div>
-    </section>
-
     <section class="panel" id="panelRules">
       <h2 id="sectionRulesTitle">规则</h2>
-      <p id="sectionRulesDesc" class="subline">按类型分区管理；当前仅支持地域规则。</p>
 
       <div class="rule-section" id="geoSection">
         <div class="rule-section-head">
@@ -51,7 +28,26 @@
           <p id="geoDesc" class="subline">三种模式互斥：全局代理，或代理某些区域，或绕过某些区域。</p>
         </div>
 
-        <div id="geoDisabled" class="status-box warn" hidden>请先准备 ipregion.db，再设置地域规则。</div>
+        <div class="db-block">
+          <div class="db-head">
+            <span id="dbLabel" class="db-label">IP 库</span>
+            <button id="btnChangeDb" type="button" hidden>更换</button>
+          </div>
+          <div id="dbStatus" class="status-box has-path-tip" title="">-</div>
+          <div id="dbEditor" hidden>
+            <div class="row">
+              <input id="dbUrl" type="url" placeholder="https://.../ipregion.db" spellcheck="false">
+              <button id="btnDownload" class="primary" type="button">下载</button>
+            </div>
+            <div class="row">
+              <input id="dbFile" type="file" accept=".db,application/octet-stream">
+              <button id="btnUpload" type="button">上传文件</button>
+            </div>
+          </div>
+          <div class="row">
+            <span id="dbMsg" class="muted"></span>
+          </div>
+        </div>
 
         <div id="geoEnabled" hidden>
           <div class="mode-row">
@@ -95,19 +91,20 @@
 
     let areas = [];
     let areaIds = [];
+    let expandedIds = new Set();
     let saveTimer = null;
     let saving = false;
+    let dbExists = false;
+    let editingDb = false;
 
-    const dbReady = document.getElementById('dbReady');
-    const dbMissing = document.getElementById('dbMissing');
     const dbStatus = document.getElementById('dbStatus');
-    const dbMissingHint = document.getElementById('dbMissingHint');
+    const dbEditor = document.getElementById('dbEditor');
     const dbUrlEl = document.getElementById('dbUrl');
     const dbFileEl = document.getElementById('dbFile');
     const dbMsg = document.getElementById('dbMsg');
+    const btnChangeDb = document.getElementById('btnChangeDb');
     const btnDownload = document.getElementById('btnDownload');
     const btnUpload = document.getElementById('btnUpload');
-    const geoDisabled = document.getElementById('geoDisabled');
     const geoEnabled = document.getElementById('geoEnabled');
     const areaPicker = document.getElementById('areaPicker');
     const areaFilter = document.getElementById('areaFilter');
@@ -144,12 +141,10 @@
       document.title = t('title.document');
       document.getElementById('titleMain').textContent = t('title.main');
       document.getElementById('titleDesc').textContent = t('title.desc');
-      document.getElementById('sectionDbTitle').textContent = t('section.db.title');
-      document.getElementById('sectionDbDesc').innerHTML = t('section.db.desc');
       document.getElementById('sectionRulesTitle').textContent = t('section.rules.title');
-      document.getElementById('sectionRulesDesc').textContent = t('section.rules.desc');
       document.getElementById('geoTitle').textContent = t('geo.title');
       document.getElementById('geoDesc').textContent = t('geo.desc');
+      document.getElementById('dbLabel').textContent = t('db.label');
       document.getElementById('labelModeGlobal').textContent = t('geo.mode.global');
       document.getElementById('labelModeProxy').textContent = t('geo.mode.proxy');
       document.getElementById('labelModeBypass').textContent = t('geo.mode.bypass');
@@ -157,8 +152,9 @@
       dbUrlEl.placeholder = t('db.url.placeholder');
       btnDownload.textContent = t('button.download');
       btnUpload.textContent = t('button.upload');
-      geoDisabled.textContent = t('geo.needDb');
-      dbMissingHint.textContent = t('db.status.missingHint');
+      if (dbExists) {
+        btnChangeDb.textContent = editingDb ? t('button.cancel') : t('button.replace');
+      }
       updateSelectedCount();
     }
 
@@ -182,9 +178,7 @@
     }
 
     function selectedAreaIds() {
-      return Array.from(areaChecks.querySelectorAll('input[type="checkbox"]:checked'))
-        .map((el) => Number(el.value))
-        .filter((id) => id > 0);
+      return (Array.isArray(areaIds) ? areaIds : []).map(Number).filter((id) => id > 0);
     }
 
     function updateSelectedCount() {
@@ -203,35 +197,97 @@
       return { mode, areaIds: ids };
     }
 
+    function nodeMatches(a, filter) {
+      if (!filter) return true;
+      const name = String(a.name || '').toLowerCase();
+      if (name.includes(filter) || String(a.id).includes(filter)) return true;
+      return (a.children || []).some((c) => nodeMatches(c, filter));
+    }
+
+    function seedExpanded(nodes, selected, ancestors) {
+      for (const a of nodes || []) {
+        const id = Number(a.id);
+        seedExpanded(a.children || [], selected, ancestors.concat(id));
+        if (selected.has(id)) {
+          ancestors.forEach((pid) => expandedIds.add(pid));
+        }
+      }
+    }
+
+    function renderAreaNode(a, selected, filter, into) {
+      if (filter && !nodeMatches(a, filter)) return;
+      const children = Array.isArray(a.children) ? a.children : [];
+      const id = Number(a.id);
+      const open = filter
+        ? children.some((c) => nodeMatches(c, filter))
+        : expandedIds.has(id);
+
+      const node = document.createElement('div');
+      node.className = 'area-node';
+      const row = document.createElement('div');
+      row.className = 'area-node-row';
+
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'area-toggle' + (children.length ? '' : ' is-empty');
+      toggle.textContent = children.length && open ? '-' : '+';
+      if (children.length) {
+        toggle.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          if (expandedIds.has(id)) expandedIds.delete(id);
+          else expandedIds.add(id);
+          renderAreaChecks();
+        });
+      }
+      row.appendChild(toggle);
+
+      const label = document.createElement('label');
+      label.className = 'area-check';
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.value = String(a.id);
+      input.checked = selected.has(id);
+      input.addEventListener('change', onAreaCheckChange);
+      const span = document.createElement('span');
+      span.textContent = String(a.name || '');
+      label.appendChild(input);
+      label.appendChild(span);
+      row.appendChild(label);
+      node.appendChild(row);
+
+      if (children.length && open) {
+        const sub = document.createElement('div');
+        sub.className = 'area-children';
+        for (const c of children) renderAreaNode(c, selected, filter, sub);
+        node.appendChild(sub);
+      }
+      into.appendChild(node);
+    }
+
     function renderAreaChecks() {
       const filter = (areaFilter.value || '').trim().toLowerCase();
       const selected = new Set((Array.isArray(areaIds) ? areaIds : []).map(Number));
 
       areaChecks.innerHTML = '';
       for (const a of areas) {
-        const name = String(a.name || '');
-        if (filter && !name.toLowerCase().includes(filter) && !String(a.id).includes(filter)) {
-          continue;
-        }
-        const label = document.createElement('label');
-        label.className = 'area-check';
-        const input = document.createElement('input');
-        input.type = 'checkbox';
-        input.value = String(a.id);
-        input.checked = selected.has(Number(a.id));
-        input.addEventListener('change', onAreaCheckChange);
-        const span = document.createElement('span');
-        span.textContent = name;
-        label.appendChild(input);
-        label.appendChild(span);
-        areaChecks.appendChild(label);
+        renderAreaNode(a, selected, filter, areaChecks);
       }
       updateSelectedCount();
     }
 
     function setGeoEnabled(enabled) {
-      geoDisabled.hidden = enabled;
       geoEnabled.hidden = !enabled;
+    }
+
+    function syncDbEditorUI() {
+      if (!dbExists) {
+        btnChangeDb.hidden = true;
+        dbEditor.hidden = false;
+        return;
+      }
+      btnChangeDb.hidden = false;
+      btnChangeDb.textContent = editingDb ? t('button.cancel') : t('button.replace');
+      dbEditor.hidden = !editingDb;
     }
 
     function setPathTip(el, path) {
@@ -246,9 +302,9 @@
     }
 
     function renderDbStatus(st) {
-      if (st && st.exists) {
-        dbReady.hidden = false;
-        dbMissing.hidden = true;
+      dbExists = !!(st && st.exists);
+      if (dbExists) {
+        dbStatus.className = 'status-box ok';
         dbStatus.textContent = t('db.status.ready', {
           size: formatSize(st.size),
           version: st.version || '-',
@@ -260,12 +316,13 @@
         setPathTip(dbStatus, st.path || '');
         setGeoEnabled(true);
       } else {
-        dbReady.hidden = true;
-        dbMissing.hidden = false;
-        dbMissingHint.textContent = t('db.status.missingHint');
-        setPathTip(dbMissingHint, st && st.path ? st.path : '');
+        editingDb = false;
+        dbStatus.className = 'status-box warn';
+        dbStatus.textContent = t('db.status.missingHint');
+        setPathTip(dbStatus, st && st.path ? st.path : '');
         setGeoEnabled(false);
       }
+      syncDbEditorUI();
     }
 
     async function loadDb() {
@@ -278,6 +335,7 @@
       try {
         areas = await api('/rule/api/areas');
         if (!Array.isArray(areas)) areas = [];
+        seedExpanded(areas, new Set((areaIds || []).map(Number)), []);
         renderAreaChecks();
       } catch (e) {
         areas = [];
@@ -332,8 +390,12 @@
       }
     }
 
-    function onAreaCheckChange() {
-      areaIds = selectedAreaIds();
+    function onAreaCheckChange(ev) {
+      const id = Number(ev.target.value);
+      const set = new Set(selectedAreaIds());
+      if (ev.target.checked) set.add(id);
+      else set.delete(id);
+      areaIds = Array.from(set).filter((n) => n > 0);
       updateSelectedCount();
       scheduleSaveFromUI();
     }
@@ -352,6 +414,7 @@
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ url })
         });
+        editingDb = false;
         renderDbStatus(res.db || await api('/rule/api/db'));
         dbMsg.textContent = t('db.status.downloaded');
         await loadAreas();
@@ -378,6 +441,7 @@
         const resp = await fetch('/rule/api/db/upload', { method: 'POST', body: fd });
         if (!resp.ok) throw new Error(await resp.text());
         const res = await resp.json();
+        editingDb = false;
         renderDbStatus(res.db || await api('/rule/api/db'));
         dbMsg.textContent = t('db.status.uploaded');
         await loadAreas();
@@ -394,6 +458,15 @@
       el.addEventListener('change', onModeChange);
     });
     areaFilter.addEventListener('input', renderAreaChecks);
+    btnChangeDb.addEventListener('click', () => {
+      editingDb = !editingDb;
+      dbMsg.textContent = '';
+      if (!editingDb) {
+        dbUrlEl.value = '';
+        dbFileEl.value = '';
+      }
+      syncDbEditorUI();
+    });
     btnDownload.addEventListener('click', downloadDb);
     btnUpload.addEventListener('click', uploadDb);
 

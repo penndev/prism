@@ -51,6 +51,7 @@ func (p *Proxy) startTunDev() error {
 	route.Start(route.Options{
 		DevName:      p.dev.Name(),
 		DevIP:        TUN_IP,
+		DevIP6:       TUN_IP6,
 		RouteAddress: Routes,
 	})
 	return nil

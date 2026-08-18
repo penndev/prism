@@ -47,19 +47,24 @@ func waitDevAddrReady(tunName string, tunPrefix netip.Prefix) error {
 
 // 给设备设置静态 IP (macOS)
 func SetDevAddr(tunName string, prefix netip.Prefix) error {
-	if !prefix.IsValid() || !prefix.Addr().Is4() {
-		return fmt.Errorf("only ipv4 prefix is supported: %v", prefix)
+	if !prefix.IsValid() {
+		return fmt.Errorf("invalid prefix")
 	}
 
 	ipStr := prefix.Addr().String()
-	maskStr := prefixMask(prefix).String()
-
-	// utun 是点到点接口，ifconfig 通常需要提供 dstaddr（可以用同一个 ip 作为兜底）
-	tries := [][]string{
-		// ifconfig utunX inet <addr> <dstaddr> netmask <mask> up
-		{"ifconfig", tunName, "inet", ipStr, ipStr, "netmask", maskStr, "up"},
-		// ifconfig utunX inet <addr> netmask <mask> up（不同系统/场景可能能直接工作）
-		{"ifconfig", tunName, "inet", ipStr, "netmask", maskStr, "up"},
+	var tries [][]string
+	if prefix.Addr().Is4() {
+		maskStr := prefixMask(prefix).String()
+		tries = [][]string{
+			{"ifconfig", tunName, "inet", ipStr, ipStr, "netmask", maskStr, "up"},
+			{"ifconfig", tunName, "inet", ipStr, "netmask", maskStr, "up"},
+		}
+	} else if prefix.Addr().Is6() {
+		tries = [][]string{
+			{"ifconfig", tunName, "inet6", ipStr, "prefixlen", "128"},
+		}
+	} else {
+		return fmt.Errorf("unsupported prefix: %v", prefix)
 	}
 
 	var lastErr error
@@ -79,20 +84,29 @@ func SetRouteAddr(addr netip.Prefix, gateway net.IP) error {
 	if !addr.IsValid() {
 		return fmt.Errorf("invalid route prefix")
 	}
-
-	gw4 := gateway.To4()
-	if gw4 == nil {
-		return fmt.Errorf("gateway must be ipv4, got: %v", gateway)
+	if gateway == nil {
+		return fmt.Errorf("gateway is nil")
 	}
 
-	netStr := addr.Addr().String()
-	maskStr := prefixMask(addr).String()
-	gwStr := gw4.String()
-
-	// 尽量覆盖 macOS / BSD route 的不同参数风格
-	tries := [][]string{
-		{"route", "-n", "add", "-net", netStr, maskStr, gwStr},
-		{"route", "-n", "add", "-net", netStr, "-netmask", maskStr, gwStr},
+	var tries [][]string
+	if addr.Addr().Is6() {
+		gw := gateway.String()
+		tries = [][]string{
+			{"route", "-n", "add", "-inet6", addr.String(), gw},
+			{"route", "-n", "add", "-inet6", "-net", addr.String(), gw},
+		}
+	} else {
+		gw4 := gateway.To4()
+		if gw4 == nil {
+			return fmt.Errorf("gateway must be ipv4, got: %v", gateway)
+		}
+		netStr := addr.Addr().String()
+		maskStr := prefixMask(addr).String()
+		gwStr := gw4.String()
+		tries = [][]string{
+			{"route", "-n", "add", "-net", netStr, maskStr, gwStr},
+			{"route", "-n", "add", "-net", netStr, "-netmask", maskStr, gwStr},
+		}
 	}
 
 	var lastErr error

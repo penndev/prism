@@ -34,53 +34,136 @@ func prefixMask(p netip.Prefix) net.IP {
 
 // 给设备设置静态IP
 func SetDevAddr(tunName string, prefix netip.Prefix) error {
-	if !prefix.Addr().Is4() {
-		panic("not ipv4 prefix")
+	if !prefix.IsValid() {
+		return fmt.Errorf("invalid prefix")
 	}
 	tunIP := prefix.Addr().String()
-	args := []string{
-		"interface", "ipv4", "set", "address",
-		fmt.Sprintf(`name=%s`, tunName),
-		"source=static",
-		fmt.Sprintf("addr=%s", tunIP),
-		fmt.Sprintf("mask=%s", prefixMask(prefix).String()),
+	var args []string
+	switch {
+	case prefix.Addr().Is4():
+		args = []string{
+			"interface", "ipv4", "set", "address",
+			fmt.Sprintf("name=%s", tunName),
+			"source=static",
+			fmt.Sprintf("addr=%s", tunIP),
+			fmt.Sprintf("mask=%s", prefixMask(prefix).String()),
+		}
+	case prefix.Addr().Is6():
+		// TUN 上 DAD 收不到 NA，Windows 会丢掉刚加上的 IPv6 地址。
+		prep := []string{
+			"interface", "ipv6", "set", "interface",
+			"interface=" + tunName,
+			"dadtransmits=0",
+			"forwarding=enabled",
+		}
+		log.Println("netsh", strings.Join(prep, " "))
+		cmd := exec.Command("netsh", prep...)
+		hideConsole(cmd)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			log.Printf("set ipv6 interface failed: %v, %s", err, out)
+		}
+		args = []string{
+			"interface", "ipv6", "add", "address",
+			"interface=" + tunName,
+			"address=" + tunIP,
+		}
+	default:
+		return fmt.Errorf("unsupported prefix: %v", prefix)
 	}
 	log.Println("netsh", strings.Join(args, " "))
 
 	cmd := exec.Command("netsh", args...)
 	hideConsole(cmd)
 	out, err := cmd.CombinedOutput()
-	if err != nil {
+	if err != nil && !alreadyExists(string(out)) {
 		return fmt.Errorf("netsh failed: %v, %s", err, string(out))
 	}
 
-	waitRouteReady := func() error {
-		ticker := time.NewTicker(200 * time.Millisecond)
-		timeout := time.After(30 * time.Second)
-		for {
-			select {
-			case <-ticker.C:
-				ic := exec.Command("ipconfig")
-				hideConsole(ic)
-				out, err := ic.CombinedOutput()
-				if err != nil {
-					continue
-				}
-				if strings.Contains(string(out), tunIP) {
-					return nil
-				} else {
-					continue
-				}
-			case <-timeout:
-				return errors.New("set dev static ip timeout")
+	if err := waitDevAddr(tunName, prefix.Addr()); err != nil {
+		return err
+	}
+	if prefix.Addr().Is4() {
+		setDevDNS(tunName)
+	}
+	return nil
+}
+
+func alreadyExists(out string) bool {
+	low := strings.ToLower(out)
+	return strings.Contains(low, "exists") || strings.Contains(out, "已存在")
+}
+
+func waitDevAddr(tunName string, addr netip.Addr) error {
+	want := net.IP(addr.AsSlice())
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
+	timeout := time.After(30 * time.Second)
+	for {
+		select {
+		case <-ticker.C:
+			if ifaceHasUnicast(tunName, want) {
+				return nil
+			}
+		case <-timeout:
+			return errors.New("set dev static ip timeout")
+		}
+	}
+}
+
+func ifaceHasUnicast(tunName string, want net.IP) bool {
+	if want == nil {
+		return false
+	}
+	var size uint32 = 15000
+	buf := make([]byte, size)
+	for {
+		err := windows.GetAdaptersAddresses(
+			windows.AF_UNSPEC,
+			windows.GAA_FLAG_SKIP_ANYCAST|windows.GAA_FLAG_SKIP_MULTICAST|windows.GAA_FLAG_SKIP_DNS_SERVER,
+			0,
+			(*windows.IpAdapterAddresses)(unsafe.Pointer(&buf[0])),
+			&size,
+		)
+		if err == nil {
+			break
+		}
+		if err != windows.ERROR_BUFFER_OVERFLOW {
+			return false
+		}
+		buf = make([]byte, size)
+	}
+	wantName := strings.ToLower(tunName)
+	for aa := (*windows.IpAdapterAddresses)(unsafe.Pointer(&buf[0])); aa != nil; aa = aa.Next {
+		name := strings.ToLower(windows.UTF16PtrToString(aa.FriendlyName))
+		if name != wantName {
+			continue
+		}
+		for ua := aa.FirstUnicastAddress; ua != nil; ua = ua.Next {
+			ip := sockaddrIP(ua.Address)
+			if ip != nil && ip.Equal(want) {
+				return true
 			}
 		}
 	}
-	if err := waitRouteReady(); err != nil {
-		return err
+	return false
+}
+
+func sockaddrIP(sa windows.SocketAddress) net.IP {
+	if sa.Sockaddr == nil {
+		return nil
 	}
-	setDevDNS(tunName)
-	return nil
+	switch sa.Sockaddr.Addr.Family {
+	case windows.AF_INET:
+		raw := (*windows.RawSockaddrInet4)(unsafe.Pointer(sa.Sockaddr))
+		return net.IPv4(raw.Addr[0], raw.Addr[1], raw.Addr[2], raw.Addr[3])
+	case windows.AF_INET6:
+		raw := (*windows.RawSockaddrInet6)(unsafe.Pointer(sa.Sockaddr))
+		ip := make(net.IP, net.IPv6len)
+		copy(ip, raw.Addr[:])
+		return ip
+	default:
+		return nil
+	}
 }
 
 func setDevDNS(tunName string) {
@@ -192,12 +275,17 @@ func SetRouteAddr(addr netip.Prefix, gateway net.IP) error {
 		return fmt.Errorf("gateway is nil")
 	}
 
-	args := []string{
-		"add",
-		addr.Addr().String(),
-		"mask",
-		prefixMask(addr).String(),
-		gateway.String(),
+	var args []string
+	if addr.Addr().Is6() {
+		args = []string{"-6", "add", addr.String(), gateway.String()}
+	} else {
+		args = []string{
+			"add",
+			addr.Addr().String(),
+			"mask",
+			prefixMask(addr).String(),
+			gateway.String(),
+		}
 	}
 
 	log.Println("route", strings.Join(args, " "))
@@ -205,7 +293,7 @@ func SetRouteAddr(addr netip.Prefix, gateway net.IP) error {
 	rc := exec.Command("route", args...)
 	hideConsole(rc)
 	out, err := rc.CombinedOutput()
-	if err != nil {
+	if err != nil && !alreadyExists(string(out)) {
 		return fmt.Errorf("route failed: %v, output: %s", err, string(out))
 	}
 	return nil

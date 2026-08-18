@@ -142,14 +142,14 @@ func HandleRuleAreas(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	s, err := ipregion.Open()
+	tree, err := ipregion.AreaTree()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(s.Areas(0))
+	_ = json.NewEncoder(w).Encode(tree)
 }
 
 func HandleRuleDB(w http.ResponseWriter, r *http.Request) {
