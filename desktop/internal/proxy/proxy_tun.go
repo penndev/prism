@@ -40,11 +40,11 @@ func (p *Proxy) startTunDev() error {
 	stack.New(stack.Option{
 		EndPoint: p.dev,
 		HandleTCP: func(f *stack.ForwarderTCPRequest) {
-			internal.App.Event.Emit(internal.AppConfig.LogTypeName_LOG, "tun -> "+f.RemoteAddr.Network()+" "+f.RemoteAddr.String())
+			// internal.App.Event.Emit(internal.AppConfig.LogTypeName_LOG, "tun -> "+f.RemoteAddr.Network()+" "+f.RemoteAddr.String())
 			p.HandleConnect(f.Conn, f.RemoteAddr.Network(), f.RemoteAddr.String())
 		},
 		HandlerUDP: func(f *stack.ForwarderUDPRequest) {
-			internal.App.Event.Emit(internal.AppConfig.LogTypeName_LOG, "tun -> "+f.RemoteAddr.Network()+" "+f.RemoteAddr.String())
+			// internal.App.Event.Emit(internal.AppConfig.LogTypeName_LOG, "tun -> "+f.RemoteAddr.Network()+" "+f.RemoteAddr.String())
 			p.HandleConnect(f.Conn, f.RemoteAddr.Network(), f.RemoteAddr.String())
 		},
 	})

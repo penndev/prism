@@ -1,10 +1,10 @@
 package proxy
 
 import (
-	"desktop/internal"
 	"log"
 	"net"
 	"net/netip"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -12,54 +12,41 @@ import (
 	"github.com/penndev/prism/transport/dialer"
 )
 
-func addrIP(addr net.Addr) net.IP {
-	switch v := addr.(type) {
-	case *net.IPNet:
-		return v.IP
-	case *net.IPAddr:
-		return v.IP
-	default:
-		return nil
-	}
-}
-
-func isTunIP(ip net.IP) bool {
-	if ip == nil {
-		return false
-	}
-	addr, ok := netip.AddrFromSlice(ip)
-	if !ok {
-		return false
-	}
-	addr = addr.Unmap()
-	if TUN_IP.IsValid() && TUN_IP.Contains(addr) {
-		return true
-	}
-	return TUN_IP6.IsValid() && TUN_IP6.Contains(addr)
-}
-
-func collectPhysicalIPs() (v4, v6 []net.IP) {
+// physicalIPs 收集已 up 的网卡地址，只排除 loopback 和本进程 TUN。
+func physicalIPs() (v4, v6 []net.IP) {
 	ifaces, err := net.Interfaces()
 	if err != nil {
-		return nil, nil
+		return
 	}
-	tunName := strings.ToLower(TUN_NAME)
+	tun := strings.ToLower(TUN_NAME)
 	for _, iface := range ifaces {
+		n := strings.ToLower(iface.Name)
 		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
 			continue
 		}
-		name := strings.ToLower(iface.Name)
-		if tunName != "" && (name == tunName || strings.HasPrefix(name, tunName) || strings.Contains(name, "wintun")) {
+		if tun != "" && (n == tun || strings.HasPrefix(n, tun)) {
 			continue
 		}
 		addrs, err := iface.Addrs()
 		if err != nil {
 			continue
 		}
-		for _, addr := range addrs {
-			ip := addrIP(addr)
-			if ip == nil || ip.IsLoopback() || ip.IsUnspecified() || ip.IsLinkLocalUnicast() || isTunIP(ip) {
+		for _, a := range addrs {
+			var ip net.IP
+			switch v := a.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+			if ip == nil || ip.IsLoopback() || ip.IsUnspecified() || ip.IsLinkLocalUnicast() {
 				continue
+			}
+			if a, ok := netip.AddrFromSlice(ip); ok {
+				a = a.Unmap()
+				if TUN_IP.Contains(a) || TUN_IP6.Contains(a) {
+					continue
+				}
 			}
 			if ip4 := ip.To4(); ip4 != nil {
 				v4 = append(v4, ip4)
@@ -68,21 +55,20 @@ func collectPhysicalIPs() (v4, v6 []net.IP) {
 			}
 		}
 	}
-	return v4, v6
+	return
 }
 
-func dialFrom(ip net.IP, target string) bool {
-	c, err := (&net.Dialer{
-		Timeout:   2 * time.Second,
-		LocalAddr: &net.TCPAddr{IP: ip},
-	}).Dial("tcp", target)
-	if err != nil {
-		return false
+// hasIP 判断 ip 是否还在网卡地址列表里。
+func hasIP(list []net.IP, ip net.IP) bool {
+	for _, c := range list {
+		if ip != nil && c.Equal(ip) {
+			return true
+		}
 	}
-	c.Close()
-	return true
+	return false
 }
 
+// probe 用候选源地址去连节点，返回第一个能通的；全失败返回 nil，不随便兜底。
 func probe(cands []net.IP, target string) net.IP {
 	host, _, _ := net.SplitHostPort(target)
 	dest := net.ParseIP(host)
@@ -90,53 +76,57 @@ func probe(cands []net.IP, target string) net.IP {
 		if dest != nil && (dest.To4() == nil) != (ip.To4() == nil) {
 			continue
 		}
-		if dialFrom(ip, target) {
+		c, err := (&net.Dialer{Timeout: 2 * time.Second, LocalAddr: &net.TCPAddr{IP: ip}}).Dial("tcp", target)
+		if err == nil {
+			c.Close()
 			return ip
 		}
-	}
-	if len(cands) > 0 {
-		return cands[0]
 	}
 	return nil
 }
 
 var dialerOnce sync.Once
 
+func remoteTarget(u *url.URL) string {
+	if u == nil || u.Host == "" {
+		return ""
+	}
+	if _, _, err := net.SplitHostPort(u.Host); err == nil {
+		return u.Host
+	}
+	if u.Hostname() != "" && u.Port() != "" {
+		return net.JoinHostPort(u.Hostname(), u.Port())
+	}
+	return ""
+}
+
+// updateDialer 由 SetStart 后台启动。等到节点地址后，按「能连上节点」绑定物理网卡。
+// 已绑定的地址还在就保持；休眠导致旧地址暂时消失且新地址探测失败时，不改绑（避免落到 Hyper-V Default Switch）。
 func (p *Proxy) updateDialer() {
 	dialerOnce.Do(func() {
 		for {
-			// 未设置代理不用处理网卡
-			if p.remoteURL == nil || p.remoteURL.Hostname() == "" || p.remoteURL.Port() == "" {
+			// 等待节点地址没设置则一直断网状态。
+			target := remoteTarget(p.remoteURL)
+			if target == "" {
 				time.Sleep(time.Second)
 				continue
 			}
-			target := net.JoinHostPort(p.remoteURL.Hostname(), p.remoteURL.Port())
-
-			// 当前绑的物理 IP 还能连上节点就不动。
+			v4cands, v6cands := physicalIPs()
 			if b, ok := dialer.TCPDialer.(*dialer.BoundDialer); ok {
-				ip := b.LocalIPv4
-				if ip == nil {
-					ip = b.LocalIPv6
-				}
-				if ip != nil && dialFrom(ip, target) {
-					time.Sleep(30 * time.Second)
+				if hasIP(v4cands, b.LocalIPv4) || hasIP(v6cands, b.LocalIPv6) {
+					time.Sleep(5 * time.Second)
 					continue
 				}
 			}
-			// 获取新的物理 网卡连接
-			v4cands, v6cands := collectPhysicalIPs()
 			v4, v6 := probe(v4cands, target), probe(v6cands, target)
+			log.Println("Select Device v4", v4, "v6", v6)
 			if v4 == nil && v6 == nil {
-				internal.App.Event.Emit(internal.AppConfig.LogTypeName_LOG, "set dialer fallback: no available local ip")
 				time.Sleep(30 * time.Second)
 				continue
 			}
-
-			log.Println("v4", v4, "v6", v6)
-			bound := &dialer.BoundDialer{LocalIPv4: v4, LocalIPv6: v6}
-			dialer.TCPDialer = bound
-			dialer.UDPDialer = bound
-			time.Sleep(30 * time.Second)
+			d := &dialer.BoundDialer{LocalIPv4: v4, LocalIPv6: v6}
+			dialer.TCPDialer, dialer.UDPDialer = d, d
+			time.Sleep(time.Second)
 		}
 	})
 }

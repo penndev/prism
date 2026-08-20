@@ -30,7 +30,7 @@ func (p *Proxy) SetStart(host, user, pass string) error {
 			internal.App.Event.Emit(internal.AppConfig.LogTypeName_LOG, "local -> "+network+" "+address)
 		})
 	}
-	// 更新处理网卡。
+
 	go p.updateDialer()
 
 	internal.App.Event.Emit(

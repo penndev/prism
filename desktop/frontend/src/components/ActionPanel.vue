@@ -1,6 +1,6 @@
 <template>
   <a-card class="proxy-panel" :title="t('proxy.title')">
-    <!-- ĺ˝ĺéä¸­çäťŁçćĺĄĺ¨ -->
+    <!-- 当前选中的代理服务器 -->
     <div class="proxy-current-server">
       <span class="proxy-label">{{ t("proxy.currentServerLabel") }}</span>
       <span class="proxy-value">
@@ -21,12 +21,12 @@
       </a-button>
     </div>
 
-    <!-- ćŞéćĺĄĺ¨ćśçćç¤ş -->
+    <!-- 未选服务器时的提示 -->
     <div v-if="!serverStore.selectedServer" class="proxy-mode-tip">
       {{ t("proxy.selectTip") }}
     </div>
 
-    <!-- äťŁçć¨Ąĺźďźćĺ¨ / TUN -->
+    <!-- 代理模式：手动 / TUN -->
     <a-radio-group v-model:value="proxyMode" class="proxy-mode-group">
       <a-radio-button value="manual">
         {{ t("proxy.mode.manual") }}
@@ -36,7 +36,7 @@
       </a-radio-button>
     </a-radio-group>
 
-    <!-- PAC / č§ĺďźçźčžĺ¨ĺĽĺŁ -->
+    <!-- PAC / 规则：编辑器入口 -->
     <div class="proxy-pac-section">
       <div class="proxy-pac-line">
         <span class="proxy-pac-tag">{{ t("settings.pacTitle") }}</span>
@@ -118,7 +118,7 @@ const ruleMode = ref("global"); // global | match | bypass
 const ruleAreaNames = ref([]);
 let ruleEventOff = null;
 
-/** ćŹĺ°äťŁç Web ćĺĄć šĺ°ĺďźç¨äşćĺź PAC / č§ĺçźčžĺ¨ */
+/** 本地代理 Web 服务根地址，用于打开 PAC / 规则编辑器 */
 const webBaseURL = computed(() => {
   const rawHost = (settingsStore.proxy.host || "").trim();
   const host =
@@ -132,7 +132,7 @@ const webBaseURL = computed(() => {
   return `http://${host}:${port}`;
 });
 
-/** PAC čćŹĺŻšĺ¤ URLďźäžćľč§ĺ¨/çłťçťĺźç¨ďź */
+/** PAC 脚本对外 URL（供浏览器/系统引用） */
 const pacScriptURL = computed(() =>
   webBaseURL.value ? `${webBaseURL.value}/pac.js` : "",
 );
@@ -176,7 +176,7 @@ async function loadRuleStatus() {
   }
 }
 
-/** ĺ¨ćľč§ĺ¨ä¸­ćĺź PAC çźčžĺ¨éĄľé˘ */
+/** 在浏览器中打开 PAC 编辑器页面 */
 async function openPacEditor() {
   if (!webBaseURL.value) {
     message.warning(t("settings.pacNeedPort"));
@@ -190,7 +190,7 @@ async function openPacEditor() {
   }
 }
 
-/** ĺ¨ćľč§ĺ¨ä¸­ćĺźĺ°ĺč§ĺçźčžĺ¨ */
+/** 在浏览器中打开地域规则编辑器 */
 async function openRuleEditor() {
   if (!webBaseURL.value) {
     message.warning(t("settings.pacNeedPort"));
@@ -204,7 +204,7 @@ async function openRuleEditor() {
   }
 }
 
-/** ĺ¤ĺś PAC čćŹ URL ĺ°ĺŞč´´ćż */
+/** 复制 PAC 脚本 URL 到剪贴板 */
 async function copyPacScriptURL() {
   if (!pacScriptURL.value) {
     message.warning(t("settings.pacNeedPort"));
@@ -238,7 +238,7 @@ onUnmounted(() => {
   }
 });
 
-/** ĺć˘äťŁçć¨ĄĺźćśéçĽĺçŤŻ SetMode */
+/** 切换代理模式时通知后端 SetMode */
 watch(
   proxyMode,
   async (mode, prevMode) => {
@@ -255,7 +255,7 @@ watch(
   { immediate: true },
 );
 
-/** éä¸­/ĺćśćĺĄĺ¨ćśďźćäšĺéćŠĺšśčŽžç˝Ž/ĺć­˘čżç¨äťŁç */
+/** 选中/取消服务器时：持久化选择并设置/停止远程代理 */
 watch(
   () => serverStore.selectedServer,
   async (server) => {
@@ -264,9 +264,9 @@ watch(
         await Storage.SetSelectedServer(server);
         await SetRemote(extendServerItem(server)._id);
       } else {
-        // ć¸çéä¸­ćĺĄĺ¨ďźä¸ćŹĄĺŻĺ¨ä¸čŞĺ¨çťĺ˝äşă
+        // 清理选中服务器，下次启动不自动登录了。
         await Storage.ClearSelectedServer();
-        // await SetStop(); webćĺĄéčŚä¸ç´éŠťçă
+        // await SetStop(); web服务需要一直驻留。
       }
     } catch (e) {
       message.error(e?.message || t("serverList.operationFailed"));
@@ -275,23 +275,21 @@ watch(
   { immediate: true },
 );
 
-/** ćŹĺ°äťŁççĺŹĺ°ĺĺć´ćśéĺŻ SetStart */
-watch(
-  () => settingsStore.proxy,
-  debounce(async () => {
-    const { host, port, username, password } = settingsStore.proxy;
-    try {
-      await SetStart(`${host}:${port}`, username, password);
-    } catch (e) {
-      message.error(e?.message || t("serverList.operationFailed"));
-    }
-  }, 1000),
-  { deep: true, immediate: true },
-);
+/** 本地代理监听地址变更时重启 SetStart；首次立即执行（节点已在 store.init 里恢复）。 */
+async function startLocalProxy() {
+  const { host, port, username, password } = settingsStore.proxy;
+  try {
+    await SetStart(`${host}:${port}`, username, password);
+  } catch (e) {
+    message.error(e?.message || t("serverList.operationFailed"));
+  }
+}
+watch(() => settingsStore.proxy, debounce(startLocalProxy, 1000), { deep: true });
+startLocalProxy();
 </script>
 
 <style lang="scss" scoped>
-/* äťŁçć§ĺśĺĄç */
+/* 代理控制卡片 */
 .proxy-panel {
   flex-shrink: 0;
   border-radius: 10px;
@@ -311,7 +309,7 @@ watch(
     padding: 12px;
   }
 
-  /* ĺ˝ĺćĺĄĺ¨čĄ */
+  /* 当前服务器行 */
   .proxy-current-server {
     margin-bottom: 6px;
     padding: 3px 6px;
@@ -340,14 +338,14 @@ watch(
     }
   }
 
-  /* ćŞéćĺĄĺ¨ćç¤ş */
+  /* 未选服务器提示 */
   .proxy-mode-tip {
     font-size: 13px;
     color: v-bind("token.colorTextSecondary");
     padding: 4px 0;
   }
 
-  /* ć¨Ąĺźĺć˘ćéŽçť */
+  /* 模式切换按钮组 */
   .proxy-mode-group {
     width: 100%;
     margin-bottom: 6px;
@@ -359,7 +357,7 @@ watch(
     }
   }
 
-  /* PAC / č§ĺéžćĽĺş */
+  /* PAC / 规则链接区 */
   .proxy-pac-section {
     margin-top: 2px;
     padding-top: 6px;

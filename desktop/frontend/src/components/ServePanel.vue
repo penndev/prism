@@ -259,7 +259,7 @@ function getLatencyClass(latency) {
   return "latency-bad";
 }
 
-// --- æŒ‰å»¶è¿ŸæŽ’åº� ---
+// --- 按延迟排序 ---
 
 function latencySortKey(server) {
   const latency = server._latency;
@@ -278,7 +278,7 @@ async function applyLatencySort() {
   await persistServers();
 }
 
-// --- æ–°å¢ž / ç¼–è¾‘ / åˆ é™¤ ---
+// --- 新增 / 编辑 / 删除 ---
 
 const edit = reactive({
   visible: false,
@@ -389,7 +389,7 @@ function deleteModal(item) {
   });
 }
 
-// --- è®¢é˜…ç¼–è¾‘å™¨ ---
+// --- 订阅编辑器 ---
 
 async function openSubscribeEditor() {
   const rawHost = (settingsStore.proxy.host || "").trim();

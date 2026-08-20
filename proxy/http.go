@@ -62,7 +62,7 @@ func (s *Server) handleHTTPProxyForward(client net.Conn, req *http.Request) erro
 	go func() {
 		err := s.HandleConnect(remote, "tcp", addr)
 		if err != nil {
-			log.Println("handleHTTPProxyForward", err)
+			// log.Println("handleHTTPProxyForward", err)
 		}
 	}()
 
