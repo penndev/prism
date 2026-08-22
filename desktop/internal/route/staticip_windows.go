@@ -167,7 +167,8 @@ func sockaddrIP(sa windows.SocketAddress) net.IP {
 }
 
 func setDevDNS(tunName string) {
-	servers := systemDNSIPv4(tunName)
+	// servers := systemDNSIPv4(tunName)
+	servers := []string{"127.0.0.1"}
 	if len(servers) == 0 {
 		return
 	}
