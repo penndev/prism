@@ -4,15 +4,24 @@ import (
 	"desktop/build"
 	"desktop/internal"
 	"desktop/internal/autostart"
+	"desktop/internal/dns"
 	"desktop/internal/lang"
 	"desktop/internal/proxy"
 	"desktop/internal/storage"
+	"log"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 func main() {
 	var err error
+	go func() {
+		err := dns.ListenUDP53("127.0.0.1")
+		if err != nil {
+			log.Println(err)
+		}
+	}()
+
 	// 语言文件
 	lang.DefaultLang, err = lang.New()
 	if err != nil {
