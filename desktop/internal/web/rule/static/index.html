@@ -14,7 +14,7 @@
         <img class="brand-logo" src="/subscribe/logo.png" width="38" height="38" alt="Prism">
         <div>
           <h1 id="titleMain">Prism 规则管理</h1>
-          <p id="titleDesc">按类型分区管理；当前仅支持地域规则。</p>
+          <p id="titleDesc">按类型分区管理：地域规则与域名规则。</p>
         </div>
       </div>
     </header>
@@ -25,7 +25,7 @@
       <div class="rule-section" id="geoSection">
         <div class="rule-section-head">
           <h3 id="geoTitle">地域规则</h3>
-          <p id="geoDesc" class="subline">三种模式互斥：全局代理，或代理某些区域，或绕过某些区域。</p>
+          <p id="geoDesc" class="subline">四种模式互斥：全局代理、全不代理，或代理某些区域，或绕过某些区域。</p>
         </div>
 
         <div class="db-block">
@@ -49,33 +49,47 @@
           </div>
         </div>
 
-        <div id="geoEnabled" hidden>
-          <div class="mode-row">
-            <label class="mode-option">
-              <input type="radio" name="geoMode" value="global" checked>
-              <span id="labelModeGlobal">全局代理</span>
-            </label>
-            <label class="mode-option">
-              <input type="radio" name="geoMode" value="proxy">
-              <span id="labelModeProxy">代理某些区域</span>
-            </label>
-            <label class="mode-option">
-              <input type="radio" name="geoMode" value="bypass">
-              <span id="labelModeBypass">绕过某些区域</span>
-            </label>
-          </div>
+        <div class="mode-row">
+          <label class="mode-option">
+            <input type="radio" name="geoMode" value="global" checked>
+            <span id="labelModeGlobal">全局代理</span>
+          </label>
+          <label class="mode-option">
+            <input type="radio" name="geoMode" value="none">
+            <span id="labelModeNone">全不代理</span>
+          </label>
+          <label class="mode-option">
+            <input type="radio" name="geoMode" value="proxy">
+            <span id="labelModeProxy">代理某些区域</span>
+          </label>
+          <label class="mode-option">
+            <input type="radio" name="geoMode" value="bypass">
+            <span id="labelModeBypass">绕过某些区域</span>
+          </label>
+        </div>
 
-          <div id="areaPicker" class="area-picker" hidden>
-            <div class="row">
-              <input id="areaFilter" type="text" placeholder="搜索国家/地区">
-              <span id="selectedCount" class="muted"></span>
-            </div>
-            <div id="areaChecks" class="area-checks"></div>
-          </div>
-
+        <div id="areaPicker" class="area-picker" hidden>
           <div class="row">
-            <span id="geoMsg" class="muted"></span>
+            <input id="areaFilter" type="text" placeholder="搜索国家/地区">
+            <span id="selectedCount" class="muted"></span>
           </div>
+          <div id="areaChecks" class="area-checks"></div>
+        </div>
+
+        <div class="row">
+          <span id="geoMsg" class="muted"></span>
+        </div>
+      </div>
+
+      <div class="rule-section" id="domainSection">
+        <div class="rule-section-head">
+          <h3 id="domainTitle">域名规则</h3>
+          <p id="domainDesc" class="subline">填写需要代理的域名；DNS 遇到这些域名时会通过 DoH 获取未被篡改的真实 IP。不需要代理的域名不必填写，每行一个。</p>
+        </div>
+        <textarea id="domains" spellcheck="false" placeholder="example.com&#10;github.com"></textarea>
+        <div class="row">
+          <span id="domainCount" class="muted"></span>
+          <span id="domainMsg" class="muted"></span>
         </div>
       </div>
     </section>
@@ -94,6 +108,7 @@
     let expandedIds = new Set();
     let saveTimer = null;
     let saving = false;
+    let pendingSave = null;
     let dbExists = false;
     let editingDb = false;
 
@@ -105,12 +120,14 @@
     const btnChangeDb = document.getElementById('btnChangeDb');
     const btnDownload = document.getElementById('btnDownload');
     const btnUpload = document.getElementById('btnUpload');
-    const geoEnabled = document.getElementById('geoEnabled');
     const areaPicker = document.getElementById('areaPicker');
     const areaFilter = document.getElementById('areaFilter');
     const areaChecks = document.getElementById('areaChecks');
     const selectedCount = document.getElementById('selectedCount');
     const geoMsg = document.getElementById('geoMsg');
+    const domainsEl = document.getElementById('domains');
+    const domainCount = document.getElementById('domainCount');
+    const domainMsg = document.getElementById('domainMsg');
 
     function t(key, params) {
       return translate(currentLang, key, params);
@@ -146,8 +163,12 @@
       document.getElementById('geoDesc').textContent = t('geo.desc');
       document.getElementById('dbLabel').textContent = t('db.label');
       document.getElementById('labelModeGlobal').textContent = t('geo.mode.global');
+      document.getElementById('labelModeNone').textContent = t('geo.mode.none');
       document.getElementById('labelModeProxy').textContent = t('geo.mode.proxy');
       document.getElementById('labelModeBypass').textContent = t('geo.mode.bypass');
+      document.getElementById('domainTitle').textContent = t('domain.title');
+      document.getElementById('domainDesc').textContent = t('domain.desc');
+      domainsEl.placeholder = t('domain.placeholder');
       areaFilter.placeholder = t('area.filter');
       dbUrlEl.placeholder = t('db.url.placeholder');
       btnDownload.textContent = t('button.download');
@@ -156,6 +177,7 @@
         btnChangeDb.textContent = editingDb ? t('button.cancel') : t('button.replace');
       }
       updateSelectedCount();
+      updateDomainCount();
     }
 
     function getMode() {
@@ -164,7 +186,7 @@
     }
 
     function setMode(mode) {
-      const value = mode === 'proxy' || mode === 'bypass' ? mode : 'global';
+      const value = mode === 'proxy' || mode === 'bypass' || mode === 'none' ? mode : 'global';
       const node = document.querySelector('input[name="geoMode"][value="' + value + '"]');
       if (node) node.checked = true;
       syncModeUI();
@@ -172,9 +194,35 @@
 
     function syncModeUI() {
       const mode = getMode();
-      areaPicker.hidden = mode === 'global';
+      const needAreas = mode === 'proxy' || mode === 'bypass';
+      areaPicker.hidden = !dbExists || !needAreas;
+      document.querySelectorAll('input[name="geoMode"]').forEach((el) => {
+        if (el.value === 'proxy' || el.value === 'bypass') {
+          el.disabled = !dbExists;
+        }
+      });
       renderAreaChecks();
       updateSelectedCount();
+    }
+
+    function parseDomainsFromTextarea() {
+      const raw = domainsEl.value || '';
+      const parts = raw.split(/[\n\r,\s]+/);
+      const seen = new Set();
+      const out = [];
+      for (const item of parts) {
+        let d = String(item || '').trim().toLowerCase();
+        d = d.replace(/^\.+/, '');
+        if (!d || seen.has(d)) continue;
+        seen.add(d);
+        out.push(d);
+      }
+      return out;
+    }
+
+    function updateDomainCount() {
+      const n = parseDomainsFromTextarea().length;
+      domainCount.textContent = t('domain.count', { count: n });
     }
 
     function selectedAreaIds() {
@@ -183,7 +231,7 @@
 
     function updateSelectedCount() {
       const mode = getMode();
-      if (mode === 'global') {
+      if (mode === 'global' || mode === 'none') {
         selectedCount.textContent = '';
         return;
       }
@@ -192,9 +240,11 @@
     }
 
     function buildPayloadFromUI() {
-      const mode = getMode();
-      const ids = mode === 'global' ? areaIds.slice() : selectedAreaIds();
-      return { mode, areaIds: ids };
+      return {
+        areaMode: getMode(),
+        areaIds: selectedAreaIds(),
+        domains: parseDomainsFromTextarea()
+      };
     }
 
     function nodeMatches(a, filter) {
@@ -276,7 +326,13 @@
     }
 
     function setGeoEnabled(enabled) {
-      geoEnabled.hidden = !enabled;
+      if (!enabled) {
+        const mode = getMode();
+        if (mode === 'proxy' || mode === 'bypass') {
+          setMode('global');
+        }
+      }
+      syncModeUI();
     }
 
     function syncDbEditorUI() {
@@ -347,13 +403,19 @@
     async function loadConfig() {
       const cfg = await api('/rule/api/config');
       areaIds = Array.isArray(cfg.areaIds) ? cfg.areaIds.map(Number).filter((id) => id > 0) : [];
-      setMode(cfg.mode || 'global');
+      setMode(cfg.areaMode || cfg.mode || 'global');
+      domainsEl.value = Array.isArray(cfg.domains) ? cfg.domains.join('\n') : '';
+      updateDomainCount();
     }
 
-    async function saveConfig(payload) {
-      if (saving) return;
+    async function saveConfig(payload, msgEl) {
+      if (saving) {
+        pendingSave = { payload, msgEl };
+        return;
+      }
       saving = true;
-      geoMsg.textContent = t('status.saving');
+      const el = msgEl || geoMsg;
+      el.textContent = t('status.saving');
       try {
         const res = await api('/rule/api/config', {
           method: 'PUT',
@@ -361,21 +423,29 @@
           body: JSON.stringify(payload)
         });
         areaIds = Array.isArray(res.areaIds) ? res.areaIds.map(Number).filter((id) => id > 0) : payload.areaIds;
-        geoMsg.textContent = t('status.saved');
+        el.textContent = t('status.saved');
         updateSelectedCount();
+        updateDomainCount();
       } catch (e) {
-        geoMsg.textContent = e.message;
+        el.textContent = e.message;
         throw e;
       } finally {
         saving = false;
+        if (pendingSave) {
+          const next = pendingSave;
+          pendingSave = null;
+          try {
+            await saveConfig(next.payload, next.msgEl);
+          } catch (_) {}
+        }
       }
     }
 
-    function scheduleSaveFromUI() {
+    function scheduleSaveFromUI(msgEl) {
       clearTimeout(saveTimer);
       saveTimer = setTimeout(async () => {
         try {
-          await saveConfig(buildPayloadFromUI());
+          await saveConfig(buildPayloadFromUI(), msgEl);
         } catch (_) {}
       }, 200);
     }
@@ -383,7 +453,7 @@
     async function onModeChange() {
       syncModeUI();
       try {
-        await saveConfig(buildPayloadFromUI());
+        await saveConfig(buildPayloadFromUI(), geoMsg);
         renderAreaChecks();
       } catch (_) {
         renderAreaChecks();
@@ -397,7 +467,7 @@
       else set.delete(id);
       areaIds = Array.from(set).filter((n) => n > 0);
       updateSelectedCount();
-      scheduleSaveFromUI();
+      scheduleSaveFromUI(geoMsg);
     }
 
     async function downloadDb() {
@@ -457,6 +527,10 @@
     document.querySelectorAll('input[name="geoMode"]').forEach((el) => {
       el.addEventListener('change', onModeChange);
     });
+    domainsEl.addEventListener('input', () => {
+      updateDomainCount();
+      scheduleSaveFromUI(domainMsg);
+    });
     areaFilter.addEventListener('input', renderAreaChecks);
     btnChangeDb.addEventListener('click', () => {
       editingDb = !editingDb;
@@ -478,8 +552,13 @@
         await loadConfig();
         if (st && st.exists) {
           await loadAreas();
-          syncModeUI();
+        } else {
+          const mode = getMode();
+          if (mode === 'proxy' || mode === 'bypass') {
+            setMode('global');
+          }
         }
+        syncModeUI();
       } catch (e) {
         dbMsg.textContent = e.message;
       }

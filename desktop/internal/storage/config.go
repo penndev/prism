@@ -1,6 +1,11 @@
 // Package storage 提供 Bolt 持久化及与前端 JSON 字段一致的数据模型。
 package storage
 
+import (
+	"encoding/json"
+	"strings"
+)
+
 // Settings 与前端 settings store 持久化 JSON 一致。
 type Settings struct {
 	Proxy       ProxySettings       `json:"proxy"`
@@ -38,30 +43,47 @@ type ServerEntry struct {
 	Protocol string `json:"protocol"`
 }
 
-type PACConfig struct {
-	Domains     string `json:"domains"`
-	Mode        string `json:"mode"`
-	PACTemplate string `json:"pacTemplate"`
-}
-
 // RuleConfig 规则配置（Web 页维护；桌面端展示状态提示）。
 type RuleConfig struct {
-	// Mode: global=全局代理，proxy=代理某些区域，bypass=绕过某些区域。
-	Mode string `json:"mode"`
-	// AreaIDs 选中的地域 ID 列表（global 时可为空）。
+	// AreaMode: global=全局代理，none=全不代理，proxy=代理某些区域，bypass=绕过某些区域。
+	AreaMode string `json:"areaMode"`
+	// AreaIDs 选中的地域 ID 列表（global/none 时可为空）。
 	AreaIDs []uint32 `json:"areaIds"`
+	// Domains 需要走代理的域名；DNS 遇到这些域名时用 DoH 取真实 IP。空列表表示域名规则暂不生效。
+	Domains []string `json:"domains"`
 }
 
-// RuleStatus 主页面展示用的地域规则摘要。
+// UnmarshalJSON 兼容旧字段 mode。
+func (r *RuleConfig) UnmarshalJSON(data []byte) error {
+	type raw struct {
+		AreaMode string   `json:"areaMode"`
+		Mode     string   `json:"mode"`
+		AreaIDs  []uint32 `json:"areaIds"`
+		Domains  []string `json:"domains"`
+	}
+	var v raw
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+	r.AreaMode = strings.TrimSpace(v.AreaMode)
+	if r.AreaMode == "" {
+		r.AreaMode = strings.TrimSpace(v.Mode)
+	}
+	r.AreaIDs = v.AreaIDs
+	r.Domains = v.Domains
+	return nil
+}
+
+// RuleStatus 主页面展示用的规则摘要。
 type RuleStatus struct {
-	Mode      string   `json:"mode"`
+	AreaMode  string   `json:"areaMode"`
 	AreaNames []string `json:"areaNames"`
+	Domains   []string `json:"domains"`
 }
 
 const (
 	KeySettings       = "settings"
 	KeyServers        = "servers"
-	KeyPAC            = "pac"
 	KeyRule           = "rule"
 	KeySelectedServer = "selectedServer"
 )

@@ -2,6 +2,8 @@ package proxy
 
 import (
 	"desktop/internal"
+	"desktop/internal/dns"
+	"desktop/internal/route"
 	"desktop/internal/tun"
 	"desktop/internal/web"
 	"net/url"
@@ -25,6 +27,14 @@ type Proxy struct {
 var localHandle = transport.Local()
 
 func (p *Proxy) SetStart(host, user, pass string) error {
+	if servers := route.CurrentDNS(""); len(servers) > 0 {
+		dns.SetUpstream(servers[0])
+		internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "dns upstream -> "+servers[0])
+	}
+	if err := dns.StartUDP53("127.0.0.1", 53); err != nil {
+		internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "dns.StartUDP53: "+err.Error())
+	}
+
 	if p.HandleConnect == nil {
 		p.HandleConnect = p.handleConnectHook(localHandle, func(network, address string) {
 			internal.App.Event.Emit(internal.AppConfig.LogTypeName_LOG, "local -> "+network+" "+address)
@@ -101,6 +111,7 @@ func (p *Proxy) SetMode(mode string) error {
 
 func (p *Proxy) SetStop() {
 	p.closeTunDev()
+	dns.StopUDP53()
 	p.Server.Close()
 	internal.App.Event.Emit(
 		internal.AppConfig.LogTypeName_STATUS,

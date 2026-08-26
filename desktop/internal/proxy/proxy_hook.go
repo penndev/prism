@@ -15,7 +15,9 @@ func (p *Proxy) handleConnectHook(handle transport.HandleConnect, callback func(
 		bypass := false
 		if st := storage.DefaultStorage; st != nil {
 			if cfg, err := st.GetRuleConfig(); err == nil && cfg != nil {
-				switch cfg.Mode {
+				switch cfg.AreaMode {
+				case "none":
+					bypass = true
 				case "proxy":
 					bypass = len(cfg.AreaIDs) == 0 || !ipregion.InAreas(address, cfg.AreaIDs)
 				case "bypass":

@@ -44,5 +44,6 @@ func Start(options Options) error {
 			log.Println("SetRouteAddr failed:", err)
 		}
 	}
+	setDevDNS(options.DevName)
 	return err
 }

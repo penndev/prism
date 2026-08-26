@@ -11,6 +11,7 @@ import (
 	"net/netip"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -129,3 +130,99 @@ func SetRouteAddr(addr netip.Prefix, gateway net.IP) error {
 	}
 	return lastErr
 }
+
+type dnsSnapshot struct {
+	service string
+	servers []string
+}
+
+var (
+	dnsSnapMu sync.Mutex
+	dnsSnaps  []dnsSnapshot
+)
+
+// CurrentDNS 读取系统当前使用的 DNS。
+func CurrentDNS(skipIface string) []string {
+	return parseResolvConf("/etc/resolv.conf")
+}
+
+func enabledNetworkServices() []string {
+	out, err := exec.Command("networksetup", "-listallnetworkservices").Output()
+	if err != nil {
+		log.Println("listallnetworkservices:", err)
+		return nil
+	}
+	var services []string
+	for i, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || i == 0 || strings.HasPrefix(line, "*") {
+			continue
+		}
+		services = append(services, line)
+	}
+	return services
+}
+
+func getServiceDNS(service string) []string {
+	out, err := exec.Command("networksetup", "-getdnsservers", service).Output()
+	if err != nil {
+		return nil
+	}
+	text := strings.TrimSpace(string(out))
+	if text == "" || strings.Contains(strings.ToLower(text), "aren't any") || strings.Contains(text, "没有") {
+		return nil
+	}
+	var servers []string
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		if net.ParseIP(line) == nil {
+			continue
+		}
+		servers = append(servers, line)
+	}
+	return servers
+}
+
+func setServiceDNS(service string, servers []string) error {
+	args := []string{"-setdnsservers", service}
+	if len(servers) == 0 {
+		args = append(args, "Empty")
+	} else {
+		args = append(args, servers...)
+	}
+	out, err := exec.Command("networksetup", args...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%v: %s", err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+func setDevDNS(tunName string) {
+	dnsSnapMu.Lock()
+	defer dnsSnapMu.Unlock()
+	if len(dnsSnaps) > 0 {
+		return
+	}
+	for _, svc := range enabledNetworkServices() {
+		orig := getServiceDNS(svc)
+		dnsSnaps = append(dnsSnaps, dnsSnapshot{service: svc, servers: orig})
+		if err := setServiceDNS(svc, []string{"127.0.0.1"}); err != nil {
+			log.Println("set dns failed:", svc, err)
+			continue
+		}
+		log.Println("set dns", svc, "-> 127.0.0.1")
+	}
+}
+
+// RestoreDNS 恢复 networksetup 改过的系统 DNS。
+func RestoreDNS() {
+	dnsSnapMu.Lock()
+	defer dnsSnapMu.Unlock()
+	for _, s := range dnsSnaps {
+		if err := setServiceDNS(s.service, s.servers); err != nil {
+			log.Println("restore dns failed:", s.service, err)
+		}
+	}
+	dnsSnaps = nil
+}
+

@@ -82,9 +82,6 @@ func SetDevAddr(tunName string, prefix netip.Prefix) error {
 	if err := waitDevAddr(tunName, prefix.Addr()); err != nil {
 		return err
 	}
-	if prefix.Addr().Is4() {
-		setDevDNS(tunName)
-	}
 	return nil
 }
 
@@ -167,7 +164,6 @@ func sockaddrIP(sa windows.SocketAddress) net.IP {
 }
 
 func setDevDNS(tunName string) {
-	// servers := systemDNSIPv4(tunName)
 	servers := []string{"127.0.0.1"}
 	if len(servers) == 0 {
 		return
@@ -255,6 +251,14 @@ func systemDNSIPv4(skipIface string) []string {
 	}
 	return out
 }
+
+// CurrentDNS 返回当前系统正在使用的 IPv4 DNS（跳过 skipIface、回环与未启用网卡）。
+func CurrentDNS(skipIface string) []string {
+	return systemDNSIPv4(skipIface)
+}
+
+// RestoreDNS Windows 上 DNS 绑在 TUN 网卡，设备关闭后自动失效。
+func RestoreDNS() {}
 
 func sockaddrIPv4(sa windows.SocketAddress) net.IP {
 	if sa.Sockaddr == nil {

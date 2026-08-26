@@ -11,6 +11,7 @@ import (
 )
 
 func (p *Proxy) closeTunDev() {
+	route.RestoreDNS()
 	if p.dev == nil {
 		return
 	}

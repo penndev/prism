@@ -14,8 +14,17 @@ import (
 )
 
 type configPayload struct {
-	Mode    string   `json:"mode"`
-	AreaIDs []uint32 `json:"areaIds"`
+	AreaMode string   `json:"areaMode"`
+	Mode     string   `json:"mode"` // 兼容旧字段
+	AreaIDs  []uint32 `json:"areaIds"`
+	Domains  []string `json:"domains"`
+}
+
+func (p configPayload) areaMode() string {
+	if strings.TrimSpace(p.AreaMode) != "" {
+		return p.AreaMode
+	}
+	return p.Mode
 }
 
 type downloadPayload struct {
@@ -28,11 +37,32 @@ func HandleRuleRedirect(w http.ResponseWriter, r *http.Request) {
 
 func normalizeMode(mode string) string {
 	switch strings.TrimSpace(mode) {
-	case "proxy", "bypass":
+	case "proxy", "bypass", "none":
 		return mode
 	default:
 		return "global"
 	}
+}
+
+func normalizeDomains(list []string) []string {
+	if list == nil {
+		return []string{}
+	}
+	out := make([]string, 0, len(list))
+	seen := make(map[string]struct{}, len(list))
+	for _, item := range list {
+		d := strings.ToLower(strings.TrimSpace(item))
+		d = strings.TrimPrefix(d, ".")
+		if d == "" {
+			continue
+		}
+		if _, ok := seen[d]; ok {
+			continue
+		}
+		seen[d] = struct{}{}
+		out = append(out, d)
+	}
+	return out
 }
 
 func normalizeAreaIDs(ids []uint32) []uint32 {
@@ -54,10 +84,20 @@ func normalizeAreaIDs(ids []uint32) []uint32 {
 	return out
 }
 
-func normalizeConfig(mode string, ids []uint32) storage.RuleConfig {
+func normalizeConfig(areaMode string, ids []uint32, domains []string) storage.RuleConfig {
 	return storage.RuleConfig{
-		Mode:    normalizeMode(mode),
-		AreaIDs: normalizeAreaIDs(ids),
+		AreaMode: normalizeMode(areaMode),
+		AreaIDs:  normalizeAreaIDs(ids),
+		Domains:  normalizeDomains(domains),
+	}
+}
+
+func encodeConfig(cfg storage.RuleConfig) map[string]any {
+	return map[string]any{
+		"areaMode":  cfg.AreaMode,
+		"areaIds":   cfg.AreaIDs,
+		"areaNames": ipregion.Names(cfg.AreaIDs),
+		"domains":   cfg.Domains,
 	}
 }
 
@@ -74,10 +114,15 @@ func resetRuleToGlobal() {
 	if st == nil {
 		return
 	}
-	_ = st.SetRuleConfig(storage.RuleConfig{
-		Mode:    "global",
-		AreaIDs: []uint32{},
-	})
+	next := storage.RuleConfig{
+		AreaMode: "global",
+		AreaIDs:  []uint32{},
+		Domains:  []string{},
+	}
+	if cfg, err := st.GetRuleConfig(); err == nil && cfg != nil {
+		next.Domains = normalizeDomains(cfg.Domains)
+	}
+	_ = st.SetRuleConfig(next)
 }
 
 func dbStatusJSON(st ipregion.Status) map[string]any {
@@ -107,23 +152,19 @@ func HandleRuleConfig(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if cfg == nil {
-			cfg = &storage.RuleConfig{Mode: "global", AreaIDs: []uint32{}}
+			cfg = &storage.RuleConfig{AreaMode: "global", AreaIDs: []uint32{}, Domains: []string{}}
 		}
-		out := normalizeConfig(cfg.Mode, cfg.AreaIDs)
+		out := normalizeConfig(cfg.AreaMode, cfg.AreaIDs, cfg.Domains)
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"mode":      out.Mode,
-			"areaIds":   out.AreaIDs,
-			"areaNames": ipregion.Names(out.AreaIDs),
-		})
+		_ = json.NewEncoder(w).Encode(encodeConfig(out))
 	case http.MethodPut, http.MethodPost:
 		var payload configPayload
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 			http.Error(w, "invalid json", http.StatusBadRequest)
 			return
 		}
-		cfg := normalizeConfig(payload.Mode, payload.AreaIDs)
+		cfg := normalizeConfig(payload.areaMode(), payload.AreaIDs, payload.Domains)
 		if err := st.SetRuleConfig(cfg); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -131,7 +172,12 @@ func HandleRuleConfig(w http.ResponseWriter, r *http.Request) {
 		emitRuleChanged()
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "mode": cfg.Mode, "areaIds": cfg.AreaIDs})
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok":       true,
+			"areaMode": cfg.AreaMode,
+			"areaIds":  cfg.AreaIDs,
+			"domains":  cfg.Domains,
+		})
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}

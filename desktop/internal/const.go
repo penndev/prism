@@ -16,7 +16,7 @@ type appConst struct {
 	EventNameLocaleChanged string
 	// 节点列表变更事件（payload 为更新时间戳）
 	EventNameServersChanged string
-	// 地域规则变更事件（payload 为更新时间戳）
+	// 规则变更事件（payload 为更新时间戳）
 	EventNameRuleChanged string
 	// 服务退出事件
 	EventNameServiceAppQuit string

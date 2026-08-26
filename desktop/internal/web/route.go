@@ -1,7 +1,6 @@
 package web
 
 import (
-	"desktop/internal/web/pac"
 	"desktop/internal/web/rule"
 	"desktop/internal/web/subscribe"
 	"net/http"
@@ -25,11 +24,6 @@ func newRouter() *http.ServeMux {
 	router.HandleFunc("/subscribe/api/servers/export", subscribe.HandleExportServers)
 	router.HandleFunc("/subscribe/api/subscription/convert", subscribe.HandleSubscriptionConvert)
 	router.Handle("/subscribe/", http.StripPrefix("/subscribe/", subscribe.HandleSubscribeFileServer()))
-	// pac管理
-	router.HandleFunc("/pac", pac.HandlePACRedirect)
-	router.Handle("/pac/", http.StripPrefix("/pac/", pac.HandlePACFileServer()))
-	router.HandleFunc("/pac/api/config", pac.HandlePACConfig)
-	router.HandleFunc("/pac.js", pac.HandlePACScript)
 	// 规则管理
 	router.HandleFunc("/rule", rule.HandleRuleRedirect)
 	router.Handle("/rule/", http.StripPrefix("/rule/", rule.HandleRuleFileServer()))

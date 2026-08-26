@@ -18,3 +18,11 @@ func SetRouteAddr(addr netip.Prefix, gateway net.IP) error {
 	return fmt.Errorf("static route is not supported on %s", runtime.GOOS)
 }
 
+func CurrentDNS(skipIface string) []string {
+	return parseResolvConf("/etc/resolv.conf")
+}
+
+func setDevDNS(tunName string) {}
+
+func RestoreDNS() {}
+

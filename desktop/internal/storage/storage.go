@@ -66,20 +66,6 @@ func (s *Storage) GetServers() ([]ServerEntry, error) {
 	return out, nil
 }
 
-func (s *Storage) SetPACConfig(v PACConfig) error {
-	return s.putJSON(KeyPAC, v)
-}
-
-// GetPACConfig 无记录时返回 nil, nil。
-func (s *Storage) GetPACConfig() (*PACConfig, error) {
-	var out PACConfig
-	ok, err := s.getJSON(KeyPAC, &out)
-	if err != nil || !ok {
-		return nil, err
-	}
-	return &out, nil
-}
-
 func (s *Storage) SetRuleConfig(v RuleConfig) error {
 	return s.putJSON(KeyRule, v)
 }
@@ -102,17 +88,26 @@ func SetRuleAreaNames(fn func(ids []uint32) []string) {
 }
 
 func (s *Storage) GetRuleStatus() RuleStatus {
-	out := RuleStatus{Mode: "global", AreaNames: []string{}}
+	out := RuleStatus{
+		AreaMode:  "global",
+		AreaNames: []string{},
+		Domains:   []string{},
+	}
 	cfg, err := s.GetRuleConfig()
 	if err != nil || cfg == nil {
 		return out
 	}
-	switch cfg.Mode {
+	switch cfg.AreaMode {
 	case "proxy", "bypass":
-		out.Mode = cfg.Mode
+		out.AreaMode = cfg.AreaMode
 		if ruleAreaNames != nil {
 			out.AreaNames = ruleAreaNames(cfg.AreaIDs)
 		}
+	case "none":
+		out.AreaMode = cfg.AreaMode
+	}
+	if len(cfg.Domains) > 0 {
+		out.Domains = cfg.Domains
 	}
 	return out
 }

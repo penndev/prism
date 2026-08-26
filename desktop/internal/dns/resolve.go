@@ -1,36 +1,42 @@
 package dns
 
 import (
-	"fmt"
-	"log"
+	"net"
+	"strings"
+
+	"desktop/internal/storage"
 
 	"github.com/miekg/dns"
 )
 
-// resolve：UDP 查询；若检测到旁路抢答则改用 DoH。
 func resolve(req *dns.Msg) (*dns.Msg, error) {
-	for _, q := range req.Question {
-		log.Printf("DNS query: %s %s", q.Name, dns.TypeToString[q.Qtype])
-	}
-
-	udp, err := exchangeUDP(req)
-	if err != nil {
-		return nil, err
-	}
-	if udp.Msg == nil {
-		return nil, fmt.Errorf("empty DNS response from %s", upstream)
-	}
-
-	resp := udp.Msg
-	if udp.Conflict {
-		log.Printf("DNS race hijack, re-querying via DoH")
-		dohResp, err := queryDoH(req)
-		if err != nil {
-			return nil, err
+	if storage.DefaultStorage != nil {
+		if cfg, err := storage.DefaultStorage.GetRuleConfig(); err == nil && cfg != nil {
+			for _, q := range req.Question {
+				if matchDomain(q.Name, cfg.Domains) {
+					return queryDoH(req)
+				}
+			}
 		}
-		resp = dohResp
 	}
+	c := &dns.Client{Net: "udp", Timeout: udpTimeout}
+	resp, _, err := c.Exchange(req, net.JoinHostPort(currentUpstream(), "53"))
+	return resp, err
+}
 
-	logAnswers("DNS answer:", resp)
-	return resp, nil
+func matchDomain(qname string, domains []string) bool {
+	name := strings.ToLower(strings.TrimSuffix(strings.TrimSpace(qname), "."))
+	if name == "" {
+		return false
+	}
+	for _, d := range domains {
+		d = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(d), "."))
+		if d == "" {
+			continue
+		}
+		if name == d || strings.HasSuffix(name, "."+d) {
+			return true
+		}
+	}
+	return false
 }

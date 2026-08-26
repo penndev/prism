@@ -2,14 +2,26 @@ package dns
 
 import (
 	"fmt"
-	"log"
 	"net"
+	"sync"
 
 	"github.com/miekg/dns"
 )
 
-// ListenUDP53 在 UDP 53 上监听 DNS 查询。host 为 0.0.0.0 或空时监听全部网卡。
-func ListenUDP53(host string) error {
+var (
+	serveMu   sync.Mutex
+	serveConn *net.UDPConn
+	serveDone chan struct{}
+)
+
+// StartUDP53 非阻塞启动 UDP DNS；已在运行则直接返回。
+func StartUDP53(host string, port int) error {
+	serveMu.Lock()
+	defer serveMu.Unlock()
+	if serveConn != nil {
+		return nil
+	}
+
 	var ip net.IP
 	if host != "" && host != "0.0.0.0" {
 		ip = net.ParseIP(host)
@@ -18,48 +30,59 @@ func ListenUDP53(host string) error {
 		}
 	}
 
-	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: ip, Port: 53})
+	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: ip, Port: port})
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
-
-	log.Printf("DNS server listening on UDP %s", conn.LocalAddr())
-
-	buf := make([]byte, 64*1024)
-	for {
-		n, clientAddr, err := conn.ReadFromUDP(buf)
-		if err != nil {
-			log.Println("DNS read error:", err)
-			continue
+	serveConn = conn
+	serveDone = make(chan struct{})
+	done := serveDone
+	go func() {
+		defer close(done)
+		buf := make([]byte, 64*1024)
+		for {
+			n, clientAddr, err := conn.ReadFromUDP(buf)
+			if err != nil {
+				return
+			}
+			pkt := make([]byte, n)
+			copy(pkt, buf[:n])
+			go serveOne(conn, clientAddr, pkt)
 		}
-		pkt := make([]byte, n)
-		copy(pkt, buf[:n])
-		go serveOne(conn, clientAddr, pkt)
+	}()
+	return nil
+}
+
+// StopUDP53 停止 UDP DNS 监听。
+func StopUDP53() {
+	serveMu.Lock()
+	conn := serveConn
+	done := serveDone
+	serveConn = nil
+	serveDone = nil
+	serveMu.Unlock()
+	if conn == nil {
+		return
+	}
+	_ = conn.Close()
+	if done != nil {
+		<-done
 	}
 }
 
 func serveOne(conn *net.UDPConn, clientAddr *net.UDPAddr, pkt []byte) {
 	req := new(dns.Msg)
 	if err := req.Unpack(pkt); err != nil {
-		log.Println("DNS unpack error:", err)
 		return
 	}
-
 	resp, err := resolve(req)
 	if err != nil {
-		log.Println("DNS resolve error:", err)
-		fail := new(dns.Msg)
-		fail.SetRcode(req, dns.RcodeServerFailure)
-		resp = fail
+		resp = new(dns.Msg)
+		resp.SetRcode(req, dns.RcodeServerFailure)
 	}
-
 	data, err := resp.Pack()
 	if err != nil {
-		log.Println("DNS pack error:", err)
 		return
 	}
-	if _, err = conn.WriteToUDP(data, clientAddr); err != nil {
-		log.Println("DNS write error:", err)
-	}
+	_, _ = conn.WriteToUDP(data, clientAddr)
 }

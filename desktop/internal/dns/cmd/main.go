@@ -6,8 +6,8 @@ import (
 )
 
 func main() {
-	err := dns.ListenUDP53("127.0.0.1")
-	if err != nil {
+	if err := dns.StartUDP53("127.0.0.1", 53); err != nil {
 		log.Fatal(err)
 	}
+	select {}
 }
