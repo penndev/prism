@@ -40,6 +40,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.penndev.prism.R
@@ -55,6 +56,7 @@ private data class AreaRow(
     val depth: Int,
     val expandable: Boolean,
     val expanded: Boolean,
+    val selected: Boolean,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -65,7 +67,9 @@ fun RulesScreen(
 ) {
     val rules = state.rules
     var areaFilter by remember { mutableStateOf("") }
-    var expandedIds by remember { mutableStateOf(setOf<Long>()) }
+    var expandedIds by remember(state.geoAreas) {
+        mutableStateOf(topLevelIdsWithSelected(state.geoAreas, rules.selectedAreaIds))
+    }
     val showAreas = rules.geoMode == GeoMode.Proxy || rules.geoMode == GeoMode.Bypass
     val hasDb = state.geoAreas.isNotEmpty()
     var editingDb by remember { mutableStateOf(false) }
@@ -76,8 +80,10 @@ fun RulesScreen(
     val pickDb = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) viewModel.importDb(uri)
     }
-    val rows = remember(state.geoAreas, areaFilter, expandedIds) {
-        flattenAreas(state.geoAreas, expandedIds, areaFilter)
+    val uriHandler = LocalUriHandler.current
+    val dbPage = stringResource(R.string.rules_db_page)
+    val rows = remember(state.geoAreas, areaFilter, expandedIds, rules.selectedAreaIds) {
+        flattenAreas(state.geoAreas, expandedIds, areaFilter, rules.selectedAreaIds)
     }
     val modes = listOf(
         Triple(GeoMode.Global, R.string.rules_mode_global, R.string.rules_mode_global_desc),
@@ -139,6 +145,15 @@ fun RulesScreen(
                         )
                     }
                     if (showDbEditor) {
+                        Text(
+                            stringResource(R.string.rules_db_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { uriHandler.openUri(dbPage) }
+                                .padding(horizontal = 16.dp, vertical = 4.dp),
+                        )
                         OutlinedTextField(
                             value = rules.dbUrl,
                             onValueChange = { value -> viewModel.updateRules { it.copy(dbUrl = value) } },
@@ -244,7 +259,7 @@ fun RulesScreen(
                     items(rows, key = { it.area.id }) { row ->
                         AreaTreeRow(
                             row = row,
-                            selected = row.area.id in rules.selectedAreaIds,
+                            selected = row.selected,
                             onToggleExpand = {
                                 expandedIds = if (row.area.id in expandedIds) {
                                     expandedIds - row.area.id
@@ -255,7 +270,11 @@ fun RulesScreen(
                             onToggleSelect = {
                                 viewModel.updateRules { draft ->
                                     val next = draft.selectedAreaIds.toMutableSet()
-                                    if (row.area.id in next) next.remove(row.area.id) else next.add(row.area.id)
+                                    if (row.selected) {
+                                        next.removeAll(selfAndDescendantIds(row.area))
+                                    } else {
+                                        next.add(row.area.id)
+                                    }
                                     draft.copy(selectedAreaIds = next)
                                 }
                             },
@@ -305,10 +324,26 @@ private fun AreaTreeRow(
     }
 }
 
+private fun selfAndDescendantIds(node: AreaUi): Set<Long> = buildSet {
+    fun walk(n: AreaUi) {
+        add(n.id)
+        n.children.forEach(::walk)
+    }
+    walk(node)
+}
+
+private fun topLevelIdsWithSelected(nodes: List<AreaUi>, selected: Set<Long>): Set<Long> {
+    if (selected.isEmpty()) return emptySet()
+    fun containsSelected(node: AreaUi): Boolean =
+        node.id in selected || node.children.any(::containsSelected)
+    return nodes.mapNotNull { node -> node.id.takeIf { containsSelected(node) } }.toSet()
+}
+
 private fun flattenAreas(
     nodes: List<AreaUi>,
     expanded: Set<Long>,
     filter: String,
+    selectedIds: Set<Long>,
 ): List<AreaRow> {
     val query = filter.trim()
     val out = mutableListOf<AreaRow>()
@@ -319,15 +354,16 @@ private fun flattenAreas(
         }
         return node.children.any(::matches)
     }
-    fun walk(node: AreaUi, depth: Int) {
+    fun walk(node: AreaUi, depth: Int, ancestorSelected: Boolean) {
         if (!matches(node)) return
         val expandable = node.children.isNotEmpty()
         val open = expandable && (query.isNotEmpty() || node.id in expanded)
-        out += AreaRow(node, depth, expandable, open)
+        val selected = ancestorSelected || node.id in selectedIds
+        out += AreaRow(node, depth, expandable, open, selected)
         if (open) {
-            node.children.forEach { walk(it, depth + 1) }
+            node.children.forEach { walk(it, depth + 1, selected) }
         }
     }
-    nodes.forEach { walk(it, 0) }
+    nodes.forEach { walk(it, 0, false) }
     return out
 }

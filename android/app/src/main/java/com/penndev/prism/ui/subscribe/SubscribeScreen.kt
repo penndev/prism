@@ -5,6 +5,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -43,7 +44,7 @@ import com.penndev.prism.R
 import com.penndev.prism.ui.PrismUiState
 import com.penndev.prism.ui.PrismViewModel
 import com.penndev.prism.ui.components.DropdownField
-import com.penndev.prism.ui.components.SettingSection
+import com.penndev.prism.ui.components.PreferenceGroup
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -100,13 +101,15 @@ fun SubscribeScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 12.dp),
+                .padding(padding),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item { Spacer(Modifier.height(4.dp)) }
             item {
-                SettingSection(title = stringResource(R.string.subscribe_import_title)) {
+                PreferenceGroup(
+                    title = stringResource(R.string.subscribe_import_title),
+                    contentPadding = PaddingValues(16.dp),
+                ) {
                     DropdownField(
                         label = stringResource(R.string.subscribe_type),
                         value = subscribeType,
@@ -152,7 +155,10 @@ fun SubscribeScreen(
             }
             if (state.importPreview.isNotEmpty()) {
                 item {
-                    SettingSection(title = stringResource(R.string.subscribe_preview_title)) {
+                    PreferenceGroup(
+                        title = stringResource(R.string.subscribe_preview_title),
+                        contentPadding = PaddingValues(16.dp),
+                    ) {
                         Text(
                             stringResource(
                                 R.string.subscribe_preview_meta,
@@ -191,7 +197,10 @@ fun SubscribeScreen(
                 }
             }
             item {
-                SettingSection(title = stringResource(R.string.subscribe_list_title)) {
+                PreferenceGroup(
+                    title = stringResource(R.string.subscribe_list_title),
+                    contentPadding = PaddingValues(16.dp),
+                ) {
                     Text(
                         stringResource(R.string.subscribe_current_count, state.servers.size),
                         style = MaterialTheme.typography.bodySmall,

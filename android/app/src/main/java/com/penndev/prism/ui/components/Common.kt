@@ -4,10 +4,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -52,6 +52,7 @@ fun groupedItemShape(index: Int, count: Int, radius: Dp = GroupRadius): RoundedC
 fun PreferenceGroup(
     title: String,
     modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = PaddingValues(0.dp),
     actions: @Composable RowScope.() -> Unit = {},
     content: @Composable ColumnScope.() -> Unit,
 ) {
@@ -74,7 +75,8 @@ fun PreferenceGroup(
             Modifier
                 .fillMaxWidth()
                 .clip(GroupShape)
-                .background(MaterialTheme.colorScheme.surface),
+                .background(MaterialTheme.colorScheme.surface)
+                .padding(contentPadding),
             content = content,
         )
     }
@@ -160,32 +162,6 @@ fun PreferenceDivider() {
         modifier = Modifier.padding(start = 16.dp),
         color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
     )
-}
-
-@Composable
-fun SettingSection(
-    title: String,
-    modifier: Modifier = Modifier,
-    fillMaxHeight: Boolean = false,
-    content: @Composable ColumnScope.() -> Unit,
-) {
-    Column(modifier.fillMaxWidth()) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
-        )
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .then(if (fillMaxHeight) Modifier.fillMaxHeight() else Modifier)
-                .clip(GroupShape)
-                .background(MaterialTheme.colorScheme.surface)
-                .padding(16.dp),
-            content = content,
-        )
-    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

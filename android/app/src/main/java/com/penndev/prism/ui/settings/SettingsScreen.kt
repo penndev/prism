@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.penndev.prism.R
+import com.penndev.prism.data.LANGUAGE_SYSTEM
 import com.penndev.prism.data.ThemeMode
 import com.penndev.prism.ui.PrismUiState
 import com.penndev.prism.ui.PrismViewModel
@@ -47,10 +48,10 @@ fun SettingsScreen(
 ) {
     val settings = state.settings
     var dialog by remember { mutableStateOf(SettingsDialog.None) }
-    val languageLabel = if (settings.system.language == "zh-CN") {
-        stringResource(R.string.lang_zh)
-    } else {
-        stringResource(R.string.lang_en)
+    val languageLabel = when (settings.system.language) {
+        "zh-CN" -> stringResource(R.string.lang_zh)
+        "en" -> stringResource(R.string.lang_en)
+        else -> stringResource(R.string.lang_system)
     }
     val themeLabel = when (settings.system.themeMode) {
         ThemeMode.System -> stringResource(R.string.settings_theme_system)
@@ -121,6 +122,7 @@ fun SettingsScreen(
         SettingsDialog.Language -> OptionDialog(
             title = stringResource(R.string.settings_select_language),
             options = listOf(
+                LANGUAGE_SYSTEM to stringResource(R.string.lang_system),
                 "zh-CN" to stringResource(R.string.lang_zh),
                 "en" to stringResource(R.string.lang_en),
             ),

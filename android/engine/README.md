@@ -12,8 +12,9 @@ opt.proxy = "socks5://user:pass@host:port" // 与桌面相同
 opt.handler = object : Handler {
     override fun protect(fd: Int) = vpn.protect(fd)
     override fun onLog(line: String?) { /* 连接日志 */ }
-    override fun useProxy(address: String?): Boolean {
+    override fun useProxy(network: String?, address: String?): Boolean {
         val chain = Engine.lookup(address) // 叶 → 父，再和已保存的地域 ID 比对
+        // 在 Java 打连接日志，例如 "proxy tcp 1.2.3.4:443"
         ...
     }
     override fun onProxyRead(n: Long) { /* 代理路径读增量 */ }
@@ -29,7 +30,7 @@ Engine.areaTree()                   // JSON，形状同桌面 /rule/api/areas
 Engine.lookup(address)              // 该 IP 的地域链（叶 → 父）
 ```
 
-下载 IP 库、选模式和勾选地域都在 Java 完成。Go 打开 db、给树、按 IP 查地域（含上级）；是否走代理由 `Handler.useProxy` 决定。
+下载 IP 库、选模式和勾选地域都在 Java 完成。Go 打开 db、给树、按 IP 查地域（含上级）；是否走代理由 `Handler.useProxy` 决定，连接日志（`proxy` / `direct`）也在 Java 里打。
 
 `Start` 成功后 fd 归 Go；失败时 Java 用 `ParcelFileDescriptor.adoptFd(fd).close()`。`Stop()` 会关掉 fd。出站 socket 必须 `protect`。
 

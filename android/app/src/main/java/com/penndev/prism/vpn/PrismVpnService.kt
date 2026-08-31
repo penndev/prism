@@ -149,8 +149,6 @@ class PrismVpnService : VpnService() {
             .build()
     }
 
-    private fun protectSocket(fd: Int): Boolean = protect(fd)
-
     private fun shouldProxy(address: String): Boolean {
         val rules = VpnController.rules
         return when (rules.geoMode) {
@@ -173,14 +171,22 @@ class PrismVpnService : VpnService() {
     }
 
     private inner class VpnHandler : Handler {
-        override fun protect(fd: Int): Boolean = protectSocket(fd)
+        override fun protect(fd: Int): Boolean = this@PrismVpnService.protect(fd)
 
         override fun onLog(line: String?) {
             val text = line.orEmpty()
             if (text.isNotEmpty()) VpnController.emitConnection(text)
         }
 
-        override fun useProxy(address: String?): Boolean = shouldProxy(address.orEmpty())
+        override fun useProxy(network: String?, address: String?): Boolean {
+            val dest = address.orEmpty()
+            val use = shouldProxy(dest)
+            val tag = if (use) "proxy" else "direct"
+            val net = network.orEmpty()
+            val line = if (net.isEmpty()) "$tag $dest" else "$tag $net $dest"
+            if (dest.isNotEmpty()) VpnController.emitConnection(line)
+            return use
+        }
 
         override fun onProxyRead(n: Long) {
             if (n > 0) VpnController.uploadBytes.addAndGet(n)

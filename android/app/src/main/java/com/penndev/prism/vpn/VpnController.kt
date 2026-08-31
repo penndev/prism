@@ -6,6 +6,7 @@ import androidx.core.content.ContextCompat
 import com.penndev.prism.data.RuleDraft
 import com.penndev.prism.data.ServerItem
 import com.penndev.prism.data.TrafficUi
+import com.penndev.prism.data.formatBytes
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,9 +27,6 @@ object VpnController {
 
     private val _connections = MutableSharedFlow<String>(extraBufferCapacity = 256)
     val connections: SharedFlow<String> = _connections.asSharedFlow()
-
-    private val _settled = MutableSharedFlow<Boolean>(extraBufferCapacity = 8)
-    val settled: SharedFlow<Boolean> = _settled.asSharedFlow()
 
     val uploadBytes = AtomicLong(0)
     val downloadBytes = AtomicLong(0)
@@ -58,7 +56,6 @@ object VpnController {
 
     fun markRunning(value: Boolean) {
         _running.value = value
-        _settled.tryEmit(value)
         if (!value) {
             lastUp = 0
             lastDown = 0
@@ -89,16 +86,4 @@ object VpnController {
     }
 
     private fun formatRate(bytes: Long): String = "${formatBytes(bytes)}/s"
-
-    private fun formatBytes(bytes: Long): String {
-        if (bytes < 1024) return "$bytes B"
-        val units = arrayOf("KB", "MB", "GB", "TB")
-        var value = bytes.toDouble() / 1024
-        var index = 0
-        while (value >= 1024 && index < units.lastIndex) {
-            value /= 1024
-            index++
-        }
-        return "%.1f %s".format(value, units[index])
-    }
 }

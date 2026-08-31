@@ -134,12 +134,7 @@ func relay(proxy, local transport.HandleConnect, h Handler, ctr *byteCounter, co
 	}
 	useProxy := true
 	if h != nil {
-		useProxy = h.UseProxy(address)
-		tag := "proxy"
-		if !useProxy {
-			tag = "direct"
-		}
-		h.OnLog(tag + " " + network + " " + address)
+		useProxy = h.UseProxy(network, address)
 	}
 	handle := proxy
 	c := conn

@@ -11,12 +11,14 @@ type Options struct {
 
 // Handler is implemented on the Android side.
 // Protect must wrap VpnService.protect.
-// UseProxy decides direct vs proxy; Java looks up the IP (leaf → parent) and matches saved area IDs.
+// UseProxy decides direct vs proxy and should emit the connection log
+// (e.g. "proxy tcp 1.2.3.4:443"). Java looks up the IP (leaf → parent)
+// and matches saved area IDs.
 // OnProxyRead / OnProxyWrite report proxy-path byte deltas about once a second.
 type Handler interface {
 	Protect(fd int32) bool
 	OnLog(line string)
-	UseProxy(address string) bool
+	UseProxy(network, address string) bool
 	OnProxyRead(n int64)
 	OnProxyWrite(n int64)
 }

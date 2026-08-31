@@ -19,7 +19,7 @@ class Prefs(context: Context) {
                     sortAfterPing = latency?.optBoolean("sortAfterPing", true) ?: true,
                 ),
                 system = SystemSettings(
-                    language = system?.optString("language") ?: "zh-CN",
+                    language = system?.optString("language").orEmpty().ifBlank { LANGUAGE_SYSTEM },
                     themeMode = runCatching {
                         ThemeMode.valueOf(system?.optString("themeMode") ?: "System")
                     }.getOrDefault(ThemeMode.System),

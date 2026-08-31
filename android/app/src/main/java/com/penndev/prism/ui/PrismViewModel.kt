@@ -2,11 +2,10 @@ package com.penndev.prism.ui
 
 import android.app.Application
 import android.net.Uri
-import androidx.appcompat.app.AppCompatDelegate
-import androidx.core.os.LocaleListCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.penndev.prism.PrismApplication
+import com.penndev.prism.applyAppLanguage
 import com.penndev.prism.R
 import com.penndev.prism.data.AppSettings
 import com.penndev.prism.data.AreaUi
@@ -21,6 +20,7 @@ import com.penndev.prism.data.SubscriptionParser
 import com.penndev.prism.data.SystemSettings
 import com.penndev.prism.data.TrafficUi
 import com.penndev.prism.data.downloadIpregionDb
+import com.penndev.prism.data.formatBytes
 import com.penndev.prism.data.installIpregionDb
 import com.penndev.prism.data.ipregionFile
 import com.penndev.prism.data.loadAreaTree
@@ -41,6 +41,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+private const val LOG_LIMIT = 1000
 
 data class PrismUiState(
     val settings: AppSettings = AppSettings(),
@@ -83,7 +85,6 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
             selectedId = prefs.loadSelectedId(),
             rules = prefs.loadRules(),
         )
-        applyLanguage(settings.system.language)
         appendStatus(str(R.string.status_ready, servers.size))
         observeVpn()
         viewModelScope.launch(Dispatchers.IO) { refreshEngineUi() }
@@ -120,7 +121,6 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         _state.update { it.copy(vpnBusy = true, vpnDesired = true) }
-        VpnController.rules = _state.value.rules
         VpnController.start(app, server)
         appendStatus(str(R.string.status_vpn_starting, server.displayName))
     }
@@ -190,13 +190,12 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
             _state.update { it.copy(importing = true) }
             runCatching {
                 withContext(Dispatchers.IO) {
-                    when {
-                        fromFile -> SubscriptionParser.parseJsonFile(trimmed)
+                    val isUrl = !fromFile && (
                         trimmed.startsWith("http://", ignoreCase = true) ||
-                            trimmed.startsWith("https://", ignoreCase = true) ->
-                            fetchSubscription(type, trimmed)
-                        else -> SubscriptionParser.parseContent(type, trimmed)
-                    }
+                            trimmed.startsWith("https://", ignoreCase = true)
+                    )
+                    if (isUrl) fetchSubscription(type, trimmed)
+                    else SubscriptionParser.parseContent(type, trimmed)
                 }
             }.onSuccess { servers ->
                 _state.update {
@@ -316,7 +315,7 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
         val previous = _state.value.settings.system
         updateSettings { it.copy(system = transform(it.system)) }
         val next = _state.value.settings.system
-        if (previous.language != next.language) applyLanguage(next.language)
+        if (previous.language != next.language) applyAppLanguage(next.language)
     }
 
     fun clearStatusLogs() {
@@ -361,11 +360,6 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
     private fun observeVpn() {
         viewModelScope.launch {
             VpnController.running.collect { running ->
-                _state.update { it.copy(running = running) }
-            }
-        }
-        viewModelScope.launch {
-            VpnController.settled.collect { running ->
                 _state.update {
                     it.copy(running = running, vpnBusy = false, vpnDesired = running)
                 }
@@ -377,7 +371,7 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             VpnController.connections.collect { line ->
                 if (_state.value.settings.system.enableLogRecording) {
-                    _state.update { it.copy(connectionLogs = (it.connectionLogs + line).takeLast(1000)) }
+                    _state.update { it.copy(connectionLogs = (it.connectionLogs + line).takeLast(LOG_LIMIT)) }
                 }
             }
         }
@@ -399,9 +393,7 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
                 runCatching { block() }.exceptionOrNull()
             }
             if (error == null) {
-                resetGeoAfterDbChange()
-                prefs.saveRules(_state.value.rules)
-                VpnController.rules = _state.value.rules
+                updateRules { it.copy(geoMode = GeoMode.Global, selectedAreaIds = emptySet()) }
             }
             withContext(Dispatchers.IO) { refreshEngineUi() }
             _state.update {
@@ -420,7 +412,7 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun appendStatus(line: String) {
-        _state.update { it.copy(statusLogs = it.statusLogs + line) }
+        _state.update { it.copy(statusLogs = (it.statusLogs + line).takeLast(LOG_LIMIT)) }
     }
 
     private fun refreshEngineUi() {
@@ -430,20 +422,9 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
             str(R.string.rules_db_missing)
         } else {
             val ver = st.version.orEmpty().ifBlank { "-" }
-            str(R.string.rules_db_status, ver, formatDbSize(st.size), st.areas)
+            str(R.string.rules_db_status, ver, formatBytes(st.size), st.areas)
         }
         _state.update { it.copy(dbStatus = text, dbReady = ready, geoAreas = loadAreaTree()) }
-    }
-
-    private fun resetGeoAfterDbChange() {
-        _state.update {
-            it.copy(
-                rules = it.rules.copy(
-                    geoMode = GeoMode.Global,
-                    selectedAreaIds = emptySet(),
-                ),
-            )
-        }
     }
 
     private fun fetchSubscription(type: String, url: String): List<ServerItem> {
@@ -477,25 +458,6 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
             return body
         } finally {
             connection.disconnect()
-        }
-    }
-
-    private fun formatDbSize(bytes: Long): String {
-        if (bytes < 1024) return "$bytes B"
-        val units = arrayOf("KB", "MB", "GB")
-        var value = bytes.toDouble() / 1024
-        var index = 0
-        while (value >= 1024 && index < units.lastIndex) {
-            value /= 1024
-            index++
-        }
-        return "%.1f %s".format(value, units[index])
-    }
-
-    private fun applyLanguage(tag: String) {
-        val locales = LocaleListCompat.forLanguageTags(tag)
-        if (AppCompatDelegate.getApplicationLocales().toLanguageTags() != locales.toLanguageTags()) {
-            AppCompatDelegate.setApplicationLocales(locales)
         }
     }
 

@@ -35,6 +35,9 @@
           </div>
           <div id="dbStatus" class="status-box has-path-tip" title="">-</div>
           <div id="dbEditor" hidden>
+            <p id="dbHint" class="muted db-hint">
+              <a id="dbHintLink" href="https://github.com/penndev/gopkg/tree/main/ipregion" target="_blank" rel="noopener noreferrer"></a>
+            </p>
             <div class="row">
               <input id="dbUrl" type="url" placeholder="https://.../ipregion.db" spellcheck="false">
               <button id="btnDownload" class="primary" type="button">下载</button>
@@ -171,6 +174,7 @@
       domainsEl.placeholder = t('domain.placeholder');
       areaFilter.placeholder = t('area.filter');
       dbUrlEl.placeholder = t('db.url.placeholder');
+      document.getElementById('dbHintLink').textContent = t('db.hint');
       btnDownload.textContent = t('button.download');
       btnUpload.textContent = t('button.upload');
       if (dbExists) {
@@ -264,13 +268,14 @@
       }
     }
 
-    function renderAreaNode(a, selected, filter, into) {
+    function renderAreaNode(a, selected, filter, into, ancestorSelected) {
       if (filter && !nodeMatches(a, filter)) return;
       const children = Array.isArray(a.children) ? a.children : [];
       const id = Number(a.id);
       const open = filter
         ? children.some((c) => nodeMatches(c, filter))
         : expandedIds.has(id);
+      const checked = ancestorSelected || selected.has(id);
 
       const node = document.createElement('div');
       node.className = 'area-node';
@@ -296,7 +301,7 @@
       const input = document.createElement('input');
       input.type = 'checkbox';
       input.value = String(a.id);
-      input.checked = selected.has(id);
+      input.checked = checked;
       input.addEventListener('change', onAreaCheckChange);
       const span = document.createElement('span');
       span.textContent = String(a.name || '');
@@ -308,7 +313,7 @@
       if (children.length && open) {
         const sub = document.createElement('div');
         sub.className = 'area-children';
-        for (const c of children) renderAreaNode(c, selected, filter, sub);
+        for (const c of children) renderAreaNode(c, selected, filter, sub, checked);
         node.appendChild(sub);
       }
       into.appendChild(node);
@@ -320,7 +325,7 @@
 
       areaChecks.innerHTML = '';
       for (const a of areas) {
-        renderAreaNode(a, selected, filter, areaChecks);
+        renderAreaNode(a, selected, filter, areaChecks, false);
       }
       updateSelectedCount();
     }
@@ -460,11 +465,31 @@
       }
     }
 
+    function collectIds(node) {
+      const ids = [Number(node.id)];
+      for (const c of node.children || []) ids.push(...collectIds(c));
+      return ids;
+    }
+
+    function findNode(nodes, id) {
+      for (const n of nodes || []) {
+        if (Number(n.id) === id) return n;
+        const found = findNode(n.children, id);
+        if (found) return found;
+      }
+      return null;
+    }
+
     function onAreaCheckChange(ev) {
       const id = Number(ev.target.value);
       const set = new Set(selectedAreaIds());
-      if (ev.target.checked) set.add(id);
-      else set.delete(id);
+      if (ev.target.checked) {
+        set.add(id);
+      } else {
+        const node = findNode(areas, id);
+        if (node) collectIds(node).forEach((x) => set.delete(x));
+        else set.delete(id);
+      }
       areaIds = Array.from(set).filter((n) => n > 0);
       updateSelectedCount();
       scheduleSaveFromUI(geoMsg);

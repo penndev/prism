@@ -26,14 +26,6 @@ object SubscriptionParser {
         }
     }
 
-    fun parseJsonFile(raw: String): List<ServerItem> {
-        val text = raw.trim()
-        if (text.isEmpty()) {
-            throw SubscriptionException(com.penndev.prism.R.string.subscribe_error_empty)
-        }
-        return serversFromJson(if (text.startsWith("[")) text else decodeMaybeBase64(text))
-    }
-
     fun exportJson(servers: List<ServerItem>): String {
         val arr = JSONArray()
         servers.forEach { server ->

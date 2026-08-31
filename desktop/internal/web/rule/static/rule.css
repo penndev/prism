@@ -193,6 +193,11 @@ button:disabled {
   font-size: 13px;
 }
 
+.db-hint {
+  margin: 0.5rem 0 0.35rem;
+  word-break: break-all;
+}
+
 .status-box {
   margin-top: 0.4rem;
   padding: 0.65rem 0.75rem;

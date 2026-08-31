@@ -31,8 +31,10 @@ data class LatencyTestSettings(
     val sortAfterPing: Boolean = true,
 )
 
+const val LANGUAGE_SYSTEM = "system"
+
 data class SystemSettings(
-    val language: String = "zh-CN",
+    val language: String = LANGUAGE_SYSTEM,
     val themeMode: ThemeMode = ThemeMode.System,
     val enableLogRecording: Boolean = true,
 )
@@ -61,6 +63,18 @@ data class TrafficUi(
     val downTotal: String = "0 B",
     val upTotal: String = "0 B",
 )
+
+fun formatBytes(bytes: Long): String {
+    if (bytes < 1024) return "$bytes B"
+    val units = arrayOf("KB", "MB", "GB", "TB")
+    var value = bytes.toDouble() / 1024
+    var index = 0
+    while (value >= 1024 && index < units.lastIndex) {
+        value /= 1024
+        index++
+    }
+    return "%.1f %s".format(value, units[index])
+}
 
 val PROXY_SCHEMES = listOf("Socks5", "Socks5OverTLS", "Http", "HttpOverTLS")
 
