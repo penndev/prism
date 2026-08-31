@@ -47,7 +47,7 @@ android {
 }
 
 dependencies {
-    implementation(files("${rootProject.projectDir}/mstack/mstack.aar"))
+    implementation(files("${rootProject.projectDir}/engine/engine.aar"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.lifecycle.runtime.ktx)

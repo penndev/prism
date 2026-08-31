@@ -1,6 +1,10 @@
 package com.penndev.prism.ui.home
 
+import android.app.Activity
+import android.net.VpnService
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -53,6 +57,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -62,6 +67,7 @@ import androidx.compose.ui.unit.sp
 import com.penndev.prism.R
 import com.penndev.prism.data.ServerItem
 import com.penndev.prism.ui.PrismUiState
+import com.penndev.prism.ui.PrismViewModel
 import com.penndev.prism.ui.components.PreferenceDivider
 import com.penndev.prism.ui.components.groupedItemShape
 import com.penndev.prism.ui.theme.LatencyBad
@@ -73,24 +79,28 @@ import com.penndev.prism.ui.theme.PrismBlue
 @Composable
 fun HomeScreen(
     state: PrismUiState,
-    onSelectServer: (ServerItem?) -> Unit,
-    onToggleRunning: (Boolean, String) -> Unit,
+    viewModel: PrismViewModel,
     onOpenSubscribe: () -> Unit,
-    onPingAll: (Pair<String, String>) -> Unit,
     onAddServer: () -> Unit,
     onEditServer: (ServerItem) -> Unit,
-    onDeleteServer: (String, String) -> Unit,
-    onDeleteServers: (Set<String>, String) -> Unit,
 ) {
     var selecting by remember { mutableStateOf(false) }
     var checkedIds by remember { mutableStateOf(setOf<String>()) }
     var pendingDelete by remember { mutableStateOf<ServerItem?>(null) }
     var pendingBatchDelete by remember { mutableStateOf(false) }
+    var waitingPermission by remember { mutableStateOf(false) }
     val selected = state.selectedServer
-    val hostRequired = stringResource(R.string.settings_latency_test_host_required)
-    val pingDone = stringResource(R.string.server_list_ping_all_done)
-    val deleteSuccess = stringResource(R.string.server_list_delete_success)
-    val needNode = stringResource(R.string.proxy_need_node)
+    val context = LocalContext.current
+    val vpnPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        waitingPermission = false
+        if (result.resultCode == Activity.RESULT_OK) {
+            viewModel.start()
+        } else {
+            viewModel.onVpnPermissionDenied()
+        }
+    }
 
     fun exitSelecting() {
         selecting = false
@@ -156,7 +166,7 @@ fun HomeScreen(
                         )
                     }
                     IconButton(
-                        onClick = { onPingAll(hostRequired to pingDone) },
+                        onClick = { viewModel.pingAll() },
                         enabled = !state.pingingAll && state.servers.isNotEmpty(),
                     ) {
                         if (state.pingingAll) {
@@ -181,7 +191,7 @@ fun HomeScreen(
             contentPadding = PaddingValues(bottom = 24.dp),
         ) {
             item {
-                val switchOn = if (state.vpnBusy) state.vpnDesired else state.running
+                val switchOn = waitingPermission || if (state.vpnBusy) state.vpnDesired else state.running
                 val statusTitle = when {
                     state.vpnBusy && state.vpnDesired -> stringResource(R.string.proxy_connecting)
                     state.vpnBusy && !state.vpnDesired -> stringResource(R.string.proxy_stopping)
@@ -190,7 +200,7 @@ fun HomeScreen(
                 }
                 val dotColor = when {
                     state.running && !state.vpnBusy -> LatencyGood
-                    state.vpnBusy -> PrismBlue
+                    state.vpnBusy || waitingPermission -> PrismBlue
                     else -> MaterialTheme.colorScheme.outline
                 }
                 val pulse = rememberInfiniteTransition(label = "vpn-status")
@@ -216,7 +226,7 @@ fun HomeScreen(
                         modifier = Modifier
                             .size(10.dp)
                             .clip(CircleShape)
-                            .background(dotColor.copy(alpha = if (state.vpnBusy) dotAlpha else 1f)),
+                            .background(dotColor.copy(alpha = if (state.vpnBusy || waitingPermission) dotAlpha else 1f)),
                     )
                     Column(Modifier.padding(start = 12.dp).weight(1f)) {
                         Text(
@@ -248,7 +258,22 @@ fun HomeScreen(
                     }
                     Switch(
                         checked = switchOn,
-                        onCheckedChange = { wantOn -> onToggleRunning(wantOn, needNode) },
+                        onCheckedChange = { wantOn ->
+                            if (!wantOn) {
+                                waitingPermission = false
+                                viewModel.stop()
+                            } else if (state.selectedServer == null) {
+                                viewModel.start()
+                            } else {
+                                val prepare = VpnService.prepare(context)
+                                if (prepare != null) {
+                                    waitingPermission = true
+                                    vpnPermission.launch(prepare)
+                                } else {
+                                    viewModel.start()
+                                }
+                            }
+                        },
                         colors = SwitchDefaults.colors(
                             checkedTrackColor = PrismBlue,
                             checkedBorderColor = PrismBlue,
@@ -297,7 +322,7 @@ fun HomeScreen(
                                     checkedIds + server.id
                                 }
                             } else {
-                                onSelectServer(server)
+                                viewModel.selectServer(server)
                             }
                         },
                         onLongClick = {
@@ -321,7 +346,7 @@ fun HomeScreen(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    onDeleteServer(server.id, deleteSuccess)
+                    viewModel.deleteServer(server.id)
                     pendingDelete = null
                 }) {
                     Text(stringResource(R.string.server_list_delete_ok), color = LatencyBad)
@@ -344,7 +369,7 @@ fun HomeScreen(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    onDeleteServers(checkedIds, deleteSuccess)
+                    viewModel.deleteServers(checkedIds)
                     pendingBatchDelete = false
                     exitSelecting()
                 }) {
@@ -359,7 +384,6 @@ fun HomeScreen(
         )
     }
 }
-
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ServerRow(

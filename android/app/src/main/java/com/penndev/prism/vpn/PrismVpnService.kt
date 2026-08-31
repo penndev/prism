@@ -12,9 +12,10 @@ import android.os.ParcelFileDescriptor
 import androidx.core.app.NotificationCompat
 import com.penndev.prism.MainActivity
 import com.penndev.prism.R
-import com.penndev.prism.mstack.Logger
-import com.penndev.prism.mstack.Mstack
-import com.penndev.prism.mstack.Protector
+import com.penndev.prism.data.GeoMode
+import com.penndev.prism.engine.Engine
+import com.penndev.prism.engine.Handler
+import com.penndev.prism.engine.Options
 import java.util.concurrent.atomic.AtomicBoolean
 
 class PrismVpnService : VpnService() {
@@ -42,13 +43,21 @@ class PrismVpnService : VpnService() {
         if (running.get()) return
         startAsForeground()
 
+        val server = VpnController.session
+        if (server == null) {
+            VpnController.emitStatus(getString(R.string.proxy_need_node))
+            VpnController.markRunning(false)
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return
+        }
+
         val builder = Builder()
             .setSession(getString(R.string.app_title))
             .setMtu(MTU)
             .addAddress(TUN_IPV4, 32)
             .addRoute("0.0.0.0", 0)
-            .addDnsServer("8.8.8.8")
-            .addDnsServer("1.1.1.1")
+            .addDnsServer("114.114.114.114")
             .setBlocking(true)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             builder.setMetered(false)
@@ -64,11 +73,18 @@ class PrismVpnService : VpnService() {
 
         val fd = pfd.detachFd()
         pfd.close()
+        VpnController.uploadBytes.set(0)
+        VpnController.downloadBytes.set(0)
         try {
-            Mstack.start(fd, MTU, VpnProtector(), VpnLogger())
+            val opt = Options()
+            opt.setFD(fd)
+            opt.setMTU(MTU)
+            opt.proxy = server.toProxyURL()
+            opt.handler = VpnHandler()
+            Engine.start(opt)
         } catch (error: Exception) {
             runCatching { ParcelFileDescriptor.adoptFd(fd).close() }
-            VpnController.emitStatus("mstack start: ${error.message}")
+            VpnController.emitStatus("engine start: ${error.message}")
             VpnController.markRunning(false)
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
@@ -76,8 +92,6 @@ class PrismVpnService : VpnService() {
         }
 
         running.set(true)
-        VpnController.uploadBytes.set(0)
-        VpnController.downloadBytes.set(0)
         VpnController.markRunning(true)
         VpnController.emitStatus(getString(R.string.vpn_started))
     }
@@ -88,7 +102,7 @@ class PrismVpnService : VpnService() {
             stopSelf()
             return
         }
-        runCatching { Mstack.stop() }
+        runCatching { Engine.stop() }
         VpnController.markRunning(false)
         VpnController.emitStatus(getString(R.string.status_stopped))
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -137,16 +151,43 @@ class PrismVpnService : VpnService() {
 
     private fun protectSocket(fd: Int): Boolean = protect(fd)
 
-    private inner class VpnProtector : Protector {
-        override fun protect(fd: Int): Boolean = protectSocket(fd)
+    private fun shouldProxy(address: String): Boolean {
+        val rules = VpnController.rules
+        return when (rules.geoMode) {
+            GeoMode.Global -> true
+            GeoMode.None -> false
+            GeoMode.Proxy -> inSelectedAreas(address, rules.selectedAreaIds)
+            GeoMode.Bypass -> !inSelectedAreas(address, rules.selectedAreaIds)
+        }
     }
 
-    private inner class VpnLogger : Logger {
-        override fun onConnect(network: String?, address: String?) {
-            val net = network.orEmpty()
-            val addr = address.orEmpty()
-            if (net.isEmpty() && addr.isEmpty()) return
-            VpnController.emitConnection("$net $addr")
+    private fun inSelectedAreas(address: String, ids: Set<Long>): Boolean {
+        if (ids.isEmpty()) return false
+        val list = runCatching { Engine.lookup(address) }.getOrNull() ?: return false
+        val n = list.len()
+        for (i in 0 until n) {
+            val area = list.get(i) ?: continue
+            if (area.id in ids) return true
+        }
+        return false
+    }
+
+    private inner class VpnHandler : Handler {
+        override fun protect(fd: Int): Boolean = protectSocket(fd)
+
+        override fun onLog(line: String?) {
+            val text = line.orEmpty()
+            if (text.isNotEmpty()) VpnController.emitConnection(text)
+        }
+
+        override fun useProxy(address: String?): Boolean = shouldProxy(address.orEmpty())
+
+        override fun onProxyRead(n: Long) {
+            if (n > 0) VpnController.uploadBytes.addAndGet(n)
+        }
+
+        override fun onProxyWrite(n: Long) {
+            if (n > 0) VpnController.downloadBytes.addAndGet(n)
         }
     }
 

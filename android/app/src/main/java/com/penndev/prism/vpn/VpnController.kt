@@ -3,6 +3,8 @@ package com.penndev.prism.vpn
 import android.content.Context
 import android.content.Intent
 import androidx.core.content.ContextCompat
+import com.penndev.prism.data.RuleDraft
+import com.penndev.prism.data.ServerItem
 import com.penndev.prism.data.TrafficUi
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -32,12 +34,20 @@ object VpnController {
     val downloadBytes = AtomicLong(0)
 
     @Volatile
+    var session: ServerItem? = null
+        private set
+
+    @Volatile
+    var rules: RuleDraft = RuleDraft()
+
+    @Volatile
     private var lastUp = 0L
 
     @Volatile
     private var lastDown = 0L
 
-    fun start(context: Context) {
+    fun start(context: Context, server: ServerItem) {
+        session = server
         val intent = Intent(context, PrismVpnService::class.java).setAction(ACTION_START)
         ContextCompat.startForegroundService(context, intent)
     }

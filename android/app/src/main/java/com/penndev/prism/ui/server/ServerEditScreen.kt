@@ -30,43 +30,21 @@ import androidx.compose.ui.unit.dp
 import com.penndev.prism.R
 import com.penndev.prism.data.PROXY_SCHEMES
 import com.penndev.prism.data.ServerItem
+import com.penndev.prism.ui.PrismViewModel
 import com.penndev.prism.ui.components.DropdownField
-
-data class ServerFormMessages(
-    val hostRequired: String,
-    val hostFormat: String,
-    val protocolRequired: String,
-    val addSuccess: String,
-    val updateSuccess: String,
-)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ServerEditScreen(
+    viewModel: PrismViewModel,
     server: ServerItem?,
     onBack: () -> Unit,
-    onSave: (
-        host: String,
-        remark: String,
-        protocol: String,
-        username: String,
-        password: String,
-        messages: ServerFormMessages,
-    ) -> Unit,
 ) {
     var host by remember { mutableStateOf(server?.host.orEmpty()) }
     var remark by remember { mutableStateOf(server?.remark.orEmpty()) }
     var protocol by remember { mutableStateOf(server?.protocol ?: "Socks5") }
     var username by remember { mutableStateOf(server?.username.orEmpty()) }
     var password by remember { mutableStateOf(server?.password.orEmpty()) }
-
-    val messages = ServerFormMessages(
-        hostRequired = stringResource(R.string.server_list_validate_host),
-        hostFormat = stringResource(R.string.server_list_validate_host_format),
-        protocolRequired = stringResource(R.string.server_list_validate_protocol),
-        addSuccess = stringResource(R.string.server_list_add_success),
-        updateSuccess = stringResource(R.string.server_list_update_success),
-    )
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -143,7 +121,15 @@ fun ServerEditScreen(
             )
             Button(
                 onClick = {
-                    onSave(host, remark, protocol, username, password, messages)
+                    val ok = viewModel.addOrUpdateServer(
+                        editingId = server?.id,
+                        host = host,
+                        remark = remark,
+                        protocol = protocol,
+                        username = username,
+                        password = password,
+                    )
+                    if (ok) onBack()
                 },
                 modifier = Modifier
                     .fillMaxWidth()

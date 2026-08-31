@@ -10,6 +10,16 @@ data class ServerItem(
     val latencyMs: Int? = null,
 ) {
     val displayName: String get() = remark.ifBlank { host }
+
+    fun toProxyURL(): String {
+        val scheme = protocol.lowercase()
+        val userinfo = if (username.isEmpty() && password.isEmpty()) {
+            ""
+        } else {
+            "${encodeUserinfo(username)}:${encodeUserinfo(password)}@"
+        }
+        return "$scheme://$userinfo$host"
+    }
 }
 
 enum class ThemeMode { System, Light, Dark }
@@ -32,10 +42,17 @@ data class AppSettings(
     val system: SystemSettings = SystemSettings(),
 )
 
+data class AreaUi(
+    val id: Long,
+    val parentId: Long,
+    val name: String,
+    val children: List<AreaUi> = emptyList(),
+)
+
 data class RuleDraft(
     val geoMode: GeoMode = GeoMode.Global,
-    val selectedAreas: Set<String> = emptySet(),
-    val domains: String = "",
+    val selectedAreaIds: Set<Long> = emptySet(),
+    val dbUrl: String = "",
 )
 
 data class TrafficUi(
@@ -49,4 +66,7 @@ val PROXY_SCHEMES = listOf("Socks5", "Socks5OverTLS", "Http", "HttpOverTLS")
 
 val HOST_PATTERN = Regex("""^(\[[^\]]+]|[^:\[\]]+):\d{1,5}$""")
 
-val DEMO_AREAS = listOf("CN", "US", "JP", "HK", "TW", "SG", "KR", "GB", "DE", "AU")
+private fun encodeUserinfo(value: String): String {
+    return java.net.URLEncoder.encode(value, Charsets.UTF_8.name()).replace("+", "%20")
+}
+

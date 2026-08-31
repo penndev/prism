@@ -56,9 +56,6 @@ fun SubscribeScreen(
     var subscribeType by remember { mutableStateOf("") }
     var subscribeUrl by remember { mutableStateOf("") }
     var confirmImport by remember { mutableStateOf(false) }
-    val exported = stringResource(R.string.subscribe_exported)
-    val fileError = stringResource(R.string.subscribe_error_file)
-    val exportEmpty = stringResource(R.string.subscribe_error_export_empty)
 
     val openFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
@@ -66,7 +63,7 @@ fun SubscribeScreen(
             context.contentResolver.openInputStream(uri)?.bufferedReader()?.readText()
         }.getOrNull()
         if (text.isNullOrBlank()) {
-            viewModel.notifyPending(fileError)
+            viewModel.snack(R.string.subscribe_error_file)
         } else {
             viewModel.parseSubscription(subscribeType, text, fromFile = true)
         }
@@ -79,9 +76,9 @@ fun SubscribeScreen(
             context.contentResolver.openOutputStream(uri)?.use { out ->
                 out.write(viewModel.exportServers().toByteArray(Charsets.UTF_8))
             }
-            viewModel.notifyPending(exported)
+            viewModel.snack(R.string.subscribe_exported)
         }.onFailure {
-            viewModel.notifyPending(fileError)
+            viewModel.snack(R.string.subscribe_error_file)
         }
     }
 
@@ -203,7 +200,7 @@ fun SubscribeScreen(
                     OutlinedButton(
                         onClick = {
                             if (state.servers.isEmpty()) {
-                                viewModel.notifyPending(exportEmpty)
+                                viewModel.snack(R.string.subscribe_error_export_empty)
                             } else {
                                 createFile.launch("prism-servers.json")
                             }
@@ -231,9 +228,7 @@ fun SubscribeScreen(
                 TextButton(
                     onClick = {
                         confirmImport = false
-                        viewModel.confirmImport(
-                            context.getString(R.string.subscribe_imported, state.importPreview.size),
-                        )
+                        viewModel.confirmImport()
                         onBack()
                     },
                 ) {

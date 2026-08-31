@@ -1,9 +1,5 @@
 package com.penndev.prism.ui
 
-import android.app.Activity
-import android.net.VpnService
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -29,7 +25,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -42,6 +37,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.penndev.prism.R
+import com.penndev.prism.ui.components.Hairline
 import com.penndev.prism.ui.home.HomeScreen
 import com.penndev.prism.ui.logs.LogsScreen
 import com.penndev.prism.ui.rules.RulesScreen
@@ -49,7 +45,6 @@ import com.penndev.prism.ui.server.ServerEditScreen
 import com.penndev.prism.ui.settings.SettingsScreen
 import com.penndev.prism.ui.subscribe.SubscribeScreen
 import com.penndev.prism.ui.theme.PrismTheme
-import com.penndev.prism.ui.components.Hairline
 
 private object Routes {
     const val Home = "home"
@@ -57,6 +52,8 @@ private object Routes {
     const val Logs = "logs"
     const val Rules = "rules"
     const val Subscribe = "subscribe"
+    const val ServerEdit = "server/edit"
+    const val ServerEditId = "server/edit/{id}"
 }
 
 @Composable
@@ -135,44 +132,12 @@ fun PrismApp(viewModel: PrismViewModel) {
                 modifier = Modifier.padding(padding),
             ) {
                 composable(Routes.Home) {
-                    val context = LocalContext.current
-                    val vpnPermission = rememberLauncherForActivityResult(
-                        ActivityResultContracts.StartActivityForResult(),
-                    ) { result ->
-                        if (result.resultCode == Activity.RESULT_OK) {
-                            viewModel.startVpn()
-                        } else {
-                            viewModel.onVpnPermissionDenied()
-                        }
-                    }
                     HomeScreen(
                         state = state,
-                        onSelectServer = viewModel::selectServer,
-                        onToggleRunning = { wantOn, needNode ->
-                            if (!wantOn) {
-                                viewModel.stopVpn()
-                            } else if (state.selectedServer == null) {
-                                viewModel.notifyPending(needNode)
-                            } else if (viewModel.beginStart()) {
-                                val prepare = VpnService.prepare(context)
-                                if (prepare != null) {
-                                    vpnPermission.launch(prepare)
-                                } else {
-                                    viewModel.startVpn()
-                                }
-                            }
-                        },
+                        viewModel = viewModel,
                         onOpenSubscribe = { navController.navigate(Routes.Subscribe) },
-                        onPingAll = {
-                            viewModel.pingAll(
-                                hostRequiredMessage = it.first,
-                                doneMessage = it.second,
-                            )
-                        },
-                        onAddServer = { navController.navigate("server/edit") },
-                        onEditServer = { navController.navigate("server/edit/${it.id}") },
-                        onDeleteServer = viewModel::deleteServer,
-                        onDeleteServers = viewModel::deleteServers,
+                        onAddServer = { navController.navigate(Routes.ServerEdit) },
+                        onEditServer = { navController.navigate("${Routes.ServerEdit}/${it.id}") },
                     )
                 }
                 composable(Routes.Settings) {
@@ -191,52 +156,22 @@ fun PrismApp(viewModel: PrismViewModel) {
                         onBack = { navController.popBackStack() },
                     )
                 }
-                composable("server/edit") {
+                composable(Routes.ServerEdit) {
                     ServerEditScreen(
+                        viewModel = viewModel,
                         server = null,
                         onBack = { navController.popBackStack() },
-                        onSave = { host, remark, protocol, username, password, messages ->
-                            val ok = viewModel.addOrUpdateServer(
-                                editingId = null,
-                                host = host,
-                                remark = remark,
-                                protocol = protocol,
-                                username = username,
-                                password = password,
-                                hostRequired = messages.hostRequired,
-                                hostFormat = messages.hostFormat,
-                                protocolRequired = messages.protocolRequired,
-                                addSuccess = messages.addSuccess,
-                                updateSuccess = messages.updateSuccess,
-                            )
-                            if (ok) navController.popBackStack()
-                        },
                     )
                 }
                 composable(
-                    route = "server/edit/{id}",
+                    route = Routes.ServerEditId,
                     arguments = listOf(navArgument("id") { type = NavType.StringType }),
                 ) { entry ->
                     val id = entry.arguments?.getString("id")
                     ServerEditScreen(
+                        viewModel = viewModel,
                         server = state.servers.firstOrNull { it.id == id },
                         onBack = { navController.popBackStack() },
-                        onSave = { host, remark, protocol, username, password, messages ->
-                            val ok = viewModel.addOrUpdateServer(
-                                editingId = id,
-                                host = host,
-                                remark = remark,
-                                protocol = protocol,
-                                username = username,
-                                password = password,
-                                hostRequired = messages.hostRequired,
-                                hostFormat = messages.hostFormat,
-                                protocolRequired = messages.protocolRequired,
-                                addSuccess = messages.addSuccess,
-                                updateSuccess = messages.updateSuccess,
-                            )
-                            if (ok) navController.popBackStack()
-                        },
                     )
                 }
             }

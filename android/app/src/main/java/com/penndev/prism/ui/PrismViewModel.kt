@@ -1,6 +1,7 @@
 package com.penndev.prism.ui
 
 import android.app.Application
+import android.net.Uri
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
 import androidx.lifecycle.AndroidViewModel
@@ -8,17 +9,32 @@ import androidx.lifecycle.viewModelScope
 import com.penndev.prism.PrismApplication
 import com.penndev.prism.R
 import com.penndev.prism.data.AppSettings
+import com.penndev.prism.data.AreaUi
+import com.penndev.prism.data.GeoMode
 import com.penndev.prism.data.HOST_PATTERN
 import com.penndev.prism.data.LatencyTestSettings
-import com.penndev.prism.data.PrismRepository
+import com.penndev.prism.data.Prefs
 import com.penndev.prism.data.RuleDraft
 import com.penndev.prism.data.ServerItem
 import com.penndev.prism.data.SubscriptionException
+import com.penndev.prism.data.SubscriptionParser
 import com.penndev.prism.data.SystemSettings
 import com.penndev.prism.data.TrafficUi
+import com.penndev.prism.data.downloadIpregionDb
+import com.penndev.prism.data.installIpregionDb
+import com.penndev.prism.data.ipregionFile
+import com.penndev.prism.data.loadAreaTree
+import com.penndev.prism.engine.Engine
 import com.penndev.prism.vpn.VpnController
+import java.io.File
+import java.net.HttpURLConnection
+import java.net.URI
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -41,6 +57,10 @@ data class PrismUiState(
     val connectionLogs: List<String> = emptyList(),
     val traffic: TrafficUi = TrafficUi(),
     val rules: RuleDraft = RuleDraft(),
+    val geoAreas: List<AreaUi> = emptyList(),
+    val dbStatus: String = "",
+    val dbReady: Boolean = false,
+    val dbBusy: Boolean = false,
     val snackbar: String? = null,
 ) {
     val selectedServer: ServerItem?
@@ -48,74 +68,66 @@ data class PrismUiState(
 }
 
 class PrismViewModel(application: Application) : AndroidViewModel(application) {
-    private val repository: PrismRepository = (application as PrismApplication).repository
+    private val prefs: Prefs = (application as PrismApplication).prefs
+    private val app get() = getApplication<Application>()
 
     private val _state = MutableStateFlow(PrismUiState())
     val state: StateFlow<PrismUiState> = _state.asStateFlow()
 
     init {
-        val settings = repository.loadSettings()
-        val servers = repository.loadServers()
+        val settings = prefs.loadSettings()
+        val servers = prefs.loadServers()
         _state.value = PrismUiState(
             settings = settings,
             servers = servers,
-            selectedId = repository.loadSelectedServerId(),
-            rules = repository.loadRules(),
+            selectedId = prefs.loadSelectedId(),
+            rules = prefs.loadRules(),
         )
         applyLanguage(settings.system.language)
-        appendStatus(appString(R.string.status_ready, servers.size))
+        appendStatus(str(R.string.status_ready, servers.size))
         observeVpn()
+        viewModelScope.launch(Dispatchers.IO) { refreshEngineUi() }
     }
 
     fun consumeSnackbar() {
         _state.update { it.copy(snackbar = null) }
     }
 
+    fun snack(message: String) {
+        _state.update { it.copy(snackbar = message) }
+    }
+
+    fun snack(resId: Int, vararg args: Any) {
+        snack(str(resId, *args))
+    }
+
     fun selectServer(server: ServerItem?) {
         _state.update { it.copy(selectedId = server?.id) }
-        repository.saveSelectedServer(server)
-        repository.setRemote(server)
+        prefs.saveSelectedId(server?.id)
         if (server == null) {
-            if (_state.value.running) stopVpn()
-            appendStatus(appString(R.string.status_node_cleared))
+            if (_state.value.running) stop()
+            appendStatus(str(R.string.status_node_cleared))
         } else {
-            appendStatus(appString(R.string.status_node_selected, server.displayName))
+            appendStatus(str(R.string.status_node_selected, server.displayName))
         }
     }
 
-    fun toggleRunning(needNodeMessage: String) {
+    fun start() {
         if (_state.value.vpnBusy) return
-        if (_state.value.running || _state.value.vpnDesired) {
-            stopVpn()
+        val server = _state.value.selectedServer
+        if (server == null) {
+            snack(str(R.string.proxy_need_node))
             return
         }
-        if (_state.value.selectedServer == null) {
-            _state.update { it.copy(snackbar = needNodeMessage) }
-            return
-        }
-        beginStart()
-        startVpn()
-    }
-
-    fun beginStart(): Boolean {
-        if (_state.value.vpnBusy) return false
-        if (_state.value.selectedServer == null) return false
         _state.update { it.copy(vpnBusy = true, vpnDesired = true) }
-        return true
+        VpnController.rules = _state.value.rules
+        VpnController.start(app, server)
+        appendStatus(str(R.string.status_vpn_starting, server.displayName))
     }
 
-    fun startVpn() {
-        val server = _state.value.selectedServer ?: return
-        if (!_state.value.vpnBusy) {
-            _state.update { it.copy(vpnBusy = true, vpnDesired = true) }
-        }
-        repository.startProxy(server)
-        appendStatus(appString(R.string.status_vpn_starting, server.displayName))
-    }
-
-    fun stopVpn() {
+    fun stop() {
         _state.update { it.copy(vpnBusy = true, vpnDesired = false) }
-        repository.stopProxy()
+        VpnController.stop(app)
     }
 
     fun onVpnPermissionDenied() {
@@ -123,31 +135,47 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
             it.copy(
                 vpnBusy = false,
                 vpnDesired = false,
-                snackbar = appString(R.string.vpn_permission_denied),
+                snackbar = str(R.string.vpn_permission_denied),
             )
         }
     }
 
-    fun pingAll(hostRequiredMessage: String, doneMessage: String) {
+    fun pingAll() {
         val host = _state.value.settings.latencyTest.host.trim()
         if (host.isEmpty()) {
-            _state.update { it.copy(snackbar = hostRequiredMessage) }
+            snack(str(R.string.settings_latency_test_host_required))
             return
         }
         if (_state.value.servers.isEmpty() || _state.value.pingingAll) return
         viewModelScope.launch {
             _state.update { it.copy(pingingAll = true) }
-            val pinged = _state.value.servers.map { server ->
-                server.copy(latencyMs = repository.pingServer(server, host))
+            coroutineScope {
+                _state.value.servers.map { server ->
+                    async {
+                        val latency = withContext(Dispatchers.IO) {
+                            runCatching {
+                                Engine.ping(server.toProxyURL(), host).toInt()
+                            }.getOrDefault(-1)
+                        }
+                        _state.update { state ->
+                            state.copy(
+                                servers = state.servers.map {
+                                    if (it.id == server.id) it.copy(latencyMs = latency) else it
+                                },
+                            )
+                        }
+                    }
+                }.awaitAll()
             }
+            val current = _state.value.servers
             val sorted = if (_state.value.settings.latencyTest.sortAfterPing) {
-                pinged.sortedWith(latencyComparator())
+                current.sortedWith(latencyComparator())
             } else {
-                pinged
+                current
             }
-            repository.saveServers(sorted)
+            prefs.saveServers(sorted)
             _state.update {
-                it.copy(servers = sorted, pingingAll = false, snackbar = doneMessage)
+                it.copy(servers = sorted, pingingAll = false, snackbar = str(R.string.server_list_ping_all_done))
             }
         }
     }
@@ -155,7 +183,7 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
     fun parseSubscription(type: String, source: String, fromFile: Boolean = false) {
         val trimmed = source.trim()
         if (trimmed.isEmpty()) {
-            _state.update { it.copy(snackbar = appString(R.string.subscribe_error_url)) }
+            snack(str(R.string.subscribe_error_url))
             return
         }
         viewModelScope.launch {
@@ -163,11 +191,11 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
             runCatching {
                 withContext(Dispatchers.IO) {
                     when {
-                        fromFile -> repository.parseServerFile(trimmed)
+                        fromFile -> SubscriptionParser.parseJsonFile(trimmed)
                         trimmed.startsWith("http://", ignoreCase = true) ||
                             trimmed.startsWith("https://", ignoreCase = true) ->
-                            repository.fetchSubscription(type, trimmed)
-                        else -> repository.parseSubscriptionContent(type, trimmed)
+                            fetchSubscription(type, trimmed)
+                        else -> SubscriptionParser.parseContent(type, trimmed)
                     }
                 }
             }.onSuccess { servers ->
@@ -175,12 +203,10 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
                     it.copy(
                         importing = false,
                         importPreview = servers,
-                        importSource = if (fromFile) {
-                            appString(R.string.subscribe_source_file)
-                        } else {
-                            appString(R.string.subscribe_source_url)
-                        },
-                        snackbar = appString(R.string.subscribe_parsed, servers.size),
+                        importSource = str(
+                            if (fromFile) R.string.subscribe_source_file else R.string.subscribe_source_url,
+                        ),
+                        snackbar = str(R.string.subscribe_parsed, servers.size),
                     )
                 }
             }.onFailure { error ->
@@ -196,34 +222,30 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun confirmImport(successMessage: String) {
+    fun confirmImport() {
         val preview = _state.value.importPreview
         if (preview.isEmpty()) {
-            _state.update { it.copy(snackbar = appString(R.string.subscribe_error_no_preview)) }
+            snack(str(R.string.subscribe_error_no_preview))
             return
         }
         val selectedStill = preview.firstOrNull { it.id == _state.value.selectedId }
         val shouldStop = selectedStill == null && _state.value.running
-        repository.saveServers(preview)
-        repository.saveSelectedServer(selectedStill)
-        if (shouldStop) stopVpn()
+        prefs.saveServers(preview)
+        prefs.saveSelectedId(selectedStill?.id)
+        if (shouldStop) stop()
         _state.update {
             it.copy(
                 servers = preview,
                 selectedId = selectedStill?.id,
                 importPreview = emptyList(),
                 importSource = null,
-                snackbar = successMessage,
+                snackbar = str(R.string.subscribe_imported, preview.size),
             )
         }
-        appendStatus(appString(R.string.status_imported, preview.size))
+        appendStatus(str(R.string.status_imported, preview.size))
     }
 
-    fun clearImportPreview() {
-        _state.update { it.copy(importPreview = emptyList(), importSource = null) }
-    }
-
-    fun exportServers(): String = repository.exportServers(_state.value.servers)
+    fun exportServers(): String = SubscriptionParser.exportJson(_state.value.servers)
 
     fun addOrUpdateServer(
         editingId: String?,
@@ -232,23 +254,18 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
         protocol: String,
         username: String,
         password: String,
-        hostRequired: String,
-        hostFormat: String,
-        protocolRequired: String,
-        addSuccess: String,
-        updateSuccess: String,
     ): Boolean {
         val trimmedHost = host.trim()
         if (trimmedHost.isEmpty()) {
-            _state.update { it.copy(snackbar = hostRequired) }
+            snack(str(R.string.server_list_validate_host))
             return false
         }
         if (!HOST_PATTERN.matches(trimmedHost)) {
-            _state.update { it.copy(snackbar = hostFormat) }
+            snack(str(R.string.server_list_validate_host_format))
             return false
         }
         if (protocol.isBlank()) {
-            _state.update { it.copy(snackbar = protocolRequired) }
+            snack(str(R.string.server_list_validate_protocol))
             return false
         }
         val payload = ServerItem(
@@ -264,12 +281,12 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
         val message: String
         if (idx >= 0) {
             current[idx] = payload.copy(latencyMs = current[idx].latencyMs)
-            message = updateSuccess
+            message = str(R.string.server_list_update_success)
         } else {
             current += payload
-            message = addSuccess
+            message = str(R.string.server_list_add_success)
         }
-        repository.saveServers(current)
+        prefs.saveServers(current)
         _state.update { it.copy(servers = current, snackbar = message) }
         if (editingId != null && _state.value.selectedId == editingId) {
             selectServer(current.first { it.id == payload.id })
@@ -277,13 +294,18 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
         return true
     }
 
-    fun deleteServer(id: String, successMessage: String) {
+    fun deleteServer(id: String) {
         val remain = _state.value.servers.filterNot { it.id == id }
-        repository.saveServers(remain)
-        if (_state.value.selectedId == id) {
-            selectServer(null)
-        }
-        _state.update { it.copy(servers = remain, snackbar = successMessage) }
+        prefs.saveServers(remain)
+        if (_state.value.selectedId == id) selectServer(null)
+        _state.update { it.copy(servers = remain, snackbar = str(R.string.server_list_delete_success)) }
+    }
+
+    fun deleteServers(ids: Set<String>) {
+        val remain = _state.value.servers.filterNot { it.id in ids }
+        prefs.saveServers(remain)
+        if (_state.value.selectedId in ids) selectServer(null)
+        _state.update { it.copy(servers = remain, snackbar = str(R.string.server_list_delete_success)) }
     }
 
     fun updateLatencySettings(transform: (LatencyTestSettings) -> LatencyTestSettings) {
@@ -294,9 +316,7 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
         val previous = _state.value.settings.system
         updateSettings { it.copy(system = transform(it.system)) }
         val next = _state.value.settings.system
-        if (previous.language != next.language) {
-            applyLanguage(next.language)
-        }
+        if (previous.language != next.language) applyLanguage(next.language)
     }
 
     fun clearStatusLogs() {
@@ -307,30 +327,35 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
         _state.update { it.copy(connectionLogs = emptyList()) }
     }
 
-    fun appendConnection(line: String) {
-        _state.update { it.copy(connectionLogs = (it.connectionLogs + line).takeLast(1000)) }
-    }
-
     fun updateRules(transform: (RuleDraft) -> RuleDraft) {
         _state.update { it.copy(rules = transform(it.rules)) }
+        val rules = _state.value.rules
+        prefs.saveRules(rules)
+        VpnController.rules = rules
     }
 
-    fun saveRules(successMessage: String) {
-        repository.saveRules(_state.value.rules)
-        _state.update { it.copy(snackbar = successMessage) }
-    }
-
-    fun notifyPending(message: String) {
-        _state.update { it.copy(snackbar = message) }
-    }
-
-    fun deleteServers(ids: Set<String>, successMessage: String) {
-        val remain = _state.value.servers.filterNot { it.id in ids }
-        repository.saveServers(remain)
-        if (_state.value.selectedId in ids) {
-            selectServer(null)
+    fun downloadDb() {
+        val url = _state.value.rules.dbUrl.trim()
+        if (url.isEmpty()) {
+            snack(str(R.string.rules_db_url_required))
+            return
         }
-        _state.update { it.copy(servers = remain, snackbar = successMessage) }
+        runDbJob(R.string.rules_download_ok) {
+            val dest = ipregionFile(app)
+            val tmp = File(app.cacheDir, "ipregion-download.tmp")
+            downloadIpregionDb(url, dest, tmp)
+        }
+    }
+
+    fun importDb(uri: Uri) {
+        runDbJob(R.string.rules_upload_ok) {
+            val tmp = File(app.cacheDir, "ipregion-upload.tmp")
+            app.contentResolver.openInputStream(uri)?.use { input ->
+                tmp.outputStream().use { output -> input.copyTo(output) }
+            } ?: error(str(R.string.rules_upload_empty))
+            installIpregionDb(tmp, ipregionFile(app))
+            tmp.delete()
+        }
     }
 
     private fun observeVpn() {
@@ -347,20 +372,18 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         viewModelScope.launch {
-            VpnController.status.collect { line ->
-                appendStatus(line)
-            }
+            VpnController.status.collect { line -> appendStatus(line) }
         }
         viewModelScope.launch {
             VpnController.connections.collect { line ->
                 if (_state.value.settings.system.enableLogRecording) {
-                    appendConnection(line)
+                    _state.update { it.copy(connectionLogs = (it.connectionLogs + line).takeLast(1000)) }
                 }
             }
         }
         viewModelScope.launch {
             while (true) {
-                kotlinx.coroutines.delay(1_000)
+                delay(1_000)
                 if (_state.value.running) {
                     _state.update { it.copy(traffic = VpnController.trafficUi()) }
                 }
@@ -368,14 +391,105 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private fun runDbJob(okRes: Int, block: () -> Unit) {
+        if (_state.value.dbBusy) return
+        viewModelScope.launch {
+            _state.update { it.copy(dbBusy = true) }
+            val error = withContext(Dispatchers.IO) {
+                runCatching { block() }.exceptionOrNull()
+            }
+            if (error == null) {
+                resetGeoAfterDbChange()
+                prefs.saveRules(_state.value.rules)
+                VpnController.rules = _state.value.rules
+            }
+            withContext(Dispatchers.IO) { refreshEngineUi() }
+            _state.update {
+                it.copy(
+                    dbBusy = false,
+                    snackbar = error?.message?.takeIf { msg -> msg.isNotBlank() } ?: str(okRes),
+                )
+            }
+        }
+    }
+
     private fun updateSettings(transform: (AppSettings) -> AppSettings) {
         val next = transform(_state.value.settings)
-        repository.saveSettings(next)
+        prefs.saveSettings(next)
         _state.update { it.copy(settings = next) }
     }
 
     private fun appendStatus(line: String) {
         _state.update { it.copy(statusLogs = it.statusLogs + line) }
+    }
+
+    private fun refreshEngineUi() {
+        val st = runCatching { Engine.dbStatus() }.getOrNull()
+        val ready = st != null && st.exists
+        val text = if (!ready) {
+            str(R.string.rules_db_missing)
+        } else {
+            val ver = st.version.orEmpty().ifBlank { "-" }
+            str(R.string.rules_db_status, ver, formatDbSize(st.size), st.areas)
+        }
+        _state.update { it.copy(dbStatus = text, dbReady = ready, geoAreas = loadAreaTree()) }
+    }
+
+    private fun resetGeoAfterDbChange() {
+        _state.update {
+            it.copy(
+                rules = it.rules.copy(
+                    geoMode = GeoMode.Global,
+                    selectedAreaIds = emptySet(),
+                ),
+            )
+        }
+    }
+
+    private fun fetchSubscription(type: String, url: String): List<ServerItem> {
+        val body = try {
+            httpGet(url)
+        } catch (error: SubscriptionException) {
+            throw error
+        } catch (_: Exception) {
+            throw SubscriptionException(R.string.subscribe_error_fetch)
+        }
+        return SubscriptionParser.parseContent(type, body)
+    }
+
+    private fun httpGet(url: String): String {
+        val connection = (URI(url).toURL().openConnection() as HttpURLConnection).apply {
+            connectTimeout = 15_000
+            readTimeout = 15_000
+            instanceFollowRedirects = true
+            setRequestProperty("User-Agent", "Prism-Android/0.1")
+        }
+        try {
+            val code = connection.responseCode
+            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+            val body = stream?.bufferedReader()?.readText().orEmpty()
+            if (code !in 200..299) {
+                throw SubscriptionException(R.string.subscribe_error_http, code)
+            }
+            if (body.isBlank()) {
+                throw SubscriptionException(R.string.subscribe_error_empty)
+            }
+            return body
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun formatDbSize(bytes: Long): String {
+        if (bytes < 1024) return "$bytes B"
+        val units = arrayOf("KB", "MB", "GB")
+        var value = bytes.toDouble() / 1024
+        var index = 0
+        while (value >= 1024 && index < units.lastIndex) {
+            value /= 1024
+            index++
+        }
+        return "%.1f %s".format(value, units[index])
     }
 
     private fun applyLanguage(tag: String) {
@@ -385,16 +499,13 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun appString(resId: Int, vararg args: Any): String {
-        return getApplication<Application>().getString(resId, *args)
-    }
+    private fun str(resId: Int, vararg args: Any): String = app.getString(resId, *args)
 
     private fun errorMessage(error: Throwable): String {
         return if (error is SubscriptionException) {
-            appString(error.messageRes, *error.formatArgs)
+            str(error.messageRes, *error.formatArgs)
         } else {
-            error.message?.takeIf { it.isNotBlank() }
-                ?: appString(R.string.subscribe_error_unknown)
+            error.message?.takeIf { it.isNotBlank() } ?: str(R.string.subscribe_error_unknown)
         }
     }
 
