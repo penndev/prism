@@ -11,4 +11,4 @@ func isLoopback(hostport string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-type HandleConnect func(net.Conn, string, string) error
+type HandleConnect func(conn net.Conn, network string, address string) error

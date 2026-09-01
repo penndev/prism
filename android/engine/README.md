@@ -51,5 +51,6 @@ $env:CGO_LDFLAGS = "-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384"
 
 go get golang.org/x/mobile/bind
 gomobile bind -target=android -androidapi 26 -javapkg com.penndev.prism -o android/engine/engine.aar github.com/penndev/prism/android/engine
-git checkout -- go.mod go.sum
+
 ```
+
