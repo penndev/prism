@@ -290,7 +290,7 @@ const edit = reactive({
     remark: "",
     username: "",
     password: "",
-    protocol: "Socks5",
+    protocol: "socks5",
   },
   rules: {
     host: [
@@ -315,7 +315,7 @@ const edit = reactive({
     edit.form.remark = server?.remark ?? "";
     edit.form.username = server?.username ?? "";
     edit.form.password = server?.password ?? "";
-    edit.form.protocol = server?.protocol ?? "Socks5";
+    edit.form.protocol = server?.protocol ?? "socks5";
     edit.visible = true;
   },
 

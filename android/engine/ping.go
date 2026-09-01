@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/penndev/prism/transport"
 )
 
 // Ping measures TTFB in milliseconds through proxy (desktop-style URL).
@@ -61,7 +63,11 @@ func ping(proxy, latencyHost string) (int64, error) {
 	}
 	req := buf.Bytes()
 
-	handle, err := selectHandle(proxy)
+	r, err := url.Parse(proxy)
+	if err != nil {
+		return -1, err
+	}
+	handle, err := transport.FromURL(r)
 	if err != nil {
 		return -1, err
 	}

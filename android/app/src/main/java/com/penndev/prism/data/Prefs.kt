@@ -60,7 +60,7 @@ class Prefs(context: Context) {
                 for (i in 0 until arr.length()) {
                     val obj = arr.optJSONObject(i) ?: continue
                     val host = obj.optString("host")
-                    val protocol = SubscriptionParser.normalizeProtocol(obj.optString("protocol", "Socks5"))
+                    val protocol = SubscriptionParser.normalizeProtocol(obj.optString("protocol", "socks5"))
                     val username = obj.optString("username")
                     val password = obj.optString("password")
                     val storedId = obj.optString("id")

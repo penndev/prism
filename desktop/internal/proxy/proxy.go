@@ -79,7 +79,7 @@ func (p *Proxy) SetRemote(remote string) error {
 		internal.AppConfig.LogTypeName_STATUS,
 		"SetRemote-> "+p.remoteURL.Scheme+"://"+p.remoteURL.User.String()+"@"+p.remoteURL.Host,
 	)
-	handle, err := HandleConnect(p.remoteURL)
+	handle, err := transport.FromURL(p.remoteURL)
 	p.HandleConnect = p.handleConnectHook(handle, func(network, address string) {
 		internal.App.Event.Emit(internal.AppConfig.LogTypeName_LOG, p.remoteURL.Scheme+" -> "+network+" "+address)
 	})

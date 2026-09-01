@@ -50,7 +50,7 @@ func (s *Storage) SetServers(servers []ServerEntry) error {
 	if servers == nil {
 		servers = []ServerEntry{}
 	}
-	return s.putJSON(KeyServers, servers)
+	return s.putJSON(KeyServers, normalizeServers(servers))
 }
 
 // GetServers 无记录时返回空切片。
@@ -63,7 +63,7 @@ func (s *Storage) GetServers() ([]ServerEntry, error) {
 	if !ok {
 		return []ServerEntry{}, nil
 	}
-	return out, nil
+	return normalizeServers(out), nil
 }
 
 func (s *Storage) SetRuleConfig(v RuleConfig) error {
@@ -113,7 +113,7 @@ func (s *Storage) GetRuleStatus() RuleStatus {
 }
 
 func (s *Storage) SetSelectedServer(v ServerEntry) error {
-	return s.putJSON(KeySelectedServer, v)
+	return s.putJSON(KeySelectedServer, normalizeServer(v))
 }
 
 // ClearSelectedServer 清除已保存的当前连接节点。
@@ -131,6 +131,7 @@ func (s *Storage) GetSelectedServer() (*ServerEntry, error) {
 	if err != nil || !ok {
 		return nil, err
 	}
+	out = normalizeServer(out)
 	return &out, nil
 }
 

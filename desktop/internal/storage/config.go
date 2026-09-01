@@ -43,6 +43,30 @@ type ServerEntry struct {
 	Protocol string `json:"protocol"`
 }
 
+// NormalizeProtocol maps stored/imported protocol names to socks5 / socks5s / http / https.
+func NormalizeProtocol(raw string) string {
+	key := strings.ToLower(strings.TrimSpace(raw))
+	switch key {
+	case "socks5", "socks5s", "http", "https":
+		return key
+	default:
+		return "socks5"
+	}
+}
+
+func normalizeServer(v ServerEntry) ServerEntry {
+	v.Protocol = NormalizeProtocol(v.Protocol)
+	return v
+}
+
+func normalizeServers(servers []ServerEntry) []ServerEntry {
+	out := make([]ServerEntry, len(servers))
+	for i, s := range servers {
+		out[i] = normalizeServer(s)
+	}
+	return out
+}
+
 // RuleConfig 规则配置（Web 页维护；桌面端展示状态提示）。
 type RuleConfig struct {
 	// AreaMode: global=全局代理，none=全不代理，proxy=代理某些区域，bypass=绕过某些区域。

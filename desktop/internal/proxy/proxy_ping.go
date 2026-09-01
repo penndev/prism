@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/penndev/prism/transport"
 )
 
 type ProxyPing struct{}
@@ -61,11 +63,11 @@ func (p *ProxyPing) TestServer(serverURL string, latencyTestHost string) ProxyPi
 	}
 	req := buf.Bytes()
 
-	remote, err := url.Parse(serverURL)
+	r, err := url.Parse(serverURL)
 	if err != nil {
 		return ProxyPingResult{Success: false, Error: err.Error()}
 	}
-	handle, err := HandleConnect(remote)
+	handle, err := transport.FromURL(r)
 	if err != nil {
 		return ProxyPingResult{Success: false, Error: err.Error()}
 	}

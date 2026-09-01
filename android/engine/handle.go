@@ -1,45 +1,12 @@
 package engine
 
 import (
-	"crypto/tls"
-	"errors"
-	"fmt"
 	"net"
-	"net/url"
-	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/penndev/prism/transport"
 )
-
-func selectHandle(raw string) (transport.HandleConnect, error) {
-	r, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil {
-		return nil, err
-	}
-	if r.Host == "" {
-		return nil, fmt.Errorf("server required")
-	}
-	user := ""
-	pass := ""
-	if r.User != nil {
-		user = r.User.Username()
-		pass, _ = r.User.Password()
-	}
-	switch strings.ToLower(r.Scheme) {
-	case "socks5":
-		return transport.Socks5(r.Host, user, pass), nil
-	case "socks5overtls", "socks5s":
-		return transport.Socks5OverTLS(r.Host, user, pass, &tls.Config{}), nil
-	case "http":
-		return transport.Http(r.Host, user, pass), nil
-	case "httpovertls", "https":
-		return transport.HttpOverTLS(r.Host, user, pass, &tls.Config{}), nil
-	default:
-		return nil, errors.New("cant find Scheme" + r.Scheme)
-	}
-}
 
 type byteCounter struct {
 	up, down atomic.Int64

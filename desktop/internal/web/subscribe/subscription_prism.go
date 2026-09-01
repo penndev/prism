@@ -27,5 +27,8 @@ func subscriptionParsePrism(text string) ([]storage.ServerEntry, error) {
 	if len(servers) == 0 {
 		return nil, fmt.Errorf("empty prism nodes")
 	}
+	for i := range servers {
+		servers[i].Protocol = storage.NormalizeProtocol(servers[i].Protocol)
+	}
 	return servers, nil
 }

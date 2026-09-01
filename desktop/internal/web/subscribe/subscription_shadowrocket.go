@@ -32,9 +32,9 @@ func subscriptionParseShadowrocket(text string) ([]storage.ServerEntry, error) {
 		protocol := ""
 		switch scheme {
 		case "https":
-			protocol = "httpovertls"
+			protocol = "https"
 		case "socks5":
-			protocol = "socks5overtls"
+			protocol = "socks5s"
 		default:
 			continue
 		}

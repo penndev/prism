@@ -5,6 +5,7 @@ package engine
 import (
 	"errors"
 	"net"
+	"net/url"
 	"sync"
 	"syscall"
 
@@ -50,7 +51,11 @@ func Start(opt *Options) error {
 		mtu = 1500
 	}
 
-	proxyH, err := selectHandle(opt.Proxy)
+	r, err := url.Parse(opt.Proxy)
+	if err != nil {
+		return err
+	}
+	proxyH, err := transport.FromURL(r)
 	if err != nil {
 		return err
 	}

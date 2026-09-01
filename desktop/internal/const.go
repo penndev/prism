@@ -39,10 +39,10 @@ func (a AppConst) AppConfig() appConst {
 
 func (a AppConst) ProxyScheme() []string {
 	return []string{
-		"Socks5",
-		"Socks5OverTLS",
-		"Http",
-		"HttpOverTLS",
+		"socks5",
+		"socks5s",
+		"http",
+		"https",
 	}
 }
 

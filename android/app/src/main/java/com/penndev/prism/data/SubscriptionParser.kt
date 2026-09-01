@@ -42,14 +42,8 @@ object SubscriptionParser {
     }
 
     fun normalizeProtocol(raw: String): String {
-        val key = raw.trim().lowercase().replace("-", "").replace("_", "")
-        return when (key) {
-            "socks5" -> "Socks5"
-            "socks5overtls", "socks5s" -> "Socks5OverTLS"
-            "http" -> "Http"
-            "httpovertls", "https" -> "HttpOverTLS"
-            else -> PROXY_SCHEMES.firstOrNull { it.equals(raw.trim(), ignoreCase = true) } ?: "Socks5"
-        }
+        val key = raw.trim().lowercase()
+        return if (key in PROXY_SCHEMES) key else "socks5"
     }
 
     fun identity(host: String, protocol: String, username: String, password: String): String {
@@ -78,8 +72,8 @@ object SubscriptionParser {
         val uri = parseNodeUri(raw.trim()) ?: return null
         val scheme = uri.scheme?.lowercase().orEmpty()
         val protocol = when (scheme) {
-            "https" -> "HttpOverTLS"
-            "socks5" -> "Socks5OverTLS"
+            "https" -> "https"
+            "socks5" -> "socks5s"
             else -> return null
         }
         val hostname = uri.host ?: return null
@@ -125,7 +119,7 @@ object SubscriptionParser {
                 val obj = arr.optJSONObject(i) ?: continue
                 val host = obj.optString("host").trim()
                 if (host.isEmpty()) continue
-                val protocol = normalizeProtocol(obj.optString("protocol", "Socks5"))
+                val protocol = normalizeProtocol(obj.optString("protocol", "socks5"))
                 val username = obj.optString("username")
                 val password = obj.optString("password")
                 add(

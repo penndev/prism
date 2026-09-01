@@ -49,15 +49,32 @@ export function stripForStorage(row) {
   );
 }
 
+/** 协议名规范为 socks5 / socks5s / http / https */
+export function canonicalProtocol(raw) {
+  const key = String(raw || "")
+    .trim()
+    .toLowerCase();
+  switch (key) {
+    case "socks5":
+    case "socks5s":
+    case "http":
+    case "https":
+      return key;
+    default:
+      return "socks5";
+  }
+}
+
 /** 拓展服务器 item：补全 _id（代理 URL）并保留 _latency 等运行时字段 */
 export function extendServerItem(row) {
   const persisted = stripForStorage(row);
-  const protocol = persisted.protocol.toLowerCase();
+  const protocol = canonicalProtocol(persisted.protocol);
   const username = persisted.username || "";
   const password = persisted.password || "";
   return {
     ...persisted,
-    _id: `${protocol}://${username}:${password}@${persisted.host}`,
+    protocol,
+    _id: `${protocol.toLowerCase()}://${username}:${password}@${persisted.host}`,
     ...(row._latency !== undefined ? { _latency: row._latency } : {}),
   };
 }

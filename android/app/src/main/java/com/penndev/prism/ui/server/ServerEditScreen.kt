@@ -42,7 +42,7 @@ fun ServerEditScreen(
 ) {
     var host by remember { mutableStateOf(server?.host.orEmpty()) }
     var remark by remember { mutableStateOf(server?.remark.orEmpty()) }
-    var protocol by remember { mutableStateOf(server?.protocol ?: "Socks5") }
+    var protocol by remember { mutableStateOf(server?.protocol ?: "socks5") }
     var username by remember { mutableStateOf(server?.username.orEmpty()) }
     var password by remember { mutableStateOf(server?.password.orEmpty()) }
 

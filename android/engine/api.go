@@ -1,7 +1,7 @@
 package engine
 
-// Options is passed to Start. Proxy is a desktop-style URL:
-// socks5://user:pass@host:port (also socks5overtls / http / httpovertls).
+// Options is passed to Start. Proxy is a URL:
+// socks5://user:pass@host:port (also socks5s / http / https).
 type Options struct {
 	FD      int32
 	MTU     int32

@@ -6,7 +6,7 @@ data class ServerItem(
     val remark: String = "",
     val username: String = "",
     val password: String = "",
-    val protocol: String = "Socks5",
+    val protocol: String = "socks5",
     val latencyMs: Int? = null,
 ) {
     val displayName: String get() = remark.ifBlank { host }
@@ -76,7 +76,7 @@ fun formatBytes(bytes: Long): String {
     return "%.1f %s".format(value, units[index])
 }
 
-val PROXY_SCHEMES = listOf("Socks5", "Socks5OverTLS", "Http", "HttpOverTLS")
+val PROXY_SCHEMES = listOf("socks5", "socks5s", "http", "https")
 
 val HOST_PATTERN = Regex("""^(\[[^\]]+]|[^:\[\]]+):\d{1,5}$""")
 

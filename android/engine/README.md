@@ -8,7 +8,7 @@
 val opt = Options()
 opt.fd = fd
 opt.mtu = mtu
-opt.proxy = "socks5://user:pass@host:port" // 与桌面相同
+opt.proxy = "socks5://user:pass@host:port" // socks5 / socks5s / http / https
 opt.handler = object : Handler {
     override fun protect(fd: Int) = vpn.protect(fd)
     override fun onLog(line: String?) { /* 连接日志 */ }
