@@ -1,7 +1,7 @@
 package rule
 
 import (
-	"desktop/internal/ipregion"
+	"desktop/internal/storage"
 	"fmt"
 	"io"
 	"net/http"
@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	gopkg "github.com/penndev/gopkg/ipregion"
+	"github.com/penndev/prism/ipregion"
 )
 
 func downloadDBFile(rawURL string) error {
@@ -17,7 +17,7 @@ func downloadDBFile(rawURL string) error {
 	if url == "" {
 		return fmt.Errorf("请填写下载地址")
 	}
-	path, err := ipregion.DBPath()
+	path, err := storage.IpregionDBPath()
 	if err != nil {
 		return err
 	}
@@ -52,7 +52,7 @@ func downloadDBFile(rawURL string) error {
 		_ = os.Remove(tmp)
 		return err
 	}
-	ipregion.Reset()
+	ipregion.Close()
 	if err := os.Rename(tmp, path); err != nil {
 		_ = os.Remove(tmp)
 		return err
@@ -61,7 +61,7 @@ func downloadDBFile(rawURL string) error {
 }
 
 func saveUploadedDBFile(r io.Reader) error {
-	path, err := ipregion.DBPath()
+	path, err := storage.IpregionDBPath()
 	if err != nil {
 		return err
 	}
@@ -85,7 +85,7 @@ func saveUploadedDBFile(r io.Reader) error {
 		_ = os.Remove(tmp)
 		return err
 	}
-	ipregion.Reset()
+	ipregion.Close()
 	if err := os.Rename(tmp, path); err != nil {
 		_ = os.Remove(tmp)
 		return err
@@ -94,10 +94,8 @@ func saveUploadedDBFile(r io.Reader) error {
 }
 
 func validateDBFile(path string) error {
-	s, err := gopkg.Open(path)
-	if err != nil {
+	if err := ipregion.Valid(path); err != nil {
 		return fmt.Errorf("无效的 ipregion.db: %w", err)
 	}
-	_ = s.Close()
 	return nil
 }

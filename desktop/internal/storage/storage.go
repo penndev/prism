@@ -5,13 +5,18 @@ import (
 	"desktop/internal/lang"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 
+	"github.com/penndev/prism/ipregion"
 	"go.etcd.io/bbolt"
 )
 
-const bucketName = "data"
+const (
+	bucketName     = "data"
+	IpregionDBName = "ipregion.db"
+)
 
 type Storage struct {
 	db *bbolt.DB
@@ -27,6 +32,32 @@ func AppDir() (string, error) {
 		return "", err
 	}
 	return dbDir, nil
+}
+
+func IpregionDBPath() (string, error) {
+	dir, err := AppDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, IpregionDBName), nil
+}
+
+// OpenIpregion opens the app-dir ipregion.db if it is not already open.
+func OpenIpregion() error {
+	path, err := IpregionDBPath()
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(path); err != nil {
+		return fmt.Errorf("未找到 ipregion.db，请先下载或上传")
+	}
+	if ipregion.Opened() {
+		st := ipregion.StatusOf()
+		if st.Path == path {
+			return nil
+		}
+	}
+	return ipregion.Open(path)
 }
 
 func (s *Storage) SetSettings(v Settings) error {
@@ -80,13 +111,6 @@ func (s *Storage) GetRuleConfig() (*RuleConfig, error) {
 	return &out, nil
 }
 
-var ruleAreaNames func(ids []uint32) []string
-
-// SetRuleAreaNames 由 ipregion 注册展示名解析，避免 storage 反向依赖 ipregion。
-func SetRuleAreaNames(fn func(ids []uint32) []string) {
-	ruleAreaNames = fn
-}
-
 func (s *Storage) GetRuleStatus() RuleStatus {
 	out := RuleStatus{
 		AreaMode:  "global",
@@ -100,14 +124,23 @@ func (s *Storage) GetRuleStatus() RuleStatus {
 	switch cfg.AreaMode {
 	case "proxy", "bypass":
 		out.AreaMode = cfg.AreaMode
-		if ruleAreaNames != nil {
-			out.AreaNames = ruleAreaNames(cfg.AreaIDs)
-		}
+		_ = OpenIpregion()
+		out.AreaNames = areaNames(cfg.AreaIDs)
 	case "none":
 		out.AreaMode = cfg.AreaMode
 	}
 	if len(cfg.Domains) > 0 {
 		out.Domains = cfg.Domains
+	}
+	return out
+}
+
+func areaNames(ids []uint32) []string {
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if n := ipregion.Name(id); n != "" {
+			out = append(out, n)
+		}
 	}
 	return out
 }

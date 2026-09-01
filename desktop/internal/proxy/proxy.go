@@ -20,8 +20,8 @@ type Proxy struct {
 	remoteURL *url.URL
 	// tun用
 	dev        *tun.Tun
-	readBytes  uint64
-	writeBytes uint64
+	readBytes  atomic.Int64
+	writeBytes atomic.Int64
 }
 
 var localHandle = transport.Local()
@@ -120,9 +120,7 @@ func (p *Proxy) SetStop() {
 }
 
 func (p *Proxy) TrafficBytes() (read uint64, write uint64) {
-	read = atomic.LoadUint64(&p.readBytes)
-	write = atomic.LoadUint64(&p.writeBytes)
-	return
+	return uint64(p.readBytes.Load()), uint64(p.writeBytes.Load())
 }
 
 func New() *Proxy {

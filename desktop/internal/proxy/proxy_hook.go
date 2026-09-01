@@ -2,10 +2,10 @@ package proxy
 
 import (
 	"desktop/internal"
-	"desktop/internal/ipregion"
 	"desktop/internal/storage"
 	"net"
 
+	"github.com/penndev/prism/ipregion"
 	"github.com/penndev/prism/transport"
 )
 
@@ -19,9 +19,9 @@ func (p *Proxy) handleConnectHook(handle transport.HandleConnect, callback func(
 				case "none":
 					bypass = true
 				case "proxy":
-					bypass = len(cfg.AreaIDs) == 0 || !ipregion.InAreas(address, cfg.AreaIDs)
+					bypass = len(cfg.AreaIDs) == 0 || !inAreas(address, cfg.AreaIDs)
 				case "bypass":
-					bypass = len(cfg.AreaIDs) > 0 && ipregion.InAreas(address, cfg.AreaIDs)
+					bypass = len(cfg.AreaIDs) > 0 && inAreas(address, cfg.AreaIDs)
 				}
 			}
 		}
@@ -38,4 +38,44 @@ func (p *Proxy) handleConnectHook(handle transport.HandleConnect, callback func(
 		conn = p.wrapConn(conn)
 		return handle(conn, network, address)
 	}
+}
+
+func inAreas(address string, areaIDs []uint32) bool {
+	if len(areaIDs) == 0 {
+		return false
+	}
+	if err := storage.OpenIpregion(); err != nil {
+		return false
+	}
+	host, _, err := net.SplitHostPort(address)
+	if err != nil {
+		host = address
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		ips, err := net.LookupIP(host)
+		if err != nil || len(ips) == 0 {
+			return false
+		}
+		ip = ips[0]
+	}
+	info, err := ipregion.Find(ip.String())
+	if err != nil || info.Area.ID == 0 {
+		return false
+	}
+	set := make(map[uint32]struct{}, len(areaIDs))
+	for _, id := range areaIDs {
+		if id != 0 {
+			set[id] = struct{}{}
+		}
+	}
+	if len(set) == 0 {
+		return false
+	}
+	for a := &info.Area; a != nil; a = a.Parent {
+		if _, ok := set[a.ID]; ok {
+			return true
+		}
+	}
+	return false
 }

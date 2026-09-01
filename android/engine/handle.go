@@ -5,6 +5,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/penndev/prism/pkg"
 	"github.com/penndev/prism/transport"
 )
 
@@ -66,32 +67,11 @@ func (c *byteCounter) flush() {
 	}
 }
 
-type countConn struct {
-	net.Conn
-	c *byteCounter
-}
-
 func wrapConn(conn net.Conn, c *byteCounter) net.Conn {
 	if conn == nil || c == nil {
 		return conn
 	}
-	return &countConn{Conn: conn, c: c}
-}
-
-func (c *countConn) Read(p []byte) (int, error) {
-	n, err := c.Conn.Read(p)
-	if n > 0 {
-		c.c.up.Add(int64(n))
-	}
-	return n, err
-}
-
-func (c *countConn) Write(p []byte) (int, error) {
-	n, err := c.Conn.Write(p)
-	if n > 0 {
-		c.c.down.Add(int64(n))
-	}
-	return n, err
+	return pkg.WrapConn(conn, &c.up, &c.down)
 }
 
 func relay(proxy, local transport.HandleConnect, h Handler, ctr *byteCounter, conn net.Conn, network, address string) {

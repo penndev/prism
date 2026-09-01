@@ -2,15 +2,17 @@ package rule
 
 import (
 	"desktop/internal"
-	"desktop/internal/ipregion"
 	"desktop/internal/storage"
 	"embed"
 	"encoding/json"
 	"io"
 	"io/fs"
 	"net/http"
+	"os"
 	"strings"
 	"time"
+
+	"github.com/penndev/prism/ipregion"
 )
 
 type configPayload struct {
@@ -93,10 +95,17 @@ func normalizeConfig(areaMode string, ids []uint32, domains []string) storage.Ru
 }
 
 func encodeConfig(cfg storage.RuleConfig) map[string]any {
+	_ = storage.OpenIpregion()
+	names := make([]string, 0, len(cfg.AreaIDs))
+	for _, id := range cfg.AreaIDs {
+		if n := ipregion.Name(id); n != "" {
+			names = append(names, n)
+		}
+	}
 	return map[string]any{
 		"areaMode":  cfg.AreaMode,
 		"areaIds":   cfg.AreaIDs,
-		"areaNames": ipregion.Names(cfg.AreaIDs),
+		"areaNames": names,
 		"domains":   cfg.Domains,
 	}
 }
@@ -183,19 +192,56 @@ func HandleRuleConfig(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+type areaNode struct {
+	ID       uint32     `json:"id"`
+	ParentID uint32     `json:"parent_id"`
+	Name     string     `json:"name"`
+	Children []areaNode `json:"children,omitempty"`
+}
+
+func buildAreaTree(parentID uint32) []areaNode {
+	src := ipregion.Areas(parentID)
+	out := make([]areaNode, 0, len(src))
+	for _, a := range src {
+		out = append(out, areaNode{
+			ID:       a.ID,
+			ParentID: a.ParentID,
+			Name:     a.Name,
+			Children: buildAreaTree(a.ID),
+		})
+	}
+	return out
+}
+
+func dbStatus() ipregion.Status {
+	path, err := storage.IpregionDBPath()
+	if err != nil {
+		return ipregion.Status{}
+	}
+	_ = storage.OpenIpregion()
+	st := ipregion.StatusOf()
+	if st.Path == "" {
+		st.Path = path
+		if fi, err := os.Stat(path); err == nil {
+			st.Exists = true
+			st.Size = fi.Size()
+		}
+	}
+	return st
+}
+
 func HandleRuleAreas(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	tree, err := ipregion.AreaTree()
-	if err != nil {
+	if err := storage.OpenIpregion(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(tree)
+	_ = json.NewEncoder(w).Encode(buildAreaTree(0))
 }
 
 func HandleRuleDB(w http.ResponseWriter, r *http.Request) {
@@ -203,14 +249,9 @@ func HandleRuleDB(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	st, err := ipregion.StatusOf()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(dbStatusJSON(st))
+	_ = json.NewEncoder(w).Encode(dbStatusJSON(dbStatus()))
 }
 
 func HandleRuleDBDownload(w http.ResponseWriter, r *http.Request) {
@@ -231,12 +272,11 @@ func HandleRuleDBDownload(w http.ResponseWriter, r *http.Request) {
 	}
 	resetRuleToGlobal()
 	emitRuleChanged()
-	status, _ := ipregion.StatusOf()
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"ok": true,
-		"db": dbStatusJSON(status),
+		"db": dbStatusJSON(dbStatus()),
 	})
 }
 
@@ -261,12 +301,11 @@ func HandleRuleDBUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	resetRuleToGlobal()
 	emitRuleChanged()
-	status, _ := ipregion.StatusOf()
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"ok": true,
-		"db": dbStatusJSON(status),
+		"db": dbStatusJSON(dbStatus()),
 	})
 }
 
