@@ -1,6 +1,7 @@
 package rule
 
 import (
+	"desktop/internal"
 	"desktop/internal/storage"
 	"fmt"
 	"io"
@@ -9,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/penndev/prism/ipregion"
+	"github.com/penndev/gopkg/ipregion"
 )
 
 func downloadDBFile(rawURL string) error {
@@ -52,11 +53,15 @@ func downloadDBFile(rawURL string) error {
 		_ = os.Remove(tmp)
 		return err
 	}
-	ipregion.Close()
 	if err := os.Rename(tmp, path); err != nil {
 		_ = os.Remove(tmp)
 		return err
 	}
+	s, err := ipregion.Open(path)
+	if err != nil {
+		return err
+	}
+	internal.Searcher = s
 	return nil
 }
 
@@ -85,17 +90,23 @@ func saveUploadedDBFile(r io.Reader) error {
 		_ = os.Remove(tmp)
 		return err
 	}
-	ipregion.Close()
 	if err := os.Rename(tmp, path); err != nil {
 		_ = os.Remove(tmp)
 		return err
 	}
+	s, err := ipregion.Open(path)
+	if err != nil {
+		return err
+	}
+	internal.Searcher = s
 	return nil
 }
 
 func validateDBFile(path string) error {
-	if err := ipregion.Valid(path); err != nil {
+	s, err := ipregion.Open(path)
+	if err != nil {
 		return fmt.Errorf("无效的 ipregion.db: %w", err)
 	}
+	_ = s.Close()
 	return nil
 }

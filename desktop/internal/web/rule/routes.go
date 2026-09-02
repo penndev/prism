@@ -10,27 +10,65 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"time"
+	"sync"
 
-	"github.com/penndev/prism/ipregion"
+	"github.com/penndev/gopkg/ipregion"
+	"github.com/penndev/prism/fakeip"
 )
+
+var domainSet = map[string]struct{}{}
+var domainMu sync.RWMutex
+
+func setDomainMap(list []string) {
+	next := make(map[string]struct{}, len(list))
+	for _, d := range list {
+		if d != "" {
+			next[d] = struct{}{}
+		}
+	}
+	domainMu.Lock()
+	domainSet = next
+	domainMu.Unlock()
+}
+
+func LoadDomains() {
+	st := storage.DefaultStorage
+	if st == nil {
+		return
+	}
+	cfg, err := st.GetRuleConfig()
+	if err != nil || cfg == nil {
+		setDomainMap(nil)
+		return
+	}
+	setDomainMap(normalizeDomains(cfg.Domains))
+
+	fakeip.SetNeedFake(func(name string) bool {
+		domainMu.RLock()
+		defer domainMu.RUnlock()
+		if name == "" || len(domainSet) == 0 {
+			return false
+		}
+		for name != "" {
+			if _, ok := domainSet[name]; ok {
+				return true
+			}
+			i := strings.IndexByte(name, '.')
+			if i < 0 {
+				return false
+			}
+			name = name[i+1:]
+		}
+		return false
+	})
+
+}
 
 type configPayload struct {
 	AreaMode string   `json:"areaMode"`
 	Mode     string   `json:"mode"` // 兼容旧字段
 	AreaIDs  []uint32 `json:"areaIds"`
 	Domains  []string `json:"domains"`
-}
-
-func (p configPayload) areaMode() string {
-	if strings.TrimSpace(p.AreaMode) != "" {
-		return p.AreaMode
-	}
-	return p.Mode
-}
-
-type downloadPayload struct {
-	URL string `json:"url"`
 }
 
 func HandleRuleRedirect(w http.ResponseWriter, r *http.Request) {
@@ -86,38 +124,6 @@ func normalizeAreaIDs(ids []uint32) []uint32 {
 	return out
 }
 
-func normalizeConfig(areaMode string, ids []uint32, domains []string) storage.RuleConfig {
-	return storage.RuleConfig{
-		AreaMode: normalizeMode(areaMode),
-		AreaIDs:  normalizeAreaIDs(ids),
-		Domains:  normalizeDomains(domains),
-	}
-}
-
-func encodeConfig(cfg storage.RuleConfig) map[string]any {
-	_ = storage.OpenIpregion()
-	names := make([]string, 0, len(cfg.AreaIDs))
-	for _, id := range cfg.AreaIDs {
-		if n := ipregion.Name(id); n != "" {
-			names = append(names, n)
-		}
-	}
-	return map[string]any{
-		"areaMode":  cfg.AreaMode,
-		"areaIds":   cfg.AreaIDs,
-		"areaNames": names,
-		"domains":   cfg.Domains,
-	}
-}
-
-func emitRuleChanged() {
-	if internal.App == nil {
-		return
-	}
-	internal.App.Event.Emit(internal.AppConfig.EventNameRuleChanged, time.Now().UnixMilli())
-}
-
-// resetRuleToGlobal 库文件更新后切回全局代理并清空已选地域。
 func resetRuleToGlobal() {
 	st := storage.DefaultStorage
 	if st == nil {
@@ -132,19 +138,33 @@ func resetRuleToGlobal() {
 		next.Domains = normalizeDomains(cfg.Domains)
 	}
 	_ = st.SetRuleConfig(next)
+	setDomainMap(next.Domains)
 }
 
-func dbStatusJSON(st ipregion.Status) map[string]any {
-	return map[string]any{
-		"exists":  st.Exists,
-		"path":    st.Path,
-		"size":    st.Size,
-		"version": st.Version,
-		"remark":  st.Remark,
-		"areas":   st.Areas,
-		"v4":      st.V4,
-		"v6":      st.V6,
+func dbStatusJSON() map[string]any {
+	path, err := storage.IpregionDBPath()
+	if err != nil {
+		return map[string]any{}
 	}
+	out := map[string]any{"path": path, "exists": false, "size": int64(0)}
+	if fi, err := os.Stat(path); err == nil {
+		out["exists"] = true
+		out["size"] = fi.Size()
+	}
+	if internal.Searcher == nil {
+		if s, err := ipregion.Open(path); err == nil {
+			internal.Searcher = s
+		}
+	}
+	if internal.Searcher != nil {
+		m := internal.Searcher.Meta()
+		out["version"] = m.Version
+		out["remark"] = m.Remark
+		out["areas"] = m.Areas
+		out["v4"] = m.V4
+		out["v6"] = m.V6
+	}
+	return out
 }
 
 func HandleRuleConfig(w http.ResponseWriter, r *http.Request) {
@@ -163,22 +183,34 @@ func HandleRuleConfig(w http.ResponseWriter, r *http.Request) {
 		if cfg == nil {
 			cfg = &storage.RuleConfig{AreaMode: "global", AreaIDs: []uint32{}, Domains: []string{}}
 		}
-		out := normalizeConfig(cfg.AreaMode, cfg.AreaIDs, cfg.Domains)
+		out := storage.RuleConfig{
+			AreaMode: normalizeMode(cfg.AreaMode),
+			AreaIDs:  normalizeAreaIDs(cfg.AreaIDs),
+			Domains:  normalizeDomains(cfg.Domains),
+		}
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(encodeConfig(out))
+		_ = json.NewEncoder(w).Encode(out)
 	case http.MethodPut, http.MethodPost:
 		var payload configPayload
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 			http.Error(w, "invalid json", http.StatusBadRequest)
 			return
 		}
-		cfg := normalizeConfig(payload.areaMode(), payload.AreaIDs, payload.Domains)
+		areaMode := payload.AreaMode
+		if strings.TrimSpace(areaMode) == "" {
+			areaMode = payload.Mode
+		}
+		cfg := storage.RuleConfig{
+			AreaMode: normalizeMode(areaMode),
+			AreaIDs:  normalizeAreaIDs(payload.AreaIDs),
+			Domains:  normalizeDomains(payload.Domains),
+		}
 		if err := st.SetRuleConfig(cfg); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		emitRuleChanged()
+		setDomainMap(cfg.Domains)
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(map[string]any{
@@ -200,7 +232,10 @@ type areaNode struct {
 }
 
 func buildAreaTree(parentID uint32) []areaNode {
-	src := ipregion.Areas(parentID)
+	if internal.Searcher == nil {
+		return nil
+	}
+	src := internal.Searcher.Areas(parentID)
 	out := make([]areaNode, 0, len(src))
 	for _, a := range src {
 		out = append(out, areaNode{
@@ -213,31 +248,23 @@ func buildAreaTree(parentID uint32) []areaNode {
 	return out
 }
 
-func dbStatus() ipregion.Status {
-	path, err := storage.IpregionDBPath()
-	if err != nil {
-		return ipregion.Status{}
-	}
-	_ = storage.OpenIpregion()
-	st := ipregion.StatusOf()
-	if st.Path == "" {
-		st.Path = path
-		if fi, err := os.Stat(path); err == nil {
-			st.Exists = true
-			st.Size = fi.Size()
-		}
-	}
-	return st
-}
-
 func HandleRuleAreas(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if err := storage.OpenIpregion(); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+	if internal.Searcher == nil {
+		path, err := storage.IpregionDBPath()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		s, err := ipregion.Open(path)
+		if err != nil {
+			http.Error(w, "未找到 ipregion.db，请先下载或上传", http.StatusBadRequest)
+			return
+		}
+		internal.Searcher = s
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
@@ -251,7 +278,7 @@ func HandleRuleDB(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(dbStatusJSON(dbStatus()))
+	_ = json.NewEncoder(w).Encode(dbStatusJSON())
 }
 
 func HandleRuleDBDownload(w http.ResponseWriter, r *http.Request) {
@@ -259,7 +286,9 @@ func HandleRuleDBDownload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	var payload downloadPayload
+	var payload struct {
+		URL string `json:"url"`
+	}
 	_ = json.NewDecoder(r.Body).Decode(&payload)
 	url := strings.TrimSpace(payload.URL)
 	if url == "" {
@@ -271,12 +300,11 @@ func HandleRuleDBDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	resetRuleToGlobal()
-	emitRuleChanged()
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"ok": true,
-		"db": dbStatusJSON(dbStatus()),
+		"db": dbStatusJSON(),
 	})
 }
 
@@ -300,12 +328,11 @@ func HandleRuleDBUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	resetRuleToGlobal()
-	emitRuleChanged()
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"ok": true,
-		"db": dbStatusJSON(dbStatus()),
+		"db": dbStatusJSON(),
 	})
 }
 

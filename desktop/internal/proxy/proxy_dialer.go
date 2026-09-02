@@ -1,7 +1,9 @@
 package proxy
 
 import (
-	"log"
+	"desktop/internal"
+	"desktop/internal/route"
+	"fmt"
 	"net"
 	"net/netip"
 	"net/url"
@@ -9,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/penndev/prism/fakeip"
 	"github.com/penndev/prism/transport/dialer"
 )
 
@@ -152,9 +155,18 @@ func (p *Proxy) updateDialer() {
 				time.Sleep(30 * time.Second)
 				continue
 			}
-			log.Println("Select Device v4", v4, "v6", v6)
+			if internal.App != nil {
+				internal.App.Event.Emit(
+					internal.AppConfig.LogTypeName_STATUS,
+					fmt.Sprintf("Select Device v4 %v v6 %v", v4, v6),
+				)
+			}
 			d := &dialer.BoundDialer{LocalIPv4: v4, LocalIPv6: v6}
 			dialer.TCPDialer, dialer.UDPDialer = d, d
+			if dns := route.CurrentDNS(TUN_NAME); len(dns) > 0 {
+				fakeip.SetUpstream(dns[0])
+			}
+			fakeip.SetHandleConnect(localHandle)
 			time.Sleep(time.Second)
 		}
 	})

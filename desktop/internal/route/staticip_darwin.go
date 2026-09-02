@@ -4,9 +4,9 @@
 package route
 
 import (
+	"desktop/internal"
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"net/netip"
 	"os/exec"
@@ -69,7 +69,7 @@ func SetDevAddr(tunName string, prefix netip.Prefix) error {
 
 	var lastErr error
 	for _, t := range tries {
-		log.Println("ifconfig", strings.Join(t[1:], " "))
+		internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "ifconfig "+strings.Join(t[1:], " "))
 		out, err := exec.Command(t[0], t[1:]...).CombinedOutput()
 		if err == nil {
 			return waitDevAddrReady(tunName, prefix)
@@ -111,11 +111,11 @@ func SetRouteAddr(addr netip.Prefix, gateway net.IP) error {
 
 	var lastErr error
 	for _, t := range tries {
-		log.Println("route", strings.Join(t[1:], " "))
+		internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "route "+strings.Join(t[1:], " "))
 		out, err := exec.Command(t[0], t[1:]...).CombinedOutput()
 		if err == nil {
 			if len(out) > 0 {
-				log.Println("route output:", string(out))
+				internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "route output: "+string(out))
 			}
 			return nil
 		}
@@ -138,4 +138,3 @@ func CurrentDNS(skipIface string) []string {
 func setDevDNS(tunName string) {}
 
 func RestoreDNS() {}
-

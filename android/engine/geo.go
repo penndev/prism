@@ -3,8 +3,9 @@ package engine
 import (
 	"encoding/json"
 	"net"
+	"os"
 
-	"github.com/penndev/prism/ipregion"
+	"github.com/penndev/gopkg/ipregion"
 )
 
 // Area is a node in the IP-region tree. ParentID 0 is a top-level region.
@@ -52,25 +53,38 @@ type areaNode struct {
 	Children []areaNode `json:"children,omitempty"`
 }
 
+var dbPath string
+var searcher *ipregion.Searcher
+
 // SetIpregionDB opens ipregion.db at path. Java downloads/copies the file first.
-// On error the previously opened DB is left unchanged.
 func SetIpregionDB(path string) error {
-	return ipregion.Open(path)
+	s, err := ipregion.Open(path)
+	if err != nil {
+		return err
+	}
+	searcher = s
+	dbPath = path
+	return nil
 }
 
-// DBStatus returns the last opened file's metadata. Path is empty if never opened.
 func DBStatus() *DbStatus {
-	st := ipregion.StatusOf()
-	return &DbStatus{
-		Exists:  st.Exists,
-		Path:    st.Path,
-		Size:    st.Size,
-		Version: st.Version,
-		Remark:  st.Remark,
-		Areas:   int64(st.Areas),
-		V4:      int64(st.V4),
-		V6:      int64(st.V6),
+	out := &DbStatus{Path: dbPath}
+	if dbPath != "" {
+		if fi, err := os.Stat(dbPath); err == nil {
+			out.Exists = true
+			out.Size = fi.Size()
+		}
 	}
+	if searcher == nil {
+		return out
+	}
+	m := searcher.Meta()
+	out.Version = m.Version
+	out.Remark = m.Remark
+	out.Areas = int64(m.Areas)
+	out.V4 = int64(m.V4)
+	out.V6 = int64(m.V6)
+	return out
 }
 
 // AreaTree returns the full region tree as JSON, same shape as desktop /rule/api/areas.
@@ -83,7 +97,10 @@ func AreaTree() string {
 }
 
 func buildAreaTree(parentID uint32) []areaNode {
-	src := ipregion.Areas(parentID)
+	if searcher == nil {
+		return nil
+	}
+	src := searcher.Areas(parentID)
 	out := make([]areaNode, 0, len(src))
 	for _, a := range src {
 		out = append(out, areaNode{
@@ -97,8 +114,10 @@ func buildAreaTree(parentID uint32) []areaNode {
 }
 
 // Lookup returns the area chain for address (host or host:port), leaf first then parents.
-// Empty if the IP is unknown or the DB is not open.
 func Lookup(address string) *AreaList {
+	if searcher == nil {
+		return &AreaList{}
+	}
 	host, _, err := net.SplitHostPort(address)
 	if err != nil {
 		host = address
@@ -111,7 +130,7 @@ func Lookup(address string) *AreaList {
 		}
 		ip = ips[0]
 	}
-	info, err := ipregion.Find(ip.String())
+	info, err := searcher.Find(ip.String())
 	if err != nil || info.Area.ID == 0 {
 		return &AreaList{}
 	}

@@ -25,4 +25,3 @@ func CurrentDNS(skipIface string) []string {
 func setDevDNS(tunName string) {}
 
 func RestoreDNS() {}
-

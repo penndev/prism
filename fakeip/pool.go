@@ -6,10 +6,12 @@ import (
 	"net"
 )
 
+const defaultNet = "198.18.0.0/15"
+
 type pool struct {
 	next  uint32
 	start uint32
-	end   uint32 // exclusive
+	end   uint32
 }
 
 func newPool(cidr string) (*pool, error) {
@@ -49,13 +51,4 @@ func (p *pool) nextIP() net.IP {
 		}
 	}
 	return nil
-}
-
-func (p *pool) contains(ip net.IP) bool {
-	ip4 := ip.To4()
-	if ip4 == nil {
-		return false
-	}
-	v := binary.BigEndian.Uint32(ip4)
-	return v >= p.start && v < p.end
 }

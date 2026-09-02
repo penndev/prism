@@ -1,6 +1,7 @@
 package route
 
 import (
+	"desktop/internal"
 	"errors"
 	"fmt"
 	"log"
@@ -56,11 +57,11 @@ func SetDevAddr(tunName string, prefix netip.Prefix) error {
 			"dadtransmits=0",
 			"forwarding=enabled",
 		}
-		log.Println("netsh", strings.Join(prep, " "))
+		internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "netsh "+strings.Join(prep, " "))
 		cmd := exec.Command("netsh", prep...)
 		hideConsole(cmd)
 		if out, err := cmd.CombinedOutput(); err != nil {
-			log.Printf("set ipv6 interface failed: %v, %s", err, out)
+			internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, fmt.Sprintf("set ipv6 interface failed: %v, %s", err, out))
 		}
 		args = []string{
 			"interface", "ipv6", "add", "address",
@@ -70,7 +71,7 @@ func SetDevAddr(tunName string, prefix netip.Prefix) error {
 	default:
 		return fmt.Errorf("unsupported prefix: %v", prefix)
 	}
-	log.Println("netsh", strings.Join(args, " "))
+	internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "netsh "+strings.Join(args, " "))
 
 	cmd := exec.Command("netsh", args...)
 	hideConsole(cmd)
@@ -81,6 +82,15 @@ func SetDevAddr(tunName string, prefix netip.Prefix) error {
 
 	if err := waitDevAddr(tunName, prefix.Addr()); err != nil {
 		return err
+	}
+	if prefix.Addr().Is4() {
+		metric := []string{"interface", "ipv4", "set", "interface", "interface=" + tunName, "metric=1"}
+		internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "netsh "+strings.Join(metric, " "))
+		cmd := exec.Command("netsh", metric...)
+		hideConsole(cmd)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, fmt.Sprintf("set ipv4 metric failed: %v, %s", err, out))
+		}
 	}
 	return nil
 }
@@ -163,7 +173,42 @@ func sockaddrIP(sa windows.SocketAddress) net.IP {
 	}
 }
 
-func setDevDNS(tunName string) {}
+func setDevDNS(tunName string) {
+	servers := CurrentDNS(tunName)
+	if tunName == "" || len(servers) == 0 {
+		return
+	}
+	args := []string{
+		"interface", "ipv4", "set", "dnsservers",
+		"name=" + tunName,
+		"source=static",
+		"address=" + servers[0],
+		"register=none",
+		"validate=no",
+	}
+	internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "netsh "+strings.Join(args, " "))
+	cmd := exec.Command("netsh", args...)
+	hideConsole(cmd)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, fmt.Sprintf("set dns failed: %v, %s", err, out))
+		return
+	}
+	for i, s := range servers[1:] {
+		args := []string{
+			"interface", "ipv4", "add", "dnsservers",
+			"name=" + tunName,
+			"address=" + s,
+			fmt.Sprintf("index=%d", i+2),
+			"validate=no",
+		}
+		internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "netsh "+strings.Join(args, " "))
+		cmd := exec.Command("netsh", args...)
+		hideConsole(cmd)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, fmt.Sprintf("add dns failed: %v, %s", err, out))
+		}
+	}
+}
 
 func systemDNSIPv4(skipIface string) []string {
 	var size uint32 = 15000
@@ -244,26 +289,55 @@ func SetRouteAddr(addr netip.Prefix, gateway net.IP) error {
 		return fmt.Errorf("gateway is nil")
 	}
 
-	var args []string
 	if addr.Addr().Is6() {
-		args = []string{"-6", "add", addr.String(), gateway.String()}
-	} else {
-		args = []string{
-			"add",
-			addr.Addr().String(),
-			"mask",
-			prefixMask(addr).String(),
-			gateway.String(),
+		args := []string{"-6", "add", addr.String(), gateway.String()}
+		internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "route "+strings.Join(args, " "))
+		rc := exec.Command("route", args...)
+		hideConsole(rc)
+		out, err := rc.CombinedOutput()
+		if err != nil && !alreadyExists(string(out)) {
+			return fmt.Errorf("route failed: %v, output: %s", err, string(out))
 		}
+		return nil
 	}
 
-	log.Println("route", strings.Join(args, " "))
+	tunName := ""
+	if ifis, err := net.Interfaces(); err == nil {
+		for _, ifi := range ifis {
+			addrs, err := ifi.Addrs()
+			if err != nil {
+				continue
+			}
+			for _, a := range addrs {
+				ipnet, ok := a.(*net.IPNet)
+				if !ok || !ipnet.IP.Equal(gateway) {
+					continue
+				}
+				tunName = ifi.Name
+				break
+			}
+			if tunName != "" {
+				break
+			}
+		}
+	}
+	if tunName == "" {
+		return fmt.Errorf("tun iface not found for gateway %s", gateway)
+	}
 
-	rc := exec.Command("route", args...)
-	hideConsole(rc)
-	out, err := rc.CombinedOutput()
+	args := []string{
+		"interface", "ipv4", "add", "route",
+		"prefix=" + addr.String(),
+		"interface=" + tunName,
+		"metric=1",
+		"store=active",
+	}
+	internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "netsh "+strings.Join(args, " "))
+	cmd := exec.Command("netsh", args...)
+	hideConsole(cmd)
+	out, err := cmd.CombinedOutput()
 	if err != nil && !alreadyExists(string(out)) {
-		return fmt.Errorf("route failed: %v, output: %s", err, string(out))
+		return fmt.Errorf("netsh route failed: %v, output: %s", err, string(out))
 	}
 	return nil
 }

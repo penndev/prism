@@ -1,7 +1,7 @@
 package route
 
 import (
-	"log"
+	"desktop/internal"
 	"net"
 	"net/netip"
 )
@@ -31,7 +31,7 @@ func Start(options Options) error {
 	ip6 := options.DevIP6
 	if ip6.IsValid() {
 		if err := SetDevAddr(options.DevName, ip6); err != nil {
-			log.Println("SetDevAddr ipv6 failed:", err)
+			internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "SetDevAddr ipv6 failed: "+err.Error())
 			ip6 = netip.Prefix{}
 		}
 	}
@@ -41,7 +41,7 @@ func Start(options Options) error {
 			continue
 		}
 		if err := SetRouteAddr(item, gw); err != nil {
-			log.Println("SetRouteAddr failed:", err)
+			internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "SetRouteAddr failed: "+err.Error())
 		}
 	}
 	setDevDNS(options.DevName)

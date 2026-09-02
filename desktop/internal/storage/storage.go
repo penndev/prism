@@ -5,11 +5,9 @@ import (
 	"desktop/internal/lang"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 
-	"github.com/penndev/prism/ipregion"
 	"go.etcd.io/bbolt"
 )
 
@@ -40,24 +38,6 @@ func IpregionDBPath() (string, error) {
 		return "", err
 	}
 	return filepath.Join(dir, IpregionDBName), nil
-}
-
-// OpenIpregion opens the app-dir ipregion.db if it is not already open.
-func OpenIpregion() error {
-	path, err := IpregionDBPath()
-	if err != nil {
-		return err
-	}
-	if _, err := os.Stat(path); err != nil {
-		return fmt.Errorf("未找到 ipregion.db，请先下载或上传")
-	}
-	if ipregion.Opened() {
-		st := ipregion.StatusOf()
-		if st.Path == path {
-			return nil
-		}
-	}
-	return ipregion.Open(path)
 }
 
 func (s *Storage) SetSettings(v Settings) error {
@@ -109,40 +89,6 @@ func (s *Storage) GetRuleConfig() (*RuleConfig, error) {
 		return nil, err
 	}
 	return &out, nil
-}
-
-func (s *Storage) GetRuleStatus() RuleStatus {
-	out := RuleStatus{
-		AreaMode:  "global",
-		AreaNames: []string{},
-		Domains:   []string{},
-	}
-	cfg, err := s.GetRuleConfig()
-	if err != nil || cfg == nil {
-		return out
-	}
-	switch cfg.AreaMode {
-	case "proxy", "bypass":
-		out.AreaMode = cfg.AreaMode
-		_ = OpenIpregion()
-		out.AreaNames = areaNames(cfg.AreaIDs)
-	case "none":
-		out.AreaMode = cfg.AreaMode
-	}
-	if len(cfg.Domains) > 0 {
-		out.Domains = cfg.Domains
-	}
-	return out
-}
-
-func areaNames(ids []uint32) []string {
-	out := make([]string, 0, len(ids))
-	for _, id := range ids {
-		if n := ipregion.Name(id); n != "" {
-			out = append(out, n)
-		}
-	}
-	return out
 }
 
 func (s *Storage) SetSelectedServer(v ServerEntry) error {

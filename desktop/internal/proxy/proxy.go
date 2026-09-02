@@ -27,7 +27,7 @@ var localHandle = transport.Local()
 func (p *Proxy) SetStart(host, user, pass string) error {
 	if p.HandleConnect == nil {
 		p.HandleConnect = p.handleConnectHook(localHandle, func(network, address string) {
-			internal.App.Event.Emit(internal.AppConfig.LogTypeName_LOG, "local -> "+network+" "+address)
+			internal.App.Event.Emit(internal.AppConfig.LogTypeName_LOG, network+" "+address)
 		})
 	}
 
@@ -75,7 +75,7 @@ func (p *Proxy) SetRemote(remote string) error {
 		return err
 	}
 	p.HandleConnect = p.handleConnectHook(handle, func(network, address string) {
-		internal.App.Event.Emit(internal.AppConfig.LogTypeName_LOG, p.remoteURL.Scheme+" -> "+network+" "+address)
+		internal.App.Event.Emit(internal.AppConfig.LogTypeName_LOG, network+" "+address)
 	})
 	return nil
 }

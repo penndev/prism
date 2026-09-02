@@ -35,7 +35,6 @@ func init() {
 		netip.MustParsePrefix("32.0.0.0/3"),
 		netip.MustParsePrefix("64.0.0.0/2"),
 		netip.MustParsePrefix("128.0.0.0/1"),
-		netip.MustParsePrefix("198.18.0.0/15"),
 	}
 	initElevate()
 }

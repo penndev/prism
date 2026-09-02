@@ -7,6 +7,7 @@ import (
 	"desktop/internal/lang"
 	"desktop/internal/proxy"
 	"desktop/internal/storage"
+	"desktop/internal/web/rule"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -24,6 +25,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	rule.LoadDomains()
 	// -
 	app, err := internal.SetUPApp([]application.Service{
 		application.NewService(lang.DefaultLang),

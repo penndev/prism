@@ -67,7 +67,7 @@ func normalizeServers(servers []ServerEntry) []ServerEntry {
 	return out
 }
 
-// RuleConfig 规则配置（Web 页维护；桌面端展示状态提示）。
+// RuleConfig 规则配置。
 type RuleConfig struct {
 	// AreaMode: global=全局代理，none=全不代理，proxy=代理某些区域，bypass=绕过某些区域。
 	AreaMode string `json:"areaMode"`
@@ -96,13 +96,6 @@ func (r *RuleConfig) UnmarshalJSON(data []byte) error {
 	r.AreaIDs = v.AreaIDs
 	r.Domains = v.Domains
 	return nil
-}
-
-// RuleStatus 主页面展示用的规则摘要。
-type RuleStatus struct {
-	AreaMode  string   `json:"areaMode"`
-	AreaNames []string `json:"areaNames"`
-	Domains   []string `json:"domains"`
 }
 
 const (

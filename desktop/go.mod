@@ -3,7 +3,8 @@ module desktop
 go 1.26.0
 
 require (
-	github.com/penndev/prism v0.0.0
+	github.com/penndev/gopkg v0.5.1
+	github.com/penndev/prism v0.1.0
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
 	github.com/wailsapp/wails/v3 v3.0.0-alpha.82
 	go.etcd.io/bbolt v1.4.3
@@ -43,7 +44,6 @@ require (
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/miekg/dns v1.1.73 // indirect
-	github.com/penndev/gopkg v0.5.1 // indirect
 	github.com/pjbgf/sha1cd v0.5.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/samber/lo v1.52.0 // indirect

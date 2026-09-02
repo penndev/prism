@@ -5,16 +5,41 @@ import (
 	"desktop/internal/storage"
 	"net"
 
-	"github.com/penndev/prism/ipregion"
+	"github.com/penndev/gopkg/ipregion"
+	"github.com/penndev/prism/fakeip"
 	"github.com/penndev/prism/pkg"
 	"github.com/penndev/prism/transport"
 )
 
 func (p *Proxy) handleConnectHook(handle transport.HandleConnect, callback func(network, address string)) transport.HandleConnect {
 	return func(conn net.Conn, network, address string) error {
-		// 每次请求判断地域规则：需绕过则走本地，否则走远程代理。
-		bypass := false
+		host, port, err := net.SplitHostPort(address)
+		if err != nil {
+			return err
+		}
+
+		// 拦截udp协议 进行中间人攻击替换IP
+		if network == "udp" || network == "udp4" || network == "udp6" {
+			if port == "53" {
+				fakeip.Handle(conn, network, address)
+				callback("fakedns -> "+network, address)
+				return nil
+			}
+		}
+
+		// 判断是否是fakeIP。是的话直接替换然后代理。
+		if domain, ok := fakeip.Lookup(host); ok {
+			fakeaddr := net.JoinHostPort(domain, port)
+			if callback != nil {
+				callback("fakeip -> "+network, address+" - "+fakeaddr)
+			}
+			conn = pkg.WrapConn(conn, func(n int64) { p.readBytes.Add(n) }, func(n int64) { p.writeBytes.Add(n) })
+			return handle(conn, network, fakeaddr)
+		}
+
+		// 验证地域规则
 		if st := storage.DefaultStorage; st != nil {
+			bypass := false
 			if cfg, err := st.GetRuleConfig(); err == nil && cfg != nil {
 				switch cfg.AreaMode {
 				case "none":
@@ -25,17 +50,17 @@ func (p *Proxy) handleConnectHook(handle transport.HandleConnect, callback func(
 					bypass = len(cfg.AreaIDs) > 0 && inAreas(address, cfg.AreaIDs)
 				}
 			}
-		}
-		if bypass {
-			if internal.App != nil {
-				internal.App.Event.Emit(internal.AppConfig.LogTypeName_LOG, "bypass -> "+network+" "+address)
+			if bypass {
+				if internal.App != nil {
+					callback("bypass -> "+network, address)
+				}
+				return localHandle(conn, network, address)
 			}
-			return localHandle(conn, network, address)
 		}
+
 		if callback != nil {
-			callback(network, address)
+			callback("proxy -> "+network, address)
 		}
-		// 只有走代理服务器才走包装
 		conn = pkg.WrapConn(conn, func(n int64) { p.readBytes.Add(n) }, func(n int64) { p.writeBytes.Add(n) })
 		return handle(conn, network, address)
 	}
@@ -45,8 +70,16 @@ func inAreas(address string, areaIDs []uint32) bool {
 	if len(areaIDs) == 0 {
 		return false
 	}
-	if err := storage.OpenIpregion(); err != nil {
-		return false
+	if internal.Searcher == nil {
+		path, err := storage.IpregionDBPath()
+		if err != nil {
+			return false
+		}
+		s, err := ipregion.Open(path)
+		if err != nil {
+			return false
+		}
+		internal.Searcher = s
 	}
 	host, _, err := net.SplitHostPort(address)
 	if err != nil {
@@ -60,7 +93,7 @@ func inAreas(address string, areaIDs []uint32) bool {
 		}
 		ip = ips[0]
 	}
-	info, err := ipregion.Find(ip.String())
+	info, err := internal.Searcher.Find(ip.String())
 	if err != nil || info.Area.ID == 0 {
 		return false
 	}
@@ -80,4 +113,3 @@ func inAreas(address string, areaIDs []uint32) bool {
 	}
 	return false
 }
-
