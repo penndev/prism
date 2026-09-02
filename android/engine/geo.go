@@ -7,6 +7,44 @@ import (
 	"github.com/penndev/prism/ipregion"
 )
 
+// Area is a node in the IP-region tree. ParentID 0 is a top-level region.
+type Area struct {
+	ID       int64
+	ParentID int64
+	Name     string
+}
+
+// AreaList is a gomobile-friendly wrapper; slices of pointers are skipped by gobind.
+type AreaList struct {
+	items []*Area
+}
+
+func (l *AreaList) Len() int64 {
+	if l == nil {
+		return 0
+	}
+	return int64(len(l.items))
+}
+
+func (l *AreaList) Get(i int64) *Area {
+	if l == nil || i < 0 || int(i) >= len(l.items) {
+		return nil
+	}
+	return l.items[int(i)]
+}
+
+// DbStatus is the current ipregion.db file and metadata.
+type DbStatus struct {
+	Exists  bool
+	Path    string
+	Size    int64
+	Version string
+	Remark  string
+	Areas   int64
+	V4      int64
+	V6      int64
+}
+
 type areaNode struct {
 	ID       uint32     `json:"id"`
 	ParentID uint32     `json:"parent_id"`

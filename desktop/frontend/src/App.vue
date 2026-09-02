@@ -79,9 +79,11 @@ const MAIN_MAX = 600;
 const RIGHT_MIN = 280;
 
 /** 客户区宽度低于此值时自动折叠为单栏 */
-/** SetSize 多为窗口外框宽度，略大于 SPLIT_MIN_INNER，尽量保证客户区够双栏 */
+/** SetSize 多为窗口外框宽度，略大于内容宽度，尽量保证客户区够用 */
 const SPLIT_MIN_INNER = 800;
-const SPLIT_WINDOW_OUTER_WIDTH = SPLIT_MIN_INNER + 40;
+const WINDOW_CHROME = 40;
+const SPLIT_WINDOW_OUTER_WIDTH = SPLIT_MIN_INNER + WINDOW_CHROME;
+const COMPACT_WINDOW_OUTER_WIDTH = MAIN_MIN + WINDOW_CHROME;
 
 /** 设置面板是否可见（可由标题栏开关或窗口过窄时自动关闭） */
 /** 主栏当前宽度 */
@@ -101,7 +103,7 @@ const mainStyle = computed(() =>
     : { flex: "1 1 auto", width: "100%", minWidth: 0 },
 );
 
-/** 根据窗口宽度同步双栏/单栏状态，并 clamp 主栏宽度 */
+/** 窗口过窄时自动收起设置栏；双栏时把主栏宽度限制在可用范围内 */
 function applyLayoutToWindow() {
   const inner = window.innerWidth;
 
@@ -110,7 +112,10 @@ function applyLayoutToWindow() {
     return;
   }
 
-  extensionVisible.value = true;
+  if (!extensionVisible.value) {
+    return;
+  }
+
   const cap = Math.min(MAIN_MAX, Math.max(MAIN_MIN, inner - RIGHT_MIN));
   if (mainWidth.value > cap) {
     mainWidth.value = cap;
@@ -130,20 +135,27 @@ function onResizeDivider(e) {
   });
 }
 
-/** 用户打开设置面板但窗口过窄时，自动扩窗至双栏最小宽度 */
+/** 展开过窄则扩到双栏宽度；收起且仍宽于展开宽度则收到主栏宽度 */
 watch(extensionVisible, async (visible) => {
   mainWidth.value = MAIN_MIN;
 
-  if (!visible || window.innerWidth >= SPLIT_MIN_INNER) {
+  if (visible) {
+    try {
+      if (window.innerWidth < SPLIT_MIN_INNER) {
+        const { height } = await Window.Size();
+        await Window.SetSize(SPLIT_WINDOW_OUTER_WIDTH, height);
+      }
+    } finally {
+      applyLayoutToWindow();
+    }
     return;
   }
 
-  try {
-    const { height } = await Window.Size();
-    await Window.SetSize(SPLIT_WINDOW_OUTER_WIDTH, height);
-  } finally {
-    applyLayoutToWindow();
+  if (window.innerWidth < SPLIT_MIN_INNER) {
+    return;
   }
+  const { height } = await Window.Size();
+  await Window.SetSize(COMPACT_WINDOW_OUTER_WIDTH, height);
 });
 
 onBeforeMount(async () => {

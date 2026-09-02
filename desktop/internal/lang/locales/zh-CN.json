@@ -9,7 +9,7 @@
   "settings.usernamePlaceholder": "可选",
   "settings.password": "密码",
   "settings.passwordPlaceholder": "可选",
-  "settings.latencyTest": "测速",
+  "settings.latencyTest": "延迟测试",
   "settings.latencyTestHost": "测试域名",
   "settings.latencyTestHostPlaceholder": "域名或 host:port",
   "settings.latencyTestHostRequired": "请先在设置中填写测试域名",

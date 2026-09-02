@@ -163,43 +163,7 @@ func sockaddrIP(sa windows.SocketAddress) net.IP {
 	}
 }
 
-func setDevDNS(tunName string) {
-	servers := []string{"127.0.0.1"}
-	if len(servers) == 0 {
-		return
-	}
-
-	args := []string{
-		"interface", "ipv4", "set", "dnsservers",
-		fmt.Sprintf("name=%s", tunName),
-		"static", servers[0],
-		"validate=no",
-	}
-	log.Println("netsh", strings.Join(args, " "))
-	cmd := exec.Command("netsh", args...)
-	hideConsole(cmd)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		log.Printf("set dns failed: %v, %s", err, string(out))
-		return
-	}
-
-	for i, addr := range servers[1:] {
-		args := []string{
-			"interface", "ipv4", "add", "dnsservers",
-			fmt.Sprintf("name=%s", tunName),
-			"address=" + addr,
-			fmt.Sprintf("index=%d", i+2),
-			"validate=no",
-		}
-		log.Println("netsh", strings.Join(args, " "))
-		cmd := exec.Command("netsh", args...)
-		hideConsole(cmd)
-		if out, err := cmd.CombinedOutput(); err != nil {
-			log.Printf("add dns failed: %v, %s", err, string(out))
-			return
-		}
-	}
-}
+func setDevDNS(tunName string) {}
 
 func systemDNSIPv4(skipIface string) []string {
 	var size uint32 = 15000

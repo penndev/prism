@@ -24,11 +24,33 @@ var (
 	origTCP    dialer.Dialer
 	origUDP    dialer.Dialer
 	handler    Handler
-	counter    *byteCounter
 	errProtect = errors.New("protect failed")
 	errStarted = errors.New("already started")
 	localH     = transport.Local()
 )
+
+// Options is passed to Start. Proxy is a URL:
+// socks5://user:pass@host:port (also socks5s / http / https).
+type Options struct {
+	FD      int32
+	MTU     int32
+	Proxy   string
+	Handler Handler
+}
+
+// Handler is implemented on the Android side.
+// Protect must wrap VpnService.protect.
+// UseProxy decides direct vs proxy and should emit the connection log
+// (e.g. "proxy tcp 1.2.3.4:443"). Java looks up the IP (leaf → parent)
+// and matches saved area IDs.
+// OnProxyRead / OnProxyWrite report proxy-path Read/Write byte counts.
+type Handler interface {
+	Protect(fd int32) bool
+	OnLog(line string)
+	UseProxy(network, address string) bool
+	OnProxyRead(n int64)
+	OnProxyWrite(n int64)
+}
 
 // Start attaches gVisor to a TUN fd and forwards TCP/UDP using opt.Proxy.
 // Handler.UseProxy decides direct vs proxy per destination.
@@ -66,22 +88,19 @@ func Start(opt *Options) error {
 	}
 
 	installProtect(h)
-	ctr := newByteCounter(h)
 	stack.New(stack.Option{
 		EndPoint: endpoint,
 		HandleTCP: func(f *stack.ForwarderTCPRequest) {
-			relay(proxyH, localH, h, ctr, f.Conn, f.RemoteAddr.Network(), f.RemoteAddr.String())
+			relay(proxyH, localH, h, f.Conn, f.RemoteAddr.Network(), f.RemoteAddr.String())
 		},
 		HandlerUDP: func(f *stack.ForwarderUDPRequest) {
-			relay(proxyH, localH, h, ctr, f.Conn, f.RemoteAddr.Network(), f.RemoteAddr.String())
+			relay(proxyH, localH, h, f.Conn, f.RemoteAddr.Network(), f.RemoteAddr.String())
 		},
 	})
-	ctr.start()
 
 	ep = endpoint
 	tunFD = int(opt.FD)
 	handler = h
-	counter = ctr
 	started = true
 	return nil
 }
@@ -93,13 +112,11 @@ func Stop() {
 		mu.Unlock()
 		return
 	}
-	ctr := counter
 	fd := tunFD
 	endpoint := ep
 	started = false
 	tunFD = -1
 	ep = nil
-	counter = nil
 	handler = nil
 	mu.Unlock()
 
@@ -109,7 +126,6 @@ func Stop() {
 	if endpoint != nil {
 		endpoint.Wait()
 	}
-	ctr.halt()
 
 	mu.Lock()
 	restoreProtect()

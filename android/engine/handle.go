@@ -1,80 +1,15 @@
+//go:build linux
+
 package engine
 
 import (
 	"net"
-	"sync/atomic"
-	"time"
 
 	"github.com/penndev/prism/pkg"
 	"github.com/penndev/prism/transport"
 )
 
-type byteCounter struct {
-	up, down atomic.Int64
-	h        Handler
-	stop     chan struct{}
-	done     chan struct{}
-}
-
-func newByteCounter(h Handler) *byteCounter {
-	return &byteCounter{
-		h:    h,
-		stop: make(chan struct{}),
-		done: make(chan struct{}),
-	}
-}
-
-func (c *byteCounter) start() {
-	go func() {
-		defer close(c.done)
-		t := time.NewTicker(time.Second)
-		defer t.Stop()
-		for {
-			select {
-			case <-t.C:
-				c.flush()
-			case <-c.stop:
-				c.flush()
-				return
-			}
-		}
-	}()
-}
-
-func (c *byteCounter) halt() {
-	if c == nil {
-		return
-	}
-	select {
-	case <-c.stop:
-	default:
-		close(c.stop)
-	}
-	<-c.done
-}
-
-func (c *byteCounter) flush() {
-	if c.h == nil {
-		return
-	}
-	up := c.up.Swap(0)
-	down := c.down.Swap(0)
-	if up > 0 {
-		c.h.OnProxyRead(up)
-	}
-	if down > 0 {
-		c.h.OnProxyWrite(down)
-	}
-}
-
-func wrapConn(conn net.Conn, c *byteCounter) net.Conn {
-	if conn == nil || c == nil {
-		return conn
-	}
-	return pkg.WrapConn(conn, &c.up, &c.down)
-}
-
-func relay(proxy, local transport.HandleConnect, h Handler, ctr *byteCounter, conn net.Conn, network, address string) {
+func relay(proxy, local transport.HandleConnect, h Handler, conn net.Conn, network, address string) {
 	defer func() { recover() }()
 	if conn == nil {
 		return
@@ -87,8 +22,8 @@ func relay(proxy, local transport.HandleConnect, h Handler, ctr *byteCounter, co
 	c := conn
 	if !useProxy {
 		handle = local
-	} else {
-		c = wrapConn(conn, ctr)
+	} else if h != nil {
+		c = pkg.WrapConn(conn, h.OnProxyRead, h.OnProxyWrite)
 	}
 	if err := handle(c, network, address); err != nil {
 		if h != nil {

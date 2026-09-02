@@ -13,7 +13,7 @@ import (
 func Ping(proxy, latencyHost string) int64 {
 	host := strings.TrimSpace(latencyHost)
 	if host == "" {
-		host = "google.com"
+		return -1
 	}
 	r, err := url.Parse(proxy)
 	if err != nil {

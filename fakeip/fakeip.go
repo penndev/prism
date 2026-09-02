@@ -1,9 +1,8 @@
 // Package fakeip is a UDP DNS server with Clash-style Fake-IP.
 //
-// Listen binds UDP DNS. SetNeedFake / SetProxy configure behavior after start
-// (nil NeedFake means nothing is faked; nil SetProxy uses the default network).
-// Domains that need fake are resolved via Google DoH. Real IPs and fake IPs are
-// both stored in ttlmap with the DoH TTL; fake addresses increment and wrap.
+// Listen binds UDP DNS. SetNeedFake chooses which names get a fake A record
+// (nil means none). Other queries are forwarded to the UDP upstream.
+// Fake mappings last fakeTTL and wrap when the pool is exhausted.
 package fakeip
 
 import (
@@ -15,15 +14,12 @@ import (
 
 	"github.com/miekg/dns"
 	"github.com/penndev/gopkg/ttlmap"
-	"github.com/penndev/prism/transport"
 )
 
-const udpTimeout = 5 * time.Second
-
-type dnsEntry struct {
-	IPs      []net.IP
-	ExpireAt time.Time
-}
+const (
+	udpTimeout = 5 * time.Second
+	fakeTTL    = 10 * time.Second
+)
 
 type fakeEntry struct {
 	Domain string
@@ -38,11 +34,31 @@ type Server struct {
 	optMu    sync.RWMutex
 	needFake NeedFake
 	upstream string
-	handle   transport.HandleConnect
 	pool     *pool
-	dnsMap   *ttlmap.Map
 	fakeMap  *ttlmap.Map
 	srv      *dns.Server
+}
+
+// Match reports whether host is listed or is a subdomain of a listed domain.
+func Match(host string, domains []string) bool {
+	host = normName(host)
+	if host == "" {
+		return false
+	}
+	for _, d := range domains {
+		d = normName(d)
+		if d == "" {
+			continue
+		}
+		if host == d || strings.HasSuffix(host, "."+d) {
+			return true
+		}
+	}
+	return false
+}
+
+func normName(s string) string {
+	return strings.ToLower(strings.TrimSuffix(strings.TrimSpace(s), "."))
 }
 
 // Listen starts a UDP DNS server on address (host:port).
@@ -65,7 +81,6 @@ func Listen(address, upstream, fakeNet string) (*Server, error) {
 	s := &Server{
 		upstream: upstream,
 		pool:     p,
-		dnsMap:   ttlmap.New(),
 		fakeMap:  ttlmap.New(),
 	}
 
@@ -97,6 +112,13 @@ func (s *Server) Close() error {
 	return s.srv.Shutdown()
 }
 
+func (s *Server) Addr() string {
+	if s == nil || s.srv == nil {
+		return ""
+	}
+	return s.srv.Addr
+}
+
 // SetNeedFake chooses which domains get a fake IP. nil means none.
 func (s *Server) SetNeedFake(fn NeedFake) {
 	if s == nil {
@@ -107,39 +129,60 @@ func (s *Server) SetNeedFake(fn NeedFake) {
 	s.needFake = fn
 }
 
-// SetProxy routes Google DoH through handle. nil uses the default network.
-func (s *Server) SetProxy(handle transport.HandleConnect) {
+// SetUpstream sets the UDP DNS used for non-fake queries. Accepts IP or host:port.
+func (s *Server) SetUpstream(up string) error {
 	if s == nil {
-		return
+		return fmt.Errorf("dns server is nil")
+	}
+	up = strings.TrimSpace(up)
+	if up == "" {
+		return fmt.Errorf("upstream DNS required")
+	}
+	if _, _, err := net.SplitHostPort(up); err != nil {
+		if net.ParseIP(up) == nil {
+			return fmt.Errorf("invalid upstream DNS: %s", up)
+		}
+		up = net.JoinHostPort(up, "53")
 	}
 	s.optMu.Lock()
-	defer s.optMu.Unlock()
-	s.handle = handle
+	s.upstream = up
+	s.optMu.Unlock()
+	return nil
 }
 
-// Lookup returns the real domain and first real IP for a fake IP.
-func (s *Server) Lookup(fakeIP string) (domain string, ip net.IP, ok bool) {
+// Contains reports whether ip is in the fake-IP CIDR.
+func (s *Server) Contains(ip string) bool {
+	if s == nil || s.pool == nil {
+		return false
+	}
+	parsed := net.ParseIP(strings.TrimSpace(ip))
+	if parsed == nil {
+		return false
+	}
+	return s.pool.contains(parsed)
+}
+
+// Lookup returns the domain for a fake IP.
+func (s *Server) Lookup(fakeIP string) (domain string, ok bool) {
+	if s == nil || s.fakeMap == nil {
+		return "", false
+	}
 	ipAddr := net.ParseIP(strings.TrimSpace(fakeIP))
 	if ipAddr == nil {
-		return "", nil, false
+		return "", false
 	}
 	if v4 := ipAddr.To4(); v4 != nil {
 		ipAddr = v4
 	}
 	v, ok := s.fakeMap.Get("ip:" + ipAddr.String())
 	if !ok {
-		return "", nil, false
+		return "", false
 	}
 	e, _ := v.(fakeEntry)
-	domain = e.Domain
-	if domain == "" {
-		return "", nil, false
+	if e.Domain == "" {
+		return "", false
 	}
-	ips, _, err := s.lookupDNS(domain)
-	if err != nil || len(ips) == 0 {
-		return domain, nil, true
-	}
-	return domain, ips[0], true
+	return e.Domain, true
 }
 
 func (s *Server) serveDNS(w dns.ResponseWriter, req *dns.Msg) {
@@ -147,7 +190,7 @@ func (s *Server) serveDNS(w dns.ResponseWriter, req *dns.Msg) {
 		return
 	}
 	q := req.Question[0]
-	domain := strings.ToLower(strings.TrimSuffix(strings.TrimSpace(q.Name), "."))
+	domain := normName(q.Name)
 
 	s.optMu.RLock()
 	needFake := s.needFake
@@ -162,7 +205,7 @@ func (s *Server) serveDNS(w dns.ResponseWriter, req *dns.Msg) {
 		return
 	}
 
-	resp, _, err := (&dns.Client{Net: "udp", Timeout: udpTimeout}).Exchange(req, s.upstream)
+	resp, _, err := (&dns.Client{Net: "udp", Timeout: udpTimeout}).Exchange(req, s.currentUpstream())
 	if err != nil {
 		resp = new(dns.Msg)
 		resp.SetRcode(req, dns.RcodeServerFailure)
@@ -178,11 +221,7 @@ func (s *Server) answerFake(req *dns.Msg, domain string, qtype uint16) (*dns.Msg
 	if qtype == dns.TypeAAAA {
 		return resp, nil
 	}
-	_, ttl, err := s.lookupDNS(domain)
-	if err != nil {
-		return nil, err
-	}
-	fake, err := s.assignFake(domain, ttl)
+	fake, err := s.assignFake(domain)
 	if err != nil {
 		return nil, err
 	}
@@ -191,14 +230,14 @@ func (s *Server) answerFake(req *dns.Msg, domain string, qtype uint16) (*dns.Msg
 			Name:   req.Question[0].Name,
 			Rrtype: dns.TypeA,
 			Class:  dns.ClassINET,
-			Ttl:    uint32(ttl / time.Second),
+			Ttl:    uint32(fakeTTL / time.Second),
 		},
 		A: fake,
 	})
 	return resp, nil
 }
 
-func (s *Server) assignFake(domain string, ttl time.Duration) (net.IP, error) {
+func (s *Server) assignFake(domain string) (net.IP, error) {
 	if v, ok := s.fakeMap.Get("h:" + domain); ok {
 		e, _ := v.(fakeEntry)
 		if e.IP != nil {
@@ -237,31 +276,14 @@ func (s *Server) assignFake(domain string, ttl time.Duration) (net.IP, error) {
 			}
 		}
 	}
-	if ttl > 0 {
-		e := fakeEntry{Domain: domain, IP: ip}
-		s.fakeMap.Set("h:"+domain, e, ttl)
-		s.fakeMap.Set("ip:"+ip.String(), e, ttl)
-	}
+	e := fakeEntry{Domain: domain, IP: ip}
+	s.fakeMap.Set("h:"+domain, e, fakeTTL)
+	s.fakeMap.Set("ip:"+ip.String(), e, fakeTTL)
 	return ip, nil
 }
 
-func (s *Server) lookupDNS(domain string) ([]net.IP, time.Duration, error) {
-	if v, ok := s.dnsMap.Get(domain); ok {
-		e, _ := v.(dnsEntry)
-		if len(e.IPs) > 0 {
-			ttl := time.Until(e.ExpireAt)
-			if ttl < 0 {
-				ttl = 0
-			}
-			return e.IPs, ttl, nil
-		}
-	}
-	ips, ttl, err := s.queryGoogleDoH(domain)
-	if err != nil {
-		return nil, 0, err
-	}
-	if ttl > 0 {
-		s.dnsMap.Set(domain, dnsEntry{IPs: ips, ExpireAt: time.Now().Add(ttl)}, ttl)
-	}
-	return ips, ttl, nil
+func (s *Server) currentUpstream() string {
+	s.optMu.RLock()
+	defer s.optMu.RUnlock()
+	return s.upstream
 }

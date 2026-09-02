@@ -50,3 +50,12 @@ func (p *pool) nextIP() net.IP {
 	}
 	return nil
 }
+
+func (p *pool) contains(ip net.IP) bool {
+	ip4 := ip.To4()
+	if ip4 == nil {
+		return false
+	}
+	v := binary.BigEndian.Uint32(ip4)
+	return v >= p.start && v < p.end
+}

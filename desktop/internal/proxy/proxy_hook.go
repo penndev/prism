@@ -6,6 +6,7 @@ import (
 	"net"
 
 	"github.com/penndev/prism/ipregion"
+	"github.com/penndev/prism/pkg"
 	"github.com/penndev/prism/transport"
 )
 
@@ -35,7 +36,7 @@ func (p *Proxy) handleConnectHook(handle transport.HandleConnect, callback func(
 			callback(network, address)
 		}
 		// 只有走代理服务器才走包装
-		conn = p.wrapConn(conn)
+		conn = pkg.WrapConn(conn, func(n int64) { p.readBytes.Add(n) }, func(n int64) { p.writeBytes.Add(n) })
 		return handle(conn, network, address)
 	}
 }
@@ -79,3 +80,4 @@ func inAreas(address string, areaIDs []uint32) bool {
 	}
 	return false
 }
+
