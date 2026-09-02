@@ -55,6 +55,7 @@ data class RuleDraft(
     val geoMode: GeoMode = GeoMode.Global,
     val selectedAreaIds: Set<Long> = emptySet(),
     val dbUrl: String = "",
+    val domains: List<String> = emptyList(),
 )
 
 data class TrafficUi(

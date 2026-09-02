@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.net.ConnectivityManager
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
@@ -52,6 +53,8 @@ class PrismVpnService : VpnService() {
             return
         }
 
+        val upstream = systemDnsIpv4()
+
         val builder = Builder()
             .setSession(getString(R.string.app_title))
             .setMtu(MTU)
@@ -80,6 +83,7 @@ class PrismVpnService : VpnService() {
             opt.setFD(fd)
             opt.setMTU(MTU)
             opt.proxy = server.toProxyURL()
+            opt.upstream = upstream
             opt.handler = VpnHandler()
             Engine.start(opt)
         } catch (error: Exception) {
@@ -170,12 +174,39 @@ class PrismVpnService : VpnService() {
         return false
     }
 
+    private fun systemDnsIpv4(): String {
+        val cm = getSystemService(ConnectivityManager::class.java) ?: return ""
+        val servers = cm.getLinkProperties(cm.activeNetwork)?.dnsServers ?: return ""
+        for (server in servers) {
+            if (server.isLoopbackAddress || server.isAnyLocalAddress) continue
+            val host = server.hostAddress ?: continue
+            if (host.contains(':')) continue
+            return host
+        }
+        return ""
+    }
+
     private inner class VpnHandler : Handler {
         override fun protect(fd: Int): Boolean = this@PrismVpnService.protect(fd)
 
         override fun onLog(line: String?) {
             val text = line.orEmpty()
             if (text.isNotEmpty()) VpnController.emitConnection(text)
+        }
+
+        override fun needFake(name: String?): Boolean {
+            val host = name.orEmpty().trim('.').lowercase()
+            if (host.isEmpty()) return false
+            val domains = VpnController.fakeDomains
+            if (domains.isEmpty()) return false
+            var n = host
+            while (n.isNotEmpty()) {
+                if (n in domains) return true
+                val i = n.indexOf('.')
+                if (i < 0) return false
+                n = n.substring(i + 1)
+            }
+            return false
         }
 
         override fun useProxy(network: String?, address: String?): Boolean {

@@ -40,6 +40,8 @@ import com.penndev.prism.R
 import com.penndev.prism.ui.components.Hairline
 import com.penndev.prism.ui.home.HomeScreen
 import com.penndev.prism.ui.logs.LogsScreen
+import com.penndev.prism.ui.rules.DomainRulesScreen
+import com.penndev.prism.ui.rules.GeoRulesScreen
 import com.penndev.prism.ui.rules.RulesScreen
 import com.penndev.prism.ui.server.ServerEditScreen
 import com.penndev.prism.ui.settings.SettingsScreen
@@ -51,6 +53,8 @@ private object Routes {
     const val Settings = "settings"
     const val Logs = "logs"
     const val Rules = "rules"
+    const val RulesDomain = "rules/domain"
+    const val RulesGeo = "rules/geo"
     const val Subscribe = "subscribe"
     const val ServerEdit = "server/edit"
     const val ServerEditId = "server/edit/{id}"
@@ -147,7 +151,25 @@ fun PrismApp(viewModel: PrismViewModel) {
                     LogsScreen(state = state, viewModel = viewModel)
                 }
                 composable(Routes.Rules) {
-                    RulesScreen(state = state, viewModel = viewModel)
+                    RulesScreen(
+                        state = state,
+                        onOpenDomain = { navController.navigate(Routes.RulesDomain) },
+                        onOpenGeo = { navController.navigate(Routes.RulesGeo) },
+                    )
+                }
+                composable(Routes.RulesDomain) {
+                    DomainRulesScreen(
+                        state = state,
+                        viewModel = viewModel,
+                        onBack = { navController.popBackStack() },
+                    )
+                }
+                composable(Routes.RulesGeo) {
+                    GeoRulesScreen(
+                        state = state,
+                        viewModel = viewModel,
+                        onBack = { navController.popBackStack() },
+                    )
                 }
                 composable(Routes.Subscribe) {
                     SubscribeScreen(

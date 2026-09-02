@@ -110,6 +110,7 @@ class Prefs(context: Context) {
         return runCatching {
             val obj = JSONObject(raw)
             val areas = obj.optJSONArray("selectedAreaIds") ?: obj.optJSONArray("selectedAreas")
+            val domainsArr = obj.optJSONArray("domains")
             RuleDraft(
                 geoMode = runCatching {
                     GeoMode.valueOf(obj.optString("geoMode", "Global"))
@@ -123,6 +124,14 @@ class Prefs(context: Context) {
                     }
                 },
                 dbUrl = obj.optString("dbUrl"),
+                domains = buildList {
+                    if (domainsArr != null) {
+                        for (i in 0 until domainsArr.length()) {
+                            val d = domainsArr.optString(i).trim().trim('.').lowercase()
+                            if (d.isNotEmpty()) add(d)
+                        }
+                    }
+                },
             )
         }.getOrDefault(RuleDraft())
     }
@@ -130,6 +139,8 @@ class Prefs(context: Context) {
     fun saveRules(draft: RuleDraft) {
         val areas = JSONArray()
         draft.selectedAreaIds.forEach { areas.put(it) }
+        val domains = JSONArray()
+        draft.domains.forEach { domains.put(it) }
         prefs.edit()
             .putString(
                 KEY_RULES,
@@ -137,6 +148,7 @@ class Prefs(context: Context) {
                     .put("geoMode", draft.geoMode.name)
                     .put("selectedAreaIds", areas)
                     .put("dbUrl", draft.dbUrl)
+                    .put("domains", domains)
                     .toString(),
             )
             .apply()

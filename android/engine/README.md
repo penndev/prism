@@ -9,9 +9,14 @@ val opt = Options()
 opt.fd = fd
 opt.mtu = mtu
 opt.proxy = "socks5://user:pass@host:port" // socks5 / socks5s / http / https
+opt.upstream = systemDns // VPN 启动前的系统 DNS，给未 fake 的查询用
 opt.handler = object : Handler {
     override fun protect(fd: Int) = vpn.protect(fd)
     override fun onLog(line: String?) { /* 连接日志 */ }
+    override fun needFake(name: String?): Boolean {
+        // Java 持有域名表，判断是否 fake
+        ...
+    }
     override fun useProxy(network: String?, address: String?): Boolean {
         val chain = Engine.lookup(address) // 叶 → 父，再和已保存的地域 ID 比对
         // 在 Java 打连接日志，例如 "proxy tcp 1.2.3.4:443"
@@ -30,7 +35,7 @@ Engine.areaTree()                   // JSON，形状同桌面 /rule/api/areas
 Engine.lookup(address)              // 该 IP 的地域链（叶 → 父）
 ```
 
-下载 IP 库、选模式和勾选地域都在 Java 完成。Go 打开 db、给树、按 IP 查地域（含上级）；是否走代理由 `Handler.useProxy` 决定，连接日志（`proxy` / `direct`）也在 Java 里打。
+下载 IP 库、选模式和勾选地域都在 Java 完成。域名列表也在 Java：`needFake` 判断是否 fake。上游 DNS 通过 `opt.upstream` 传入（VPN 启动前的系统 DNS）。Go 只拦截 UDP/53 交给 fakeip、对 fake IP 做 Lookup 后按域名走代理；未 fake 的 DNS 直连上游（依赖 Java 的 `protect`，不要 `SetHandleConnect`）。
 
 `Start` 成功后 fd 归 Go；失败时 Java 用 `ParcelFileDescriptor.adoptFd(fd).close()`。`Stop()` 会关掉 fd。出站 socket 必须 `protect`。
 

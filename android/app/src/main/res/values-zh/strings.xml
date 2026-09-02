@@ -91,8 +91,16 @@
     <string name="proxy_stopping">正在停止…</string>
 
     <string name="rules_title">规则</string>
-    <string name="rules_desc">按地域决定直连或走代理。</string>
     <string name="rules_section">规则</string>
+    <string name="rules_entry_domain">域名规则</string>
+    <string name="rules_entry_domain_desc">直接代理指定域名</string>
+    <string name="rules_entry_geo">地域规则</string>
+    <string name="rules_entry_geo_desc">按地域决定直连或走代理</string>
+    <string name="rules_domain_title">域名规则</string>
+    <string name="rules_domain_hint">一行一个域名。填写 google.com 时 www.google.com 也会命中。</string>
+    <string name="rules_domain_placeholder">google.com</string>
+    <string name="rules_domain_count">%1$d 个域名</string>
+    <string name="rules_domain_empty">未设置</string>
     <string name="rules_geo_title">地域规则</string>
     <string name="rules_geo_desc">四种模式互斥：全局代理、全不代理，或代理某些区域，或绕过某些区域。</string>
     <string name="rules_db_label">IP 库</string>

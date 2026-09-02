@@ -36,7 +36,15 @@ object VpnController {
         private set
 
     @Volatile
+    var fakeDomains: Set<String> = emptySet()
+        private set
+
+    @Volatile
     var rules: RuleDraft = RuleDraft()
+        set(value) {
+            field = value
+            fakeDomains = value.domains.toHashSet()
+        }
 
     @Volatile
     private var lastUp = 0L

@@ -91,8 +91,16 @@
     <string name="proxy_stopping">Disconnecting…</string>
 
     <string name="rules_title">Rules</string>
-    <string name="rules_desc">Choose direct or proxy by region.</string>
     <string name="rules_section">Rules</string>
+    <string name="rules_entry_domain">Domain rules</string>
+    <string name="rules_entry_domain_desc">Proxy the listed domains</string>
+    <string name="rules_entry_geo">Geo rules</string>
+    <string name="rules_entry_geo_desc">Choose direct or proxy by region</string>
+    <string name="rules_domain_title">Domain rules</string>
+    <string name="rules_domain_hint">One domain per line. google.com also matches www.google.com.</string>
+    <string name="rules_domain_placeholder">google.com</string>
+    <string name="rules_domain_count">%1$d domains</string>
+    <string name="rules_domain_empty">None</string>
     <string name="rules_geo_title">Geo rules</string>
     <string name="rules_geo_desc">Four exclusive modes: proxy all, proxy none, proxy some regions, or bypass some regions.</string>
     <string name="rules_db_label">IP database</string>

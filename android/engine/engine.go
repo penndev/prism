@@ -9,6 +9,7 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/penndev/prism/fakeip"
 	"github.com/penndev/prism/stack"
 	"github.com/penndev/prism/transport"
 	"github.com/penndev/prism/transport/dialer"
@@ -32,14 +33,16 @@ var (
 // Options is passed to Start. Proxy is a URL:
 // socks5://user:pass@host:port (also socks5s / http / https).
 type Options struct {
-	FD      int32
-	MTU     int32
-	Proxy   string
-	Handler Handler
+	FD       int32
+	MTU      int32
+	Proxy    string
+	Upstream string // VPN 启动前的系统 DNS，给未 fake 的查询用
+	Handler  Handler
 }
 
 // Handler is implemented on the Android side.
 // Protect must wrap VpnService.protect.
+// NeedFake is called from fakeip for each DNS name; Java owns the domain list.
 // UseProxy decides direct vs proxy and should emit the connection log
 // (e.g. "proxy tcp 1.2.3.4:443"). Java looks up the IP (leaf → parent)
 // and matches saved area IDs.
@@ -47,6 +50,7 @@ type Options struct {
 type Handler interface {
 	Protect(fd int32) bool
 	OnLog(line string)
+	NeedFake(name string) bool
 	UseProxy(network, address string) bool
 	OnProxyRead(n int64)
 	OnProxyWrite(n int64)
@@ -88,6 +92,10 @@ func Start(opt *Options) error {
 	}
 
 	installProtect(h)
+	fakeip.SetUpstream(opt.Upstream)
+	fakeip.SetNeedFake(func(name string) bool {
+		return h.NeedFake(name)
+	})
 	stack.New(stack.Option{
 		EndPoint: endpoint,
 		HandleTCP: func(f *stack.ForwarderTCPRequest) {
@@ -118,6 +126,7 @@ func Stop() {
 	tunFD = -1
 	ep = nil
 	handler = nil
+	fakeip.SetNeedFake(nil)
 	mu.Unlock()
 
 	if fd >= 0 {
