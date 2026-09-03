@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 
 	"go.etcd.io/bbolt"
 )
@@ -61,7 +62,19 @@ func (s *Storage) SetServers(servers []ServerEntry) error {
 	if servers == nil {
 		servers = []ServerEntry{}
 	}
-	return s.putJSON(KeyServers, normalizeServers(servers))
+	normalized := normalizeServers(servers)
+	seen := make(map[string]struct{}, len(normalized))
+	out := make([]ServerEntry, 0, len(normalized))
+	for _, v := range normalized {
+		// 和前端 _id 同一套身份：协议+账号+地址相同就是同一条，后写的丢掉。
+		key := v.Protocol + "://" + v.Username + ":" + v.Password + "@" + v.Host
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, v)
+	}
+	return s.putJSON(KeyServers, out)
 }
 
 // GetServers 无记录时返回空切片。
@@ -77,8 +90,15 @@ func (s *Storage) GetServers() ([]ServerEntry, error) {
 	return normalizeServers(out), nil
 }
 
+// ruleCache 让 CachedRuleConfig 不必每次都开 bbolt 事务，写入时由 SetRuleConfig 刷新。
+var ruleCache atomic.Pointer[RuleConfig]
+
 func (s *Storage) SetRuleConfig(v RuleConfig) error {
-	return s.putJSON(KeyRule, v)
+	if err := s.putJSON(KeyRule, v); err != nil {
+		return err
+	}
+	ruleCache.Store(&v)
+	return nil
 }
 
 // GetRuleConfig 无记录时返回 nil, nil。
@@ -89,6 +109,25 @@ func (s *Storage) GetRuleConfig() (*RuleConfig, error) {
 		return nil, err
 	}
 	return &out, nil
+}
+
+// CachedRuleConfig 供连接路径使用：每条连接都要判地域规则，
+// 走 GetRuleConfig 就是每条连接一次 bbolt 只读事务。
+// 返回的 *RuleConfig 是共享只读副本，调用方不要改。
+func (s *Storage) CachedRuleConfig() *RuleConfig {
+	if c := ruleCache.Load(); c != nil {
+		return c
+	}
+	cfg, err := s.GetRuleConfig()
+	if err != nil {
+		return nil
+	}
+	if cfg == nil {
+		// 没存过配置时也要缓存一个空值，否则每条连接还是会去查库
+		cfg = &RuleConfig{}
+	}
+	ruleCache.Store(cfg)
+	return cfg
 }
 
 func (s *Storage) SetSelectedServer(v ServerEntry) error {

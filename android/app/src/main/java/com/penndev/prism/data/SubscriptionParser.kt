@@ -58,10 +58,12 @@ object SubscriptionParser {
 
     private fun parseShadowrocket(text: String): List<ServerItem> {
         val payload = decodeMaybeBase64(text)
+        val seen = mutableSetOf<String>()
         val servers = payload
             .replace("\r\n", "\n")
             .split('\n')
             .mapNotNull { parseShadowrocketLine(it) }
+            .filter { seen.add(it.id) }
         if (servers.isEmpty()) {
             throw SubscriptionException(com.penndev.prism.R.string.subscribe_error_no_nodes)
         }
@@ -73,7 +75,9 @@ object SubscriptionParser {
         val scheme = uri.scheme?.lowercase().orEmpty()
         val protocol = when (scheme) {
             "https" -> "https"
-            "socks5" -> "socks5s"
+            "socks5s" -> "socks5s"
+            // Shadowrocket 的 socks5:// 是明文 SOCKS5；带 TLS 的才是 socks5s://
+            "socks5", "socks" -> "socks5"
             else -> return null
         }
         val hostname = uri.host ?: return null
@@ -115,6 +119,7 @@ object SubscriptionParser {
             throw SubscriptionException(com.penndev.prism.R.string.subscribe_error_json)
         }
         val servers = buildList {
+            val seen = mutableSetOf<String>()
             for (i in 0 until arr.length()) {
                 val obj = arr.optJSONObject(i) ?: continue
                 val host = obj.optString("host").trim()
@@ -122,9 +127,11 @@ object SubscriptionParser {
                 val protocol = normalizeProtocol(obj.optString("protocol", "socks5"))
                 val username = obj.optString("username")
                 val password = obj.optString("password")
+                val id = identity(host, protocol, username, password)
+                if (!seen.add(id)) continue
                 add(
                     ServerItem(
-                        id = identity(host, protocol, username, password),
+                        id = id,
                         host = host,
                         remark = obj.optString("remark"),
                         username = username,

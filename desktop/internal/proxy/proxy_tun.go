@@ -12,6 +12,10 @@ import (
 
 func (p *Proxy) closeTunDev() {
 	route.RestoreDNS()
+	if p.netstack != nil {
+		p.netstack.Close()
+		p.netstack = nil
+	}
 	if p.dev == nil {
 		return
 	}
@@ -21,15 +25,14 @@ func (p *Proxy) closeTunDev() {
 }
 
 func (p *Proxy) startTunDev() error {
-	if p.remoteURL == nil || p.remoteURL.Host == "" {
+	if u := p.remoteURL.Load(); u == nil || u.Host == "" {
 		return errors.New(lang.DefaultLang.T("proxy.tun.noNode"))
 	}
 	if !tunPermission() {
 		return nil
 	}
 	p.closeTunDev()
-	var err error
-	p.dev, err = tun.New(tun.Options{
+	dev, err := tun.New(tun.Options{
 		Name:   TUN_NAME,
 		MTU:    TUN_MTU,
 		Offset: TUN_OFFSET,
@@ -38,22 +41,31 @@ func (p *Proxy) startTunDev() error {
 		internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "tun.New: "+err.Error())
 		return errors.New(lang.DefaultLang.T("proxy.tun.startFailed"))
 	}
-	stack.New(stack.Option{
-		EndPoint: p.dev,
+	netstack, err := stack.New(stack.Option{
+		EndPoint: dev,
 		HandleTCP: func(f *stack.ForwarderTCPRequest) {
-			// internal.App.Event.Emit(internal.AppConfig.LogTypeName_LOG, "tun -> "+f.RemoteAddr.Network()+" "+f.RemoteAddr.String())
 			p.HandleConnect(f.Conn, f.RemoteAddr.Network(), f.RemoteAddr.String())
 		},
 		HandlerUDP: func(f *stack.ForwarderUDPRequest) {
-			// internal.App.Event.Emit(internal.AppConfig.LogTypeName_LOG, "tun -> "+f.RemoteAddr.Network()+" "+f.RemoteAddr.String())
 			p.HandleConnect(f.Conn, f.RemoteAddr.Network(), f.RemoteAddr.String())
 		},
 	})
-	route.Start(route.Options{
-		DevName:      p.dev.Name(),
+	if err != nil {
+		dev.Close()
+		internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "stack.New: "+err.Error())
+		return errors.New(lang.DefaultLang.T("proxy.tun.startFailed"))
+	}
+	p.dev = dev
+	p.netstack = netstack
+	if err := route.Start(route.Options{
+		DevName:      dev.Name(),
 		DevIP:        TUN_IP,
 		DevIP6:       TUN_IP6,
 		RouteAddress: Routes,
-	})
+	}); err != nil {
+		p.closeTunDev()
+		internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "route.Start: "+err.Error())
+		return errors.New(lang.DefaultLang.T("proxy.tun.startFailed"))
+	}
 	return nil
 }

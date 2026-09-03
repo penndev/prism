@@ -57,19 +57,22 @@ const settingsStore = useSettingsStore();
 const serverStore = useServerStore();
 const { token } = theme.useToken();
 
-/** 跟随系统深浅色偏好（settings 为 auto 时生效） */
+/** 跟随系统深浅色偏好（themeMode 为 system 时生效） */
 const colorScheme = window.matchMedia("(prefers-color-scheme: dark)");
 const prefersColor = ref(colorScheme.matches);
+function onColorSchemeChange(e) {
+  prefersColor.value = e.matches;
+}
 
 /** Ant Design 全局主题：深浅色算法 + 按钮去阴影 */
-const antdThemeConfig = computed(() => ({
-  algorithm: [
-    settingsStore.system.themeMode === "dark" || prefersColor.value
-      ? theme.darkAlgorithm
-      : theme.defaultAlgorithm,
-  ],
-  components: { Button: { primaryShadow: "none" } },
-}));
+const antdThemeConfig = computed(() => {
+  const mode = settingsStore.system.themeMode;
+  const dark = mode === "dark" || (mode === "system" && prefersColor.value);
+  return {
+    algorithm: [dark ? theme.darkAlgorithm : theme.defaultAlgorithm],
+    components: { Button: { primaryShadow: "none" } },
+  };
+});
 
 // ---------------------------------------------------------------------------
 // 双栏布局：主栏 ↔ 设置栏宽度规则（单位 px）
@@ -154,8 +157,12 @@ watch(extensionVisible, async (visible) => {
   if (window.innerWidth < SPLIT_MIN_INNER) {
     return;
   }
-  const { height } = await Window.Size();
-  await Window.SetSize(COMPACT_WINDOW_OUTER_WIDTH, height);
+  try {
+    const { height } = await Window.Size();
+    await Window.SetSize(COMPACT_WINDOW_OUTER_WIDTH, height);
+  } finally {
+    applyLayoutToWindow();
+  }
 });
 
 onBeforeMount(async () => {
@@ -165,17 +172,13 @@ onBeforeMount(async () => {
 });
 
 onMounted(async () => {
-  colorScheme.addEventListener("change", function (e) {
-    prefersColor.value = e.matches;
-  });
+  colorScheme.addEventListener("change", onColorSchemeChange);
   applyLayoutToWindow();
   window.addEventListener("resize", applyLayoutToWindow);
 });
 
 onBeforeUnmount(() => {
-  colorScheme.removeEventListener("change", function (e) {
-    prefersColor.value = e.matches;
-  });
+  colorScheme.removeEventListener("change", onColorSchemeChange);
   window.removeEventListener("resize", applyLayoutToWindow);
 });
 </script>

@@ -1,11 +1,12 @@
 package proxy
 
 import (
+	"context"
 	"desktop/internal"
 	"desktop/internal/storage"
 	"net"
+	"time"
 
-	"github.com/penndev/gopkg/ipregion"
 	"github.com/penndev/prism/fakeip"
 	"github.com/penndev/prism/pkg"
 	"github.com/penndev/prism/transport"
@@ -40,7 +41,7 @@ func (p *Proxy) handleConnectHook(handle transport.HandleConnect, callback func(
 		// 验证地域规则
 		if st := storage.DefaultStorage; st != nil {
 			bypass := false
-			if cfg, err := st.GetRuleConfig(); err == nil && cfg != nil {
+			if cfg := st.CachedRuleConfig(); cfg != nil {
 				switch cfg.AreaMode {
 				case "none":
 					bypass = true
@@ -51,7 +52,7 @@ func (p *Proxy) handleConnectHook(handle transport.HandleConnect, callback func(
 				}
 			}
 			if bypass {
-				if internal.App != nil {
+				if callback != nil {
 					callback("bypass -> "+network, address)
 				}
 				return localHandle(conn, network, address)
@@ -70,16 +71,12 @@ func inAreas(address string, areaIDs []uint32) bool {
 	if len(areaIDs) == 0 {
 		return false
 	}
-	if internal.Searcher == nil {
-		path, err := storage.IpregionDBPath()
-		if err != nil {
-			return false
-		}
-		s, err := ipregion.Open(path)
-		if err != nil {
-			return false
-		}
-		internal.Searcher = s
+	path, err := storage.IpregionDBPath()
+	if err != nil {
+		return false
+	}
+	if err := internal.EnsureSearcher(path); err != nil {
+		return false
 	}
 	host, _, err := net.SplitHostPort(address)
 	if err != nil {
@@ -87,13 +84,20 @@ func inAreas(address string, areaIDs []uint32) bool {
 	}
 	ip := net.ParseIP(host)
 	if ip == nil {
-		ips, err := net.LookupIP(host)
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		ips, err := net.DefaultResolver.LookupIP(ctx, "ip", host)
+		cancel()
 		if err != nil || len(ips) == 0 {
 			return false
 		}
 		ip = ips[0]
 	}
-	info, err := internal.Searcher.Find(ip.String())
+	searcher := internal.AcquireSearcher()
+	defer internal.ReleaseSearcher()
+	if searcher == nil {
+		return false
+	}
+	info, err := searcher.Find(ip.String())
 	if err != nil || info.Area.ID == 0 {
 		return false
 	}

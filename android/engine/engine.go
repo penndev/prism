@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net"
 	"net/url"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -18,27 +19,19 @@ import (
 )
 
 var (
-	mu         sync.Mutex
-	ep         gvisorstack.LinkEndpoint
-	tunFD      = -1
-	started    bool
-	origTCP    dialer.Dialer
-	origUDP    dialer.Dialer
-	handler    Handler
+	mu       sync.Mutex
+	ep       gvisorstack.LinkEndpoint
+	netstack *gvisorstack.Stack
+	tunFD    = -1
+	started  bool
+	origTCP  dialer.Dialer
+	origUDP  dialer.Dialer
+	handler  Handler
+
 	errProtect = errors.New("protect failed")
 	errStarted = errors.New("already started")
 	localH     = transport.Local()
 )
-
-// Options is passed to Start. Proxy is a URL:
-// socks5://user:pass@host:port (also socks5s / http / https).
-type Options struct {
-	FD       int32
-	MTU      int32
-	Proxy    string
-	Upstream string // VPN 启动前的系统 DNS，给未 fake 的查询用
-	Handler  Handler
-}
 
 // Handler is implemented on the Android side.
 // Protect must wrap VpnService.protect.
@@ -54,6 +47,16 @@ type Handler interface {
 	UseProxy(network, address string) bool
 	OnProxyRead(n int64)
 	OnProxyWrite(n int64)
+}
+
+// Options is passed to Start. Proxy is a URL:
+// socks5://user:pass@host:port (also socks5s / http / https).
+type Options struct {
+	FD       int32
+	MTU      int32
+	Proxy    string
+	Upstream string // VPN 启动前的系统 DNS，给未 fake 的查询用
+	Handler  Handler
 }
 
 // Start attaches gVisor to a TUN fd and forwards TCP/UDP using opt.Proxy.
@@ -92,11 +95,16 @@ func Start(opt *Options) error {
 	}
 
 	installProtect(h)
-	fakeip.SetUpstream(opt.Upstream)
-	fakeip.SetNeedFake(func(name string) bool {
-		return h.NeedFake(name)
-	})
-	stack.New(stack.Option{
+	// upstream 为空（比如 IPv6-only 网络下取不到 IPv4 DNS）时 SetUpstream 会早退，
+	// 沿用上一次连接留下的值，所以这里显式回落到默认值。
+	upstream := opt.Upstream
+	if strings.TrimSpace(upstream) == "" {
+		upstream = fakeip.DefaultUpstream
+	}
+	fakeip.SetUpstream(upstream)
+	fakeip.SetNeedFake(h.NeedFake)
+
+	s, err := stack.New(stack.Option{
 		EndPoint: endpoint,
 		HandleTCP: func(f *stack.ForwarderTCPRequest) {
 			relay(proxyH, localH, h, f.Conn, f.RemoteAddr.Network(), f.RemoteAddr.String())
@@ -105,15 +113,22 @@ func Start(opt *Options) error {
 			relay(proxyH, localH, h, f.Conn, f.RemoteAddr.Network(), f.RemoteAddr.String())
 		},
 	})
+	if err != nil {
+		fakeip.SetNeedFake(nil)
+		restoreProtect()
+		return err
+	}
 
 	ep = endpoint
+	netstack = s
 	tunFD = int(opt.FD)
 	handler = h
 	started = true
 	return nil
 }
 
-// Stop closes the TUN fd so gVisor dispatch exits.
+// Stop 关掉协议栈和 TUN fd。会阻塞到 gVisor 的 dispatch goroutine 全部退出，
+// 调用方不要放在 Android 主线程上。
 func Stop() {
 	mu.Lock()
 	if !started {
@@ -122,18 +137,29 @@ func Stop() {
 	}
 	fd := tunFD
 	endpoint := ep
+	s := netstack
 	started = false
 	tunFD = -1
 	ep = nil
+	netstack = nil
 	handler = nil
 	fakeip.SetNeedFake(nil)
 	mu.Unlock()
 
+	// 先停协议栈，不再派发新连接
+	if s != nil {
+		s.Close()
+	}
+	// fdbased 的 LinkEndpoint.Close() 是空实现，只能靠关 fd 把阻塞在 readv 的
+	// dispatcher 唤醒，所以顺序必须是「关 fd -> Wait」。
 	if fd >= 0 {
 		_ = unix.Close(fd)
 	}
 	if endpoint != nil {
 		endpoint.Wait()
+	}
+	if s != nil {
+		s.Wait()
 	}
 
 	mu.Lock()

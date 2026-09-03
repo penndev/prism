@@ -8,7 +8,7 @@ import (
 	"net/netip"
 	"net/url"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/penndev/prism/fakeip"
@@ -97,7 +97,7 @@ func probe(cands []net.IP, target string) net.IP {
 	return nil
 }
 
-var dialerOnce sync.Once
+var dialerStarted atomic.Bool
 
 func remoteTarget(u *url.URL) string {
 	if u == nil || u.Host == "" {
@@ -115,59 +115,63 @@ func remoteTarget(u *url.URL) string {
 // updateDialer 由 SetStart 后台启动。等到节点地址后，按「能连上节点」绑定物理网卡。
 // 已绑定的地址还在就保持；休眠导致旧地址暂时消失且新地址探测失败时，不改绑（避免落到 Hyper-V Default Switch）。
 func (p *Proxy) updateDialer() {
-	dialerOnce.Do(func() {
-		for {
-			target := remoteTarget(p.remoteURL)
-			if target == "" {
-				time.Sleep(time.Second)
-				continue
-			}
-			nics := physicalNics()
-			if b, ok := dialer.TCPDialer.(*dialer.BoundDialer); ok {
-				keep := false
-				for _, nic := range nics {
-					if hasIP(nic.v4, b.LocalIPv4) || hasIP(nic.v6, b.LocalIPv6) {
-						keep = true
-						break
-					}
-				}
-				if keep {
-					time.Sleep(5 * time.Second)
-					continue
-				}
-			}
-			var v4, v6 net.IP
-			for _, nic := range nics {
-				p4, p6 := probe(nic.v4, target), probe(nic.v6, target)
-				if p4 == nil && p6 == nil {
-					continue
-				}
-				v4, v6 = p4, p6
-				if v4 == nil && len(nic.v4) > 0 {
-					v4 = nic.v4[0]
-				}
-				if v6 == nil && len(nic.v6) > 0 {
-					v6 = nic.v6[0]
-				}
-				break
-			}
-			if v4 == nil && v6 == nil {
-				time.Sleep(30 * time.Second)
-				continue
-			}
-			if internal.App != nil {
-				internal.App.Event.Emit(
-					internal.AppConfig.LogTypeName_STATUS,
-					fmt.Sprintf("Select Device v4 %v v6 %v", v4, v6),
-				)
-			}
-			d := &dialer.BoundDialer{LocalIPv4: v4, LocalIPv6: v6}
-			dialer.TCPDialer, dialer.UDPDialer = d, d
-			if dns := route.CurrentDNS(TUN_NAME); len(dns) > 0 {
-				fakeip.SetUpstream(dns[0])
-			}
-			fakeip.SetHandleConnect(localHandle)
+	// 这是个不会返回的常驻循环，所以不能用 sync.Once：
+	// Once.Do 会让后来的调用一直阻塞等第一个返回，
+	// 于是每次 SetStart 都在这里漏一个 goroutine。
+	if !dialerStarted.CompareAndSwap(false, true) {
+		return
+	}
+	for {
+		target := remoteTarget(p.remoteURL.Load())
+		if target == "" {
 			time.Sleep(time.Second)
+			continue
 		}
-	})
+		nics := physicalNics()
+		if b, ok := dialer.TCPDialer.(*dialer.BoundDialer); ok {
+			keep := false
+			for _, nic := range nics {
+				if hasIP(nic.v4, b.LocalIPv4) || hasIP(nic.v6, b.LocalIPv6) {
+					keep = true
+					break
+				}
+			}
+			if keep {
+				time.Sleep(5 * time.Second)
+				continue
+			}
+		}
+		var v4, v6 net.IP
+		for _, nic := range nics {
+			p4, p6 := probe(nic.v4, target), probe(nic.v6, target)
+			if p4 == nil && p6 == nil {
+				continue
+			}
+			v4, v6 = p4, p6
+			if v4 == nil && len(nic.v4) > 0 {
+				v4 = nic.v4[0]
+			}
+			if v6 == nil && len(nic.v6) > 0 {
+				v6 = nic.v6[0]
+			}
+			break
+		}
+		if v4 == nil && v6 == nil {
+			time.Sleep(30 * time.Second)
+			continue
+		}
+		if internal.App != nil {
+			internal.App.Event.Emit(
+				internal.AppConfig.LogTypeName_STATUS,
+				fmt.Sprintf("Select Device v4 %v v6 %v", v4, v6),
+			)
+		}
+		d := &dialer.BoundDialer{LocalIPv4: v4, LocalIPv6: v6}
+		dialer.TCPDialer, dialer.UDPDialer = d, d
+		if dns := route.CurrentDNS(TUN_NAME); len(dns) > 0 {
+			fakeip.SetUpstream(dns[0])
+		}
+		fakeip.SetHandleConnect(localHandle)
+		time.Sleep(time.Second)
+	}
 }

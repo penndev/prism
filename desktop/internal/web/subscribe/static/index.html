@@ -116,6 +116,7 @@
     }
 
     function applyI18n() {
+      document.documentElement.lang = currentLang;
       document.title = t('title.document');
       document.getElementById('titleMain').textContent = t('title.main');
       document.getElementById('titleDesc').textContent = t('title.desc');
@@ -168,8 +169,9 @@
       if (!Array.isArray(data)) {
         throw new Error(t('error.jsonArrayRequired'));
       }
-      const seen = new Map();
-      return data.map((item, idx) => {
+      const seen = new Set();
+      const out = [];
+      data.forEach((item, idx) => {
         if (item == null || typeof item !== 'object') {
           throw new Error(t('error.itemNotObject', { index: idx + 1 }));
         }
@@ -181,19 +183,13 @@
         const username = String(item.username || '').trim();
         const password = String(item.password || '');
         const protocol = String(item.protocol || 'http').trim().toLowerCase();
-        const base = host + '|' + protocol + '|' + username + '|' + password;
-        const n = (seen.get(base) || 0) + 1;
-        seen.set(base, n);
-        const id = n > 1 ? base + '#' + n : base;
-        return {
-          id,
-          host,
-          remark,
-          username,
-          password,
-          protocol
-        };
+        // 和桌面列表的 _id 同一套身份，重复的不进列表。
+        const id = protocol + '://' + username + ':' + password + '@' + host;
+        if (seen.has(id)) return;
+        seen.add(id);
+        out.push({ id, host, remark, username, password, protocol });
       });
+      return out;
     }
 
     function showImportPreview(serversToPreview, sourceLabel = '') {
@@ -239,21 +235,34 @@
       const visibleServers = getFilteredServers();
       visibleServers.forEach(s => {
         const tr = document.createElement('tr');
-        const checked = s.id && selectedIds.has(s.id);
+        const checked = !!(s.id && selectedIds.has(s.id));
         if (checked) tr.classList.add('selected');
-        tr.innerHTML =
-          '<td class="check-col"><input type="checkbox" data-id="' + escapeHtml(s.id || '') + '"' + (checked ? ' checked' : '') + '></td>' +
-          '<td>' + escapeHtml(s.host || '') + '</td>' +
-          '<td>' + escapeHtml(s.remark || '') + '</td>' +
-          '<td>' + escapeHtml(s.username || '') + '</td>' +
-          '<td>' + escapeHtml(s.protocol || '') + '</td>';
-        const checkbox = tr.querySelector('input[type="checkbox"]');
+
+        // 逐个单元格用 textContent 赋值，不拼 HTML 字符串。
+        // host / remark / username / id 都来自远端订阅链接，
+        // 拼进属性时引号会被跳脱出来（textContent + innerHTML 不转义 " 和 '）。
+        const checkTd = document.createElement('td');
+        checkTd.className = 'check-col';
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = checked;
+        checkTd.appendChild(checkbox);
+        tr.appendChild(checkTd);
+
+        for (const value of [s.host, s.remark, s.username, s.protocol]) {
+          const td = document.createElement('td');
+          td.textContent = value || '';
+          tr.appendChild(td);
+        }
+
         checkbox.onclick = (e) => {
           e.stopPropagation();
           const id = s.id || '';
           if (!id) return;
           if (checkbox.checked) selectedIds.add(id);
           else selectedIds.delete(id);
+          // 点复选框也要跟着更新行高亮，否则和点整行的效果不一致
+          tr.classList.toggle('selected', checkbox.checked);
           syncStats(visibleServers);
         };
         tr.onclick = () => {
@@ -266,12 +275,6 @@
         body.appendChild(tr);
       });
       syncStats(visibleServers);
-    }
-
-    function escapeHtml(str) {
-      const d = document.createElement('div');
-      d.textContent = str;
-      return d.innerHTML;
     }
 
     async function refreshServers(notify = false) {
@@ -330,12 +333,18 @@
     }
 
     async function deleteSelected() {
+      const backupServers = servers;
+      const backupSelected = selectedIds;
       try {
         if (selectedIds.size === 0) throw new Error(t('error.selectFirst'));
         servers = servers.filter(s => !s.id || !selectedIds.has(s.id));
         selectedIds = new Set();
-        await persistServers(t('toast.deletedSelected'));
-        renderServers();
+        // 写入失败要还原，否则页面显示已删除而服务端数据还在
+        if (!await persistServers(t('toast.deletedSelected'))) {
+          servers = backupServers;
+          selectedIds = backupSelected;
+          renderServers();
+        }
       } catch (e) {
         showMsg(e.message, true);
       }

@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"fmt"
 	"net/url"
 	"strings"
 
@@ -53,7 +54,7 @@ func (a AppConst) OpenExternalURL(rawURL string) error {
 		return err
 	}
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return nil
+		return fmt.Errorf("unsupported scheme: %s", parsed.Scheme)
 	}
 	return browser.OpenURL(parsed.String())
 }

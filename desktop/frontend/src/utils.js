@@ -1,13 +1,13 @@
 export function debounce(fn, delay = 1000) {
-  let timer = null
+  let timer = null;
 
   return (...args) => {
-    clearTimeout(timer)
+    clearTimeout(timer);
 
     timer = setTimeout(() => {
-      fn(...args)
-    }, delay)
-  }
+      fn(...args);
+    }, delay);
+  };
 }
 
 /**
@@ -69,12 +69,13 @@ export function canonicalProtocol(raw) {
 export function extendServerItem(row) {
   const persisted = stripForStorage(row);
   const protocol = canonicalProtocol(persisted.protocol);
-  const username = persisted.username || "";
-  const password = persisted.password || "";
+  // 账号密码必须编码：含 @ : / 会让后端 url.Parse 解析出错误的 host，含非法 % 转义会直接报错。
+  const username = encodeURIComponent(persisted.username || "");
+  const password = encodeURIComponent(persisted.password || "");
   return {
     ...persisted,
     protocol,
-    _id: `${protocol.toLowerCase()}://${username}:${password}@${persisted.host}`,
+    _id: `${protocol}://${username}:${password}@${persisted.host}`,
     ...(row._latency !== undefined ? { _latency: row._latency } : {}),
   };
 }

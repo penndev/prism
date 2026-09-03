@@ -2,9 +2,13 @@ import { defineStore } from "pinia";
 import { Storage } from "@bindings/desktop/internal/storage";
 import { notification } from "ant-design-vue";
 import { debounce } from "@/utils";
-import { t, subscribeLocaleEvents, languageLocale } from "@/locale";
-import { Bundle } from "@bindings/desktop/internal/lang/lang";
+import { t, subscribeLocaleEvents } from "@/locale";
+import { SetLocale } from "@bindings/desktop/internal/lang/lang";
 import { Enable, Disable } from "@bindings/desktop/internal/autostart/autostart";
+
+// 已生效的值。save() 每次改动都会跑，只有这两项真正变化时才需要动后端语言和注册表启动项。
+let appliedLanguage = null;
+let appliedStartupOnBoot = null;
 
 export const useSettingsStore = defineStore("settings", {
   state: () => ({
@@ -24,7 +28,22 @@ export const useSettingsStore = defineStore("settings", {
       startupOnBoot: false,
       enableLogRecording: false,
     },
+    proxyMode: "manual",
   }),
+
+  getters: {
+    /** 本地代理 Web 服务根地址（规则页/订阅页都用它）；端口非法时为空串 */
+    webBaseURL(state) {
+      const rawHost = (state.proxy.host || "").trim();
+      const host =
+        rawHost === "0.0.0.0" || rawHost === "" ? "127.0.0.1" : rawHost;
+      const port = Number(state.proxy.port);
+      if (!Number.isInteger(port) || port < 1 || port > 65535) {
+        return "";
+      }
+      return `http://${host}:${port}`;
+    },
+  },
 
   actions: {
     /** 将 state 持久化到存储 */
@@ -34,20 +53,17 @@ export const useSettingsStore = defineStore("settings", {
           proxy: this.proxy,
           latencyTest: this.latencyTest,
           system: this.system,
+          proxyMode: this.proxyMode,
         });
-        // 设置切换语言环境
-        languageLocale.value = await Bundle(
-          this.system.language
-        );
-        if (this.system.startupOnBoot) {
-          await Enable();
-        } else {
-          await Disable();
+        if (this.system.language !== appliedLanguage) {
+          appliedLanguage = this.system.language;
+          // 前端文案和托盘文案都由后端的 localeChanged 事件驱动，这里只负责通知后端
+          await SetLocale(this.system.language);
         }
-        notification.success({
-          message: t("settings.saveSuccess"),
-          placement: "topRight",
-        });
+        if (this.system.startupOnBoot !== appliedStartupOnBoot) {
+          appliedStartupOnBoot = this.system.startupOnBoot;
+          await (this.system.startupOnBoot ? Enable() : Disable());
+        }
       } catch (error) {
         notification.error({
           message: t("settings.saveError"),
@@ -73,20 +89,17 @@ export const useSettingsStore = defineStore("settings", {
           const storedLatencyTest = storedSettings.latencyTest ?? {};
           this.latencyTest = {
             ...this.latencyTest,
-            host:
-              storedLatencyTest.host ??
-              storedProxy.latencyTestHost ??
-              this.latencyTest.host,
+            host: storedLatencyTest.host ?? this.latencyTest.host,
             sortAfterPing:
-              storedLatencyTest.sortAfterPing ??
-              storedProxy.sortByLatencyAfterPing ??
-              this.latencyTest.sortAfterPing,
+              storedLatencyTest.sortAfterPing ?? this.latencyTest.sortAfterPing,
           };
 
           this.system = {
             ...this.system,
             ...(storedSettings.system ?? {}),
           };
+
+          this.proxyMode = storedSettings.proxyMode || this.proxyMode;
         }else{
           // 强制设置默认语言环境
           if(navigator.language.startsWith("zh")){
@@ -95,16 +108,12 @@ export const useSettingsStore = defineStore("settings", {
             this.system.language = "en";
           }
         }
-        const save = debounce(this.save, 800)
-        this.$subscribe(save);
         // 设置初始语言与开机启动
-        console.log("初始语言", this.system.language);
+        appliedLanguage = this.system.language;
+        appliedStartupOnBoot = this.system.startupOnBoot;
         await subscribeLocaleEvents(this.system.language);
-        if (this.system.startupOnBoot) {
-          await Enable();
-        } else {
-          await Disable();
-        }
+        await (this.system.startupOnBoot ? Enable() : Disable());
+        this.$subscribe(debounce(this.save, 800));
       } catch (error) {
         notification.error({
           message: t("settings.loadError"),

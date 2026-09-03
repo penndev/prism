@@ -6,7 +6,7 @@
           type="text"
           size="small"
           class="card-extra-btn"
-          :disabled="!webBaseURL"
+          :disabled="!settingsStore.webBaseURL"
           @click="openRuleEditor"
         >
           <FilterOutlined />
@@ -14,48 +14,48 @@
       </a-tooltip>
     </template>
 
-    <!-- 当前选中的代理服务器 -->
-    <div class="proxy-current-server">
-      <span class="proxy-label">{{ t("proxy.currentServerLabel") }}</span>
-      <span class="proxy-value">
-        {{
-          serverStore.selectedServer?.remark ||
-          serverStore.selectedServer?.host ||
-          t("proxy.noSelectedServer")
-        }}
+    <div v-if="!serverStore.selectedServer" class="proxy-empty">
+      <span class="proxy-empty-icon">
+        <CloudServerOutlined />
       </span>
-      <a-button
-        v-if="serverStore.selectedServer"
-        type="link"
-        size="small"
-        danger
-        @click="serverStore.selectedServer = null"
-      >
-        {{ t("proxy.removeButton") }}
-      </a-button>
+      <span class="proxy-empty-text">{{ t("proxy.selectTip") }}</span>
     </div>
 
-    <!-- 未选服务器时的提示 -->
-    <div v-if="!serverStore.selectedServer" class="proxy-mode-tip">
-      {{ t("proxy.selectTip") }}
-    </div>
+    <template v-else>
+      <div class="proxy-current-server">
+        <span class="proxy-label">{{ t("proxy.currentServerLabel") }}</span>
+        <span class="proxy-value">
+          {{
+            serverStore.selectedServer.remark ||
+            serverStore.selectedServer.host
+          }}
+        </span>
+        <a-button
+          type="link"
+          size="small"
+          danger
+          @click="serverStore.selectedServer = null"
+        >
+          {{ t("proxy.removeButton") }}
+        </a-button>
+      </div>
 
-    <!-- 代理模式：手动 / TUN -->
-    <a-radio-group v-model:value="proxyMode" class="proxy-mode-group">
-      <a-radio-button value="manual">
-        {{ t("proxy.mode.manual") }}
-      </a-radio-button>
-      <a-radio-button value="tun">
-        {{ t("proxy.mode.tun") }}
-      </a-radio-button>
-    </a-radio-group>
+      <a-radio-group v-model:value="proxyMode" class="proxy-mode-group">
+        <a-radio-button value="manual">
+          {{ t("proxy.mode.manual") }}
+        </a-radio-button>
+        <a-radio-button value="tun">
+          {{ t("proxy.mode.tun") }}
+        </a-radio-button>
+      </a-radio-group>
+    </template>
   </a-card>
 </template>
 
 <script setup>
-import { ref, watch, computed } from "vue";
+import { ref, watch } from "vue";
 import { theme, message } from "ant-design-vue";
-import { FilterOutlined } from "@ant-design/icons-vue";
+import { CloudServerOutlined, FilterOutlined } from "@ant-design/icons-vue";
 
 import { useServerStore } from "../stores/server";
 import { useSettingsStore } from "@/stores/settings";
@@ -76,72 +76,53 @@ const serverStore = useServerStore();
 
 const proxyMode = ref("manual");
 
-/** 本地代理 Web 服务根地址，用于打开规则编辑器 */
-const webBaseURL = computed(() => {
-  const rawHost = (settingsStore.proxy.host || "").trim();
-  const host =
-    rawHost === "0.0.0.0" || rawHost === "" ? "127.0.0.1" : rawHost;
-  const port = Number(settingsStore.proxy.port);
-
-  if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    return "";
-  }
-
-  return `http://${host}:${port}`;
-});
-
 /** 在浏览器中打开规则编辑器 */
 async function openRuleEditor() {
-  if (!webBaseURL.value) {
+  if (!settingsStore.webBaseURL) {
     message.warning(t("settings.pacNeedPort"));
     return;
   }
 
   try {
-    await OpenExternalURL(`${webBaseURL.value}/rule/`);
+    await OpenExternalURL(`${settingsStore.webBaseURL}/rule/`);
   } catch (e) {
     message.error(e?.message || t("settings.pacOpenFailed"));
   }
 }
 
-/** 切换代理模式时通知后端 SetMode */
-watch(
-  proxyMode,
-  async (mode, prevMode) => {
-    const revert = prevMode ?? "manual";
-    try {
-      await SetMode(mode);
-    } catch (e) {
-      if (mode !== revert) {
-        proxyMode.value = revert;
-      }
-      message.error(e?.message ?? "");
+/** 切换代理模式时通知后端 SetMode 并持久化 */
+watch(proxyMode, async (mode, prevMode) => {
+  const revert = prevMode ?? "manual";
+  try {
+    await SetMode(mode);
+    settingsStore.proxyMode = mode;
+  } catch (e) {
+    if (mode !== revert) {
+      proxyMode.value = revert;
     }
-  },
-  { immediate: true },
-);
+    message.error(e?.message ?? "");
+  }
+});
 
 /** 选中/取消服务器时：持久化选择并设置/停止远程代理 */
-watch(
-  () => serverStore.selectedServer,
-  async (server) => {
-    try {
-      if (server?.host && server?.protocol) {
-        await Storage.SetSelectedServer(server);
-        await SetRemote(extendServerItem(server)._id);
-      } else {
-        // 清理选中服务器，下次启动不自动登录了。
-        await Storage.ClearSelectedServer();
-        // await SetStop(); web服务需要一直驻留。
-      }
-    } catch (e) {
-      message.error(e?.message || t("serverList.operationFailed"));
+async function applySelectedServer(server) {
+  try {
+    if (server?.host && server?.protocol) {
+      await Storage.SetSelectedServer(server);
+      await SetRemote(extendServerItem(server)._id);
+    } else {
+      // 本地监听要一直开着给 web 管理页用，只卸掉远程节点。
+      await Storage.ClearSelectedServer();
+      await SetRemote("");
+      proxyMode.value = "manual";
     }
-  },
-  { immediate: true },
-);
+  } catch (e) {
+    message.error(e?.message || t("serverList.operationFailed"));
+  }
+}
+watch(() => serverStore.selectedServer, applySelectedServer);
 
-/** 本地代理监听地址变更时重启 SetStart；首次立即执行（节点已在 store.init 里恢复）。 */
+/** 本地代理监听地址变更时重启 SetStart */
 async function startLocalProxy() {
   const { host, port, username, password } = settingsStore.proxy;
   try {
@@ -151,7 +132,14 @@ async function startLocalProxy() {
   }
 }
 watch(() => settingsStore.proxy, debounce(startLocalProxy, 1000), { deep: true });
-startLocalProxy();
+
+// 启动顺序必须是 本地监听 -> 远程节点 -> 恢复代理模式：
+// 后端 startTunDev 要求远程节点已就绪，否则恢复 tun 模式会直接被拒。
+(async () => {
+  await startLocalProxy();
+  await applySelectedServer(serverStore.selectedServer);
+  proxyMode.value = settingsStore.proxyMode || "manual";
+})();
 </script>
 
 <style lang="scss" scoped>
@@ -204,11 +192,34 @@ startLocalProxy();
     }
   }
 
-  /* 未选服务器提示 */
-  .proxy-mode-tip {
-    font-size: 13px;
-    color: v-bind("token.colorTextSecondary");
-    padding: 4px 0;
+  .proxy-empty {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 56px;
+    padding: 10px 12px;
+    background: v-bind("token.colorFillAlter");
+    border: 1px dashed v-bind("token.colorBorder");
+    border-radius: 8px;
+
+    .proxy-empty-icon {
+      flex-shrink: 0;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: v-bind("token.colorPrimaryBg");
+      color: v-bind("token.colorPrimary");
+      font-size: 16px;
+    }
+
+    .proxy-empty-text {
+      font-size: 13px;
+      line-height: 1.45;
+      color: v-bind("token.colorTextSecondary");
+    }
   }
 
   /* 模式切换按钮组 */

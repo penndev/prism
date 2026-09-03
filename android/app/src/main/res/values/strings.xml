@@ -61,6 +61,7 @@
     <string name="server_list_delete_success">Deleted</string>
     <string name="server_list_update_success">Updated successfully</string>
     <string name="server_list_add_success">Added successfully</string>
+    <string name="server_list_duplicate">A node with the same protocol, credentials and address already exists</string>
     <string name="server_list_ping_failed">Ping failed</string>
     <string name="server_list_ping_all">Test all latency</string>
     <string name="server_list_ping_all_done">Latency test finished for all nodes</string>

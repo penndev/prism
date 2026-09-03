@@ -61,6 +61,7 @@
     <string name="server_list_delete_success">已删除</string>
     <string name="server_list_update_success">修改成功</string>
     <string name="server_list_add_success">添加成功</string>
+    <string name="server_list_duplicate">已存在相同协议、账号和地址的节点</string>
     <string name="server_list_ping_failed">测速失败</string>
     <string name="server_list_ping_all">测试全部延迟</string>
     <string name="server_list_ping_all_done">全部节点测速完成</string>

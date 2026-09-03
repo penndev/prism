@@ -6,8 +6,10 @@ import (
 	"net/http"
 )
 
+// 路由表与内嵌文件服务器只需建一次，不要每个请求重建。
+var router = newRouter()
+
 func Route(w http.ResponseWriter, r *http.Request) {
-	router := newRouter()
 	router.ServeHTTP(w, r)
 }
 

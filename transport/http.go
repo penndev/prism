@@ -10,7 +10,6 @@ import (
 	"net/url"
 
 	"github.com/penndev/gopkg/util"
-	"github.com/penndev/prism/transport/dialer"
 )
 
 func httpConnet(conn, remote net.Conn, user, pass, address string) error {
@@ -67,49 +66,27 @@ func Http(host, user, pass string) HandleConnect {
 		if network != "tcp" {
 			return localHandle(conn, network, address)
 		}
-		// 1. 拨号到底层代理服务器
-		var remote net.Conn
-		var err error
-		if isLoopback(host) {
-			remote, err = net.Dial("tcp", host)
-		} else {
-			remote, err = dialer.TCPDialer.Dial("tcp", host)
-		}
+		remote, err := dialProxy(host)
 		if err != nil {
 			return err
 		}
-
 		return httpConnet(conn, remote, user, pass, address)
 	}
 }
 
 func HttpOverTLS(host, user, pass string, conf *tls.Config) HandleConnect {
+	tlsConf := tlsConfigFor(host, conf)
 	return func(conn net.Conn, network, address string) error {
 		if network != "tcp" {
 			return localHandle(conn, network, address)
 		}
-		// 1. 拨号到底层代理服务器
-		var dialTCP net.Conn
-		var err error
-		if isLoopback(host) {
-			dialTCP, err = net.Dial("tcp", host)
-		} else {
-			dialTCP, err = dialer.TCPDialer.Dial("tcp", host)
-		}
+		dialTCP, err := dialProxy(host)
 		if err != nil {
 			return err
 		}
-
-		if conf.ServerName == "" && !conf.InsecureSkipVerify {
-			domain, _, err := net.SplitHostPort(host)
-			if err != nil {
-				conf.InsecureSkipVerify = true
-			} else {
-				conf.ServerName = domain
-			}
-		}
-		remoteTLS := tls.Client(dialTCP, conf)
-		if err = remoteTLS.Handshake(); err != nil {
+		remoteTLS := tls.Client(dialTCP, tlsConf)
+		if err := remoteTLS.Handshake(); err != nil {
+			remoteTLS.Close()
 			return err
 		}
 		return httpConnet(conn, remoteTLS, user, pass, address)

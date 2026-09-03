@@ -1,7 +1,7 @@
 package stack
 
 import (
-	"log"
+	"fmt"
 	"net"
 	"runtime"
 
@@ -35,7 +35,9 @@ type Option struct {
 	EndPoint   stack.LinkEndpoint
 }
 
-func New(option Option) {
+// New 建好协议栈并挂上转发器。返回的 *stack.Stack 由调用方负责 Close，
+// 不返回的话每次切换 tun 都会漏掉一整个 netstack（含其内部 goroutine）。
+func New(option Option) (*stack.Stack, error) {
 	s := stack.New(stack.Options{
 		NetworkProtocols: []stack.NetworkProtocolFactory{
 			ipv4.NewProtocol,
@@ -50,9 +52,18 @@ func New(option Option) {
 	})
 
 	nicID := tcpip.NICID(s.NextNICID())
-	s.CreateNICWithOptions(nicID, option.EndPoint, stack.NICOptions{})
-	s.SetPromiscuousMode(nicID, true)
-	s.SetSpoofing(nicID, true)
+	if err := s.CreateNICWithOptions(nicID, option.EndPoint, stack.NICOptions{}); err != nil {
+		s.Close()
+		return nil, fmt.Errorf("create nic: %s", err)
+	}
+	if err := s.SetPromiscuousMode(nicID, true); err != nil {
+		s.Close()
+		return nil, fmt.Errorf("promiscuous mode: %s", err)
+	}
+	if err := s.SetSpoofing(nicID, true); err != nil {
+		s.Close()
+		return nil, fmt.Errorf("spoofing: %s", err)
+	}
 	s.SetRouteTable([]tcpip.Route{
 		{Destination: header.IPv4EmptySubnet, NIC: nicID},
 		{Destination: header.IPv6EmptySubnet, NIC: nicID},
@@ -61,7 +72,8 @@ func New(option Option) {
 	// Windows 上 RACK 会让 gVisor TCP 严重掉速，sing-tun / sing-box 同样关掉。
 	if runtime.GOOS == "windows" {
 		if err := s.SetTransportProtocolOption(tcp.ProtocolNumber, new(tcpip.TCPRecovery)); err != nil {
-			log.Fatal("TCPRecovery: ", err)
+			s.Close()
+			return nil, fmt.Errorf("disable RACK: %s", err)
 		}
 	}
 
@@ -114,4 +126,5 @@ func New(option Option) {
 		})
 		s.SetTransportProtocolHandler(udp.ProtocolNumber, udpForwarder.HandlePacket)
 	}
+	return s, nil
 }

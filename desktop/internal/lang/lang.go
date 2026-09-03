@@ -82,10 +82,11 @@ func (l *Lang) CurrentLocale() string {
 
 // SetLocale 切换语言并向前端派发 localeChanged 事件。
 func (l *Lang) SetLocale(locale string) error {
+	l.mu.Lock()
 	if l.locale == locale {
+		l.mu.Unlock()
 		return nil
 	}
-	l.mu.Lock()
 	if _, ok := l.bundles[locale]; !ok {
 		l.mu.Unlock()
 		return errors.New("locale not found: " + locale)

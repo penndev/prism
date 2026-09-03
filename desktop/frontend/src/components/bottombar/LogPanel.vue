@@ -21,10 +21,8 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue";
+import { ref, computed, onMounted, onBeforeUnmount } from "vue";
 import { Events } from "@wailsio/runtime";
-import { storeToRefs } from "pinia";
-import { useSettingsStore } from "@/stores/settings";
 import { CloseOutlined } from "@ant-design/icons-vue";
 import { t } from "@/locale";
 import { theme } from "ant-design-vue";
@@ -40,7 +38,6 @@ defineProps({
   startResize: Function,
 });
 
-const { system } = storeToRefs(useSettingsStore());
 const lines = ref([]);
 
 const displayText = computed(
@@ -57,8 +54,8 @@ onMounted(async () => {
     const appConst = await AppConfig();
     connectionEventOff = Events.On( 
       appConst.LogTypeName_LOG,
+      // 整个 BottomBar 挂在 enableLogRecording 的 v-if 下，这里不用再判一次
       (eventPayload) => {
-        if (!system.value.enableLogRecording) return;
         lines.value.push(String(eventPayload.data));
         if (lines.value.length > MAX_LOG_LINES) {
           lines.value.shift();

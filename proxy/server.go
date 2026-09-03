@@ -25,6 +25,7 @@ func (s *Server) handleConn(conn *Conn) {
 	buf, err := conn.Peek(1)
 	if err != nil {
 		log.Println("read failed: ", err)
+		conn.Close()
 		return
 	}
 	if buf[0] == 0x05 {
@@ -50,45 +51,46 @@ func (s *Server) initSocks5Server() {
 		Username: s.Username,
 		Password: s.Password,
 		HandleConnect: func(c net.Conn, req socks5.Requests, rep socks5.HandleReply) error {
-			var err error
 			host := req.Addr()
-			network := ""
+			var network string
 			switch req.CMD {
 			case socks5.CMD_CONNECT:
 				network = "tcp"
 			case socks5.CMD_UDP_ASSOCIATE:
 				network = "udp"
 			default:
+				// 这里不 return 就会紧接着再回一个 REP_SUCCEEDED，
+				// 并且拿空 network 去调 HandleConnect。
 				rep(socks5.REP_COMMAND_NOT_SUPPORTED)
+				return nil
 			}
 			rep(socks5.REP_SUCCEEDED)
-			err = s.HandleConnect(c, network, host)
-			return err
+			return s.HandleConnect(c, network, host)
 		},
 	}
 	go s.socks5Server.UDPListen()
 }
 
 func (s *Server) ListenAndServe() error {
-	var err error
-	s.ln, err = net.Listen("tcp", s.Addr)
+	ln, err := net.Listen("tcp", s.Addr)
 	if err != nil {
 		return err
 	}
-	defer s.ln.Close()
+	s.ln = ln
+	defer ln.Close()
 	s.initSocks5Server()
 	for {
-		conn, err := s.ln.Accept()
+		conn, err := ln.Accept()
 		if err != nil {
+			// Close() 关掉监听后走这里，属于正常退出
 			if errors.Is(err, net.ErrClosed) {
-				break
+				return nil
 			}
 			log.Println("accept failed: ", err)
 			continue
 		}
 		go s.handleConn(NewConn(conn))
 	}
-	return err
 }
 
 func New(addr, username, password string) *Server {

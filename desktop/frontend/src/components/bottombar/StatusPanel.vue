@@ -6,7 +6,7 @@
       @mousedown="startResize($event)"
     />
     <div class="panel-header">
-      <span>{{ t('log.statusTitle') }}</span>
+      <span>{{ t("log.statusTitle") }}</span>
       <div class="panel-actions">
         <a-button type="text" size="small" @click="clearStatus">
           {{ t("log.clear") }}
@@ -36,25 +36,27 @@ defineProps({
   startResize: Function,
 });
 
-const statusText = ref("");
+const MAX_STATUS_LINES = 1000;
+
+const lines = ref([]);
 const displayText = computed(
-  () => statusText.value || t("log.statusEmpty"),
+  () => lines.value.join("\n") || t("log.statusEmpty"),
 );
 
 function clearStatus() {
-  statusText.value = "";
+  lines.value = [];
 }
 
 let statusEventOff = null;
 onMounted(async () => {
   try {
     const appConst = await AppConfig();
-    statusEventOff = Events.On(
-      appConst.LogTypeName_STATUS,
-      (eventPayload) => {
-        statusText.value += String(eventPayload.data) + "\n";
-      },
-    );
+    statusEventOff = Events.On(appConst.LogTypeName_STATUS, (eventPayload) => {
+      lines.value.push(String(eventPayload.data));
+      if (lines.value.length > MAX_STATUS_LINES) {
+        lines.value.shift();
+      }
+    });
   } catch (e) {
     console.error("[StatusPanel] AppConfig() failed:", e);
   }

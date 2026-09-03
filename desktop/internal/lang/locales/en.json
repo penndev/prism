@@ -60,6 +60,7 @@
   "serverList.loadFailed": "Failed to load nodes",
   "serverList.updateSuccess": "Updated successfully",
   "serverList.addSuccess": "Added successfully",
+  "serverList.duplicateServer": "A node with the same protocol, credentials and address already exists",
   "serverList.operationFailed": "Operation failed",
   "serverList.pingFailed": "Ping failed",
   "serverList.pingAll": "Test all latency",

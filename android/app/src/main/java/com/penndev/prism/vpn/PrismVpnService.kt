@@ -17,32 +17,49 @@ import com.penndev.prism.data.GeoMode
 import com.penndev.prism.engine.Engine
 import com.penndev.prism.engine.Handler
 import com.penndev.prism.engine.Options
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 class PrismVpnService : VpnService() {
     private val running = AtomicBoolean(false)
 
+    // Engine.start / Engine.stop 都是阻塞调用（stop 要等 gVisor 的 dispatch goroutine 退出），
+    // establish() 同样可能耗时，放在主线程会 ANR。
+    // 单线程执行器顺带保证启动和停止不会交错。
+    private val worker = Executors.newSingleThreadExecutor()
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            VpnController.ACTION_STOP -> stopTunnel()
-            else -> startTunnel()
+            VpnController.ACTION_STOP -> worker.execute { stopTunnel() }
+            else -> {
+                // startForegroundService 之后必须尽快进前台，不能排队等工作线程
+                startAsForeground()
+                worker.execute { startTunnel() }
+            }
         }
         return START_NOT_STICKY
     }
 
     override fun onDestroy() {
-        stopTunnel()
+        worker.execute { stopTunnel() }
+        worker.shutdown()
+        // 给收尾留点时间，但不能无限占着主线程
+        runCatching { worker.awaitTermination(SHUTDOWN_WAIT_MS, TimeUnit.MILLISECONDS) }
         super.onDestroy()
     }
 
     override fun onRevoke() {
-        stopTunnel()
+        worker.execute { stopTunnel() }
         super.onRevoke()
     }
 
     private fun startTunnel() {
-        if (running.get()) return
-        startAsForeground()
+        if (running.get()) {
+            // 已经在跑了，也要回一次状态，否则 UI 的 vpnBusy 复位不了
+            VpnController.markRunning(true)
+            return
+        }
 
         val server = VpnController.session
         if (server == null) {
@@ -60,7 +77,7 @@ class PrismVpnService : VpnService() {
             .setMtu(MTU)
             .addAddress(TUN_IPV4, 32)
             .addRoute("0.0.0.0", 0)
-            .addDnsServer("114.114.114.114")
+            .addDnsServer(TUN_DNS)
             .setBlocking(true)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             builder.setMetered(false)
@@ -74,8 +91,9 @@ class PrismVpnService : VpnService() {
             return
         }
 
+        // detachFd 之后这个 fd 归 Go 侧所有，由 Engine.stop() 负责关闭；
+        // pfd 本身已经不持有它了，不用也不能再 close。
         val fd = pfd.detachFd()
-        pfd.close()
         VpnController.uploadBytes.set(0)
         VpnController.downloadBytes.set(0)
         try {
@@ -103,6 +121,7 @@ class PrismVpnService : VpnService() {
     private fun stopTunnel() {
         if (!running.getAndSet(false)) {
             VpnController.markRunning(false)
+            stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
             return
         }
@@ -233,5 +252,12 @@ class PrismVpnService : VpnService() {
         private const val NOTIFICATION_ID = 1
         private const val MTU = 1500
         private const val TUN_IPV4 = "172.19.0.1"
+
+        // 只是告诉系统「隧道内的 DNS 服务器是这个地址」。
+        // 实际上所有目标端口 53 的 UDP 都在 Go 侧被 fakeip 无条件劫持，不看目标 IP，
+        // 真正的上游是 VPN 启动前抓到的系统 DNS（见 systemDnsIpv4）。
+        private const val TUN_DNS = "114.114.114.114"
+
+        private const val SHUTDOWN_WAIT_MS = 2000L
     }
 }

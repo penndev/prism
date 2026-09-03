@@ -8,19 +8,24 @@ import com.penndev.prism.data.ServerItem
 import com.penndev.prism.data.TrafficUi
 import com.penndev.prism.data.formatBytes
 import java.util.concurrent.atomic.AtomicLong
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.asStateFlow
 
 object VpnController {
     const val ACTION_START = "com.penndev.prism.vpn.START"
     const val ACTION_STOP = "com.penndev.prism.vpn.STOP"
 
-    private val _running = MutableStateFlow(false)
-    val running: StateFlow<Boolean> = _running.asStateFlow()
+    // 用 SharedFlow 而不是 StateFlow：Service 的所有启动失败分支和重复停止分支
+    // 都是在 _running 已经是 false 的情况下再写一次 false，StateFlow 会去重、
+    // 不发射，于是 UI 侧的 vpnBusy 永远复位不了，开关卡死。
+    // replay = 1 保留「当前状态」语义，晚订阅的收集者仍能拿到最后一次的值。
+    private val _running = MutableSharedFlow<Boolean>(
+        replay = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+    val running: SharedFlow<Boolean> = _running.asSharedFlow()
 
     private val _status = MutableSharedFlow<String>(extraBufferCapacity = 64)
     val status: SharedFlow<String> = _status.asSharedFlow()
@@ -63,7 +68,7 @@ object VpnController {
     }
 
     fun markRunning(value: Boolean) {
-        _running.value = value
+        _running.tryEmit(value)
         if (!value) {
             lastUp = 0
             lastDown = 0

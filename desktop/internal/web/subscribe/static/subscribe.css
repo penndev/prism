@@ -166,23 +166,6 @@ header.page-head {
   white-space: nowrap;
 }
 
-.form-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 0.65rem;
-  margin-bottom: 1rem;
-}
-
-label.field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  font-size: 0.75rem;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
 input,
 select {
   padding: 0.5rem 0.65rem;

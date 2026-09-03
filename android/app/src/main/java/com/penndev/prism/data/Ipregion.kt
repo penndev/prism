@@ -26,11 +26,10 @@ fun loadAreaTree(): List<AreaUi> {
 }
 
 fun installIpregionDb(src: File, dest: File) {
-    Engine.setIpregionDB(src.absolutePath)
     if (src.canonicalPath != dest.canonicalPath) {
         src.copyTo(dest, overwrite = true)
-        Engine.setIpregionDB(dest.absolutePath)
     }
+    Engine.setIpregionDB(dest.absolutePath)
 }
 
 fun downloadIpregionDb(url: String, dest: File, tmp: File) {
@@ -59,7 +58,10 @@ private fun parseArea(obj: JSONObject): AreaUi {
 }
 
 private fun httpDownload(url: String, dest: File) {
-    val connection = (URI(url).toURL().openConnection() as HttpURLConnection).apply {
+    val uri = URI(url)
+    val scheme = uri.scheme?.lowercase().orEmpty()
+    if (scheme != "http" && scheme != "https") error("url must be http or https")
+    val connection = (uri.toURL().openConnection() as HttpURLConnection).apply {
         connectTimeout = 15_000
         readTimeout = 5 * 60_000
         instanceFollowRedirects = true
@@ -69,7 +71,17 @@ private fun httpDownload(url: String, dest: File) {
         val code = connection.responseCode
         if (code !in 200..299) error("HTTP $code")
         dest.outputStream().use { output ->
-            connection.inputStream.use { input -> input.copyTo(output) }
+            connection.inputStream.use { input ->
+                val buf = ByteArray(8 * 1024)
+                var total = 0L
+                while (true) {
+                    val n = input.read(buf)
+                    if (n < 0) break
+                    total += n
+                    if (total > 64L * 1024 * 1024) error("file too large")
+                    output.write(buf, 0, n)
+                }
+            }
         }
     } finally {
         connection.disconnect()

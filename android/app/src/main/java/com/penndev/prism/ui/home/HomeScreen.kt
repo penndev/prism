@@ -53,6 +53,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -84,11 +86,19 @@ fun HomeScreen(
     onAddServer: () -> Unit,
     onEditServer: (ServerItem) -> Unit,
 ) {
-    var selecting by remember { mutableStateOf(false) }
-    var checkedIds by remember { mutableStateOf(setOf<String>()) }
+    // 这几个都参与界面状态（waitingPermission 还直接决定开关的显示位置），
+    // 用 remember 的话旋转屏幕会丢掉，开关会瞬间跳回关闭。
+    var selecting by rememberSaveable { mutableStateOf(false) }
+    var checkedIds by rememberSaveable(
+        stateSaver = listSaver<Set<String>, String>(
+            save = { it.toList() },
+            restore = { it.toSet() },
+        ),
+    ) { mutableStateOf(setOf<String>()) }
+    var pendingBatchDelete by rememberSaveable { mutableStateOf(false) }
+    var waitingPermission by rememberSaveable { mutableStateOf(false) }
+    // ServerItem 不可序列化，重建后弹窗消失即可，不影响数据
     var pendingDelete by remember { mutableStateOf<ServerItem?>(null) }
-    var pendingBatchDelete by remember { mutableStateOf(false) }
-    var waitingPermission by remember { mutableStateOf(false) }
     val selected = state.selectedServer
     val context = LocalContext.current
     val vpnPermission = rememberLauncherForActivityResult(
@@ -263,7 +273,7 @@ fun HomeScreen(
                                 waitingPermission = false
                                 viewModel.stop()
                             } else if (state.selectedServer == null) {
-                                viewModel.start()
+                                viewModel.snack(R.string.proxy_need_node)
                             } else {
                                 val prepare = VpnService.prepare(context)
                                 if (prepare != null) {

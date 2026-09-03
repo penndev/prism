@@ -25,12 +25,14 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	// 加载域名规则
 	rule.LoadDomains()
 	// -
+	localProxy := proxy.New()
 	app, err := internal.SetUPApp([]application.Service{
 		application.NewService(lang.DefaultLang),
 		application.NewService(storage.DefaultStorage),
-		application.NewService(proxy.New()),
+		application.NewService(localProxy),
 		application.NewService(&internal.AppConst{}),
 		application.NewService(&proxy.ProxyPing{}),
 		application.NewService(&autostart.Autostart{}),
@@ -73,7 +75,16 @@ func main() {
 		app.Quit()
 	})
 
-	if err := app.Run(); err != nil {
-		panic(err)
+	runErr := app.Run()
+
+	// 退出收尾：先停代理和 tun（会关掉设备、还原系统代理与路由），再释放库句柄和存储。
+	localProxy.SetStop()
+	internal.SetSearcher(nil)
+	if storage.DefaultStorage != nil {
+		_ = storage.DefaultStorage.Close()
+	}
+
+	if runErr != nil {
+		panic(runErr)
 	}
 }

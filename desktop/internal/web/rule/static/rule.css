@@ -273,14 +273,6 @@ button:disabled {
   font-weight: 600;
 }
 
-.inline-radio {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  white-space: nowrap;
-  font-size: 13px;
-}
-
 .mode-row {
   display: flex;
   flex-wrap: wrap;
@@ -356,74 +348,6 @@ button:disabled {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.rule-list {
-  list-style: none;
-  margin: 0.5rem 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
-}
-
-.rule-item {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.55rem 0.7rem;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-soft);
-}
-
-.rule-item .tag {
-  font-size: 12px;
-  padding: 0.12rem 0.45rem;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-}
-
-.rule-item .tag.proxy {
-  color: #1677ff;
-  border-color: #91caff;
-  background: #e6f4ff;
-}
-
-.rule-item .tag.bypass {
-  color: #b45309;
-  border-color: #fcd34d;
-  background: #fffbeb;
-}
-
-:root[data-theme="dark"] .rule-item .tag.proxy {
-  background: #0b1c33;
-  border-color: #1d4ed8;
-}
-
-:root[data-theme="dark"] .rule-item .tag.bypass {
-  background: #1f1808;
-  border-color: #92400e;
-  color: #fbbf24;
-}
-
-.rule-item .name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.rule-item button {
-  padding: 0.28rem 0.6rem;
-  font-size: 12px;
-}
-
-.empty-tip {
-  margin-top: 0.55rem;
-  color: var(--muted);
-  font-size: 13px;
 }
 
 a {

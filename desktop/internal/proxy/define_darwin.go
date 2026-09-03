@@ -44,6 +44,12 @@ const elevateFailAfter = 3 * time.Second
 
 var elevateMarkerFile = "/tmp/prism-desktop-elevate.marker"
 
+// shellQuote 用单引号包住字符串，内部出现的单引号按 shell 惯例拆成
+// 「关引号 + 转义单引号 + 开引号」，避免跳出引用。
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
 // initElevate 检查上次提权重启是否超时失败，超时则清理 sudoers
 func initElevate() {
 	defer os.Remove(elevateMarkerFile)
@@ -87,6 +93,9 @@ func tunPermission() bool {
 	if err != nil {
 		return false
 	}
+	if strings.ContainsAny(u.Username, " \t\n#,:=\\") {
+		return false
+	}
 
 	// sudoers 已存在时先尝试提权启动；失败则继续走下方修复流程，避免误退出
 	if _, err := os.Stat(sudoFile); err == nil {
@@ -99,29 +108,21 @@ func tunPermission() bool {
 		internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "sudo launch failed, repairing sudoers")
 	}
 
-	// sudoers 内容（⚠️ 不要转义路径）
-	line := fmt.Sprintf("%s ALL=(ALL) NOPASSWD: %s\n", u.Username, exePath)
-
-	// 单行脚本（无换行）
+	// 这段会以 root 身份执行，exePath 和用户名必须做 shell 引用，
+	// 否则路径里的单引号就能跳出引号拼进任意命令。
+	line := fmt.Sprintf("%s ALL=(ALL) NOPASSWD: %s", u.Username, exePath)
 	script := fmt.Sprintf(
-		`echo '%s' > %s && chmod 440 %s`,
-		line, sudoFile, sudoFile,
+		"echo %s > %s && chmod 440 %s",
+		shellQuote(line), sudoFile, sudoFile,
 	)
 	apple := fmt.Sprintf(`do shell script %q with administrator privileges`, script)
-	cmd := exec.Command("osascript", "-e", apple)
 
 	go func() {
-		// 第一次尝试
-		err := cmd.Run()
-
-		if err != nil {
-			// 修复（再写一次）
-			fixScript := fmt.Sprintf(
-				`echo '%s' > %s && chmod 440 %s`,
-				line, sudoFile, sudoFile,
-			)
-			fixApple := fmt.Sprintf(`do shell script %q with administrator privileges`, fixScript)
-			_ = exec.Command("osascript", "-e", fixApple).Run()
+		// osascript 偶发失败，同样的脚本再试一次
+		for i := 0; i < 2; i++ {
+			if err := exec.Command("osascript", "-e", apple).Run(); err == nil {
+				break
+			}
 		}
 
 		if cmd := exec.Command("sudo", "-n", exePath); cmd.Start() == nil {

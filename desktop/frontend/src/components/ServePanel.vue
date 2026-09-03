@@ -164,7 +164,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from "vue";
+import { ref, reactive, onMounted, onBeforeUnmount } from "vue";
 import {
   CheckCircleFilled,
   DeleteOutlined,
@@ -227,16 +227,21 @@ async function pingAllServers() {
 
   pingingAll.value = true;
   try {
+    const pending = servers.value;
     await Promise.all(
-      servers.value.map(async (server, index) => {
+      pending.map(async (server) => {
+        let latency = -1;
         try {
           const result = await TestServer(server._id, latencyHost);
-          servers.value[index] = {
-            ...server,
-            _latency: result.success ? result.latency : -1,
-          };
+          if (result.success) latency = result.latency;
         } catch {
-          servers.value[index] = { ...server, _latency: -1 };
+          latency = -1;
+        }
+        // 按 _id 回写而不是按启动时的下标：测速期间 EventNameServersChanged
+        // 可能整体换掉 servers.value，按下标写会让已删除的节点复活。
+        const idx = servers.value.findIndex((s) => s._id === server._id);
+        if (idx >= 0) {
+          servers.value[idx] = { ...servers.value[idx], _latency: latency };
         }
       }),
     );
@@ -292,18 +297,22 @@ const edit = reactive({
     password: "",
     protocol: "socks5",
   },
-  rules: {
-    host: [
-      { required: true, message: t("serverList.validateHostRequired") },
-      {
-        // IPv4/域名: host:port；IPv6: [addr]:port
-        pattern: /^(\[[^\]]+\]|[^:\[\]]+):\d{1,5}$/,
-        message: t("serverList.validateHostFormat"),
-      },
-    ],
-    protocol: [
-      { required: true, message: t("serverList.validateProtocolRequired") },
-    ],
+  // 用 getter 而不是字面量：字面量里的 t() 只在 setup 时求值一次，
+  // 切换语言后校验提示会停留在旧语言。
+  get rules() {
+    return {
+      host: [
+        { required: true, message: t("serverList.validateHostRequired") },
+        {
+          // IPv4/域名: host:port；IPv6: [addr]:port
+          pattern: /^(\[[^\]]+\]|[^:\[\]]+):\d{1,5}$/,
+          message: t("serverList.validateHostFormat"),
+        },
+      ],
+      protocol: [
+        { required: true, message: t("serverList.validateProtocolRequired") },
+      ],
+    };
   },
 
   open(server = null) {
@@ -332,26 +341,50 @@ const edit = reactive({
         protocol: edit.form.protocol,
       };
 
+      // _id 由 protocol/账号/host 派生，两条记录撞上之后编辑和删除都会认错行。
+      // 保存前挡掉重复项，列表里就不会出现同 _id 的记录。
+      const nextId = extendServerItem(payload)._id;
+      const duplicated = servers.value.some(
+        (s) => s._id === nextId && s._id !== edit.editingId,
+      );
+      if (duplicated) {
+        message.error(t("serverList.duplicateServer"));
+        return;
+      }
+
+      const backup = servers.value;
       const selectedWasEdited =
         edit.editingId &&
         serverStore.selectedServer &&
         extendServerItem(serverStore.selectedServer)._id === edit.editingId;
-      let editedIdx = -1;
 
+      const next = [...servers.value];
+      let editedIdx = -1;
       if (edit.editingId) {
-        editedIdx = servers.value.findIndex((s) => s._id === edit.editingId);
-        if (editedIdx >= 0) servers.value[editedIdx] = { ...payload };
-        message.success(t("serverList.updateSuccess"));
+        editedIdx = next.findIndex((s) => s._id === edit.editingId);
+        if (editedIdx >= 0) next[editedIdx] = payload;
       } else {
-        servers.value.push(payload);
-        message.success(t("serverList.addSuccess"));
+        next.push(payload);
+      }
+      servers.value = next.map(extendServerItem);
+
+      try {
+        await persistServers();
+      } catch (err) {
+        // 写入失败要还原，否则界面已经改了而存储里还是旧的
+        servers.value = backup;
+        message.error(err?.message || t("serverList.operationFailed"));
+        return;
       }
 
-      servers.value = servers.value.map(extendServerItem);
       if (selectedWasEdited && editedIdx >= 0) {
         serverStore.selectedServer = stripForStorage(servers.value[editedIdx]);
       }
-      await persistServers();
+      message.success(
+        edit.editingId
+          ? t("serverList.updateSuccess")
+          : t("serverList.addSuccess"),
+      );
       edit.visible = false;
     } catch (e) {
       if (!e?.errorFields) {
@@ -373,17 +406,24 @@ function deleteModal(item) {
     okText: t("serverList.deleteOkText"),
     cancelText: t("serverList.deleteCancelText"),
     async onOk() {
-      const id = item._id;
+      const backup = servers.value;
       servers.value = servers.value
-        .filter((s) => s._id !== id)
+        .filter((s) => s._id !== item._id)
         .map(extendServerItem);
+      try {
+        await persistServers();
+      } catch (e) {
+        // 写入失败要把列表还原，否则界面显示已删除而存储里还在
+        servers.value = backup;
+        message.error(e?.message || t("serverList.operationFailed"));
+        return;
+      }
       if (
         serverStore.selectedServer &&
         extendServerItem(serverStore.selectedServer)._id === item._id
       ) {
         serverStore.selectedServer = null;
       }
-      await persistServers();
       message.success(t("serverList.deleteSuccess"));
     },
   });
@@ -392,26 +432,29 @@ function deleteModal(item) {
 // --- 订阅编辑器 ---
 
 async function openSubscribeEditor() {
-  const rawHost = (settingsStore.proxy.host || "").trim();
-  const host = rawHost === "0.0.0.0" || rawHost === "" ? "127.0.0.1" : rawHost;
-  const port = Number(settingsStore.proxy.port);
-  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+  if (!settingsStore.webBaseURL) {
     message.warning(t("settings.pacNeedPort"));
     return;
   }
   try {
-    await OpenExternalURL(`http://${host}:${port}/subscribe/`);
+    await OpenExternalURL(`${settingsStore.webBaseURL}/subscribe/`);
   } catch (e) {
     message.error(e?.message || t("settings.pacOpenFailed"));
   }
 }
+
+let offServersChanged = null;
 
 onMounted(async () => {
   await loadServers();
   proxySchemes.value = await ProxyScheme();
 
   const appConfig = await AppConfig();
-  Events.On(appConfig.EventNameServersChanged, loadServers);
+  offServersChanged = Events.On(appConfig.EventNameServersChanged, loadServers);
+});
+
+onBeforeUnmount(() => {
+  offServersChanged?.();
 });
 </script>
 

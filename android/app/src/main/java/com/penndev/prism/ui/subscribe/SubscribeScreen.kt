@@ -33,7 +33,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -54,9 +54,9 @@ fun SubscribeScreen(
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
-    var subscribeType by remember { mutableStateOf("") }
-    var subscribeUrl by remember { mutableStateOf("") }
-    var confirmImport by remember { mutableStateOf(false) }
+    var subscribeType by rememberSaveable { mutableStateOf("") }
+    var subscribeUrl by rememberSaveable { mutableStateOf("") }
+    var confirmImport by rememberSaveable { mutableStateOf(false) }
 
     val openFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult

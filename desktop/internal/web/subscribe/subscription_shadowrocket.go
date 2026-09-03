@@ -33,8 +33,11 @@ func subscriptionParseShadowrocket(text string) ([]storage.ServerEntry, error) {
 		switch scheme {
 		case "https":
 			protocol = "https"
-		case "socks5":
+		case "socks5s":
 			protocol = "socks5s"
+		case "socks5", "socks":
+			// Shadowrocket 的 socks5:// 是明文 SOCKS5；带 TLS 的才是 socks5s://
+			protocol = "socks5"
 		default:
 			continue
 		}

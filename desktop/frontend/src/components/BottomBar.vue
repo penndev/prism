@@ -118,7 +118,12 @@ function formatBytes(value) {
   return `${next.toFixed(precision)} ${units[idx]}`;
 }
 
+let sampling = false;
+
 async function sampleTraffic() {
+  // 单次采样超过 1s 时会和下一次定时器重入，交错覆盖 lastSampleAt / lastReadBytes 会算出跳变的速率
+  if (sampling) return;
+  sampling = true;
   try {
     const [readBytes, writeBytes] = await TrafficBytes();
     const now = Date.now();
@@ -138,6 +143,8 @@ async function sampleTraffic() {
     lastSampleAt = now;
   } catch (e) {
     console.error("[BottomBar] TrafficBytes() failed:", e);
+  } finally {
+    sampling = false;
   }
 }
 

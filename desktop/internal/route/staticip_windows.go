@@ -4,7 +4,6 @@ import (
 	"desktop/internal"
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"net/netip"
 	"os/exec"
@@ -225,7 +224,10 @@ func systemDNSIPv4(skipIface string) []string {
 			break
 		}
 		if err != windows.ERROR_BUFFER_OVERFLOW {
-			log.Println("GetAdaptersAddresses:", err)
+			internal.App.Event.Emit(
+				internal.AppConfig.LogTypeName_STATUS,
+				"GetAdaptersAddresses failed: "+err.Error(),
+			)
 			return nil
 		}
 		buf = make([]byte, size)

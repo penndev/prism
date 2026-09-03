@@ -2,7 +2,6 @@
 package storage
 
 import (
-	"encoding/json"
 	"strings"
 )
 
@@ -11,6 +10,9 @@ type Settings struct {
 	Proxy       ProxySettings       `json:"proxy"`
 	LatencyTest LatencyTestSettings `json:"latencyTest"`
 	System      SystemSettings      `json:"system"`
+	// ProxyMode: manual=只开本地监听，tun=接管全局流量。
+	// 不放进 Proxy 里，避免前端对 proxy 的深度 watch 把切模式当成要重启本地监听。
+	ProxyMode string `json:"proxyMode"`
 }
 
 type ProxySettings struct {
@@ -35,6 +37,8 @@ type SystemSettings struct {
 }
 
 // ServerEntry 与前端服务器列表项一致（不含运行时延迟字段）。
+// 身份由 protocol/账号/host 派生（前端的 _id），所以这四项相同的记录视为同一个节点，
+// 新增和编辑时前端会拒绝保存重复项。
 type ServerEntry struct {
 	Host     string `json:"host"`
 	Remark   string `json:"remark"`
@@ -75,27 +79,6 @@ type RuleConfig struct {
 	AreaIDs []uint32 `json:"areaIds"`
 	// Domains 需要走代理的域名。空列表表示域名规则暂不生效。
 	Domains []string `json:"domains"`
-}
-
-// UnmarshalJSON 兼容旧字段 mode。
-func (r *RuleConfig) UnmarshalJSON(data []byte) error {
-	type raw struct {
-		AreaMode string   `json:"areaMode"`
-		Mode     string   `json:"mode"`
-		AreaIDs  []uint32 `json:"areaIds"`
-		Domains  []string `json:"domains"`
-	}
-	var v raw
-	if err := json.Unmarshal(data, &v); err != nil {
-		return err
-	}
-	r.AreaMode = strings.TrimSpace(v.AreaMode)
-	if r.AreaMode == "" {
-		r.AreaMode = strings.TrimSpace(v.Mode)
-	}
-	r.AreaIDs = v.AreaIDs
-	r.Domains = v.Domains
-	return nil
 }
 
 const (

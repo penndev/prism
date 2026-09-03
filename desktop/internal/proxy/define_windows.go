@@ -5,8 +5,8 @@ import (
 	"net/netip"
 	"os"
 	"os/exec"
+	"strings"
 	"syscall"
-	"time"
 
 	"golang.org/x/sys/windows"
 	"golang.zx2c4.com/wireguard/tun"
@@ -52,16 +52,16 @@ func tunPermission() bool {
 		return true
 	}
 	exePath, _ := os.Executable()
+	exePath = strings.ReplaceAll(exePath, `"`, "`\"")
 	cmd = exec.Command("powershell",
 		"-Command",
 		`Start-Process "`+exePath+`" -Verb RunAs`,
 	)
 	hideConsole(cmd)
-	_ = cmd.Start()
-	// 退出当前进程
-	go func() {
-		time.Sleep(100 * time.Millisecond)
-		internal.App.Event.Emit(internal.AppConfig.EventNameServiceAppQuit, true)
-	}()
+	// Run 会等到 UAC 结束：取消就返回错误，当前进程继续；同意才退出让新实例接手。
+	if err := cmd.Run(); err != nil {
+		return false
+	}
+	internal.App.Event.Emit(internal.AppConfig.EventNameServiceAppQuit, true)
 	return false
 }

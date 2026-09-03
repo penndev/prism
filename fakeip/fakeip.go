@@ -1,7 +1,6 @@
 package fakeip
 
 import (
-	"log"
 	"net"
 	"strings"
 	"sync"
@@ -16,6 +15,9 @@ const (
 	udpTimeout = 5 * time.Second
 	fakeTTL    = 60
 	mapTTL     = 30 * time.Minute
+
+	// DefaultUpstream 是没有配置上游 DNS 时的兜底地址。
+	DefaultUpstream = "8.8.8.8:53"
 )
 
 var (
@@ -27,7 +29,7 @@ var (
 
 	needFake func(string) bool
 	handle   transport.HandleConnect
-	upstream = "8.8.8.8:53"
+	upstream = DefaultUpstream
 )
 
 func init() {
@@ -130,7 +132,6 @@ func answer(query []byte) ([]byte, error) {
 				})
 			}
 		}
-		log.Println("dns fake:", resp)
 		return resp.Pack()
 	}
 	return forward(req)

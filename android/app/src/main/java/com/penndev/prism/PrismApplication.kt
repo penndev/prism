@@ -16,7 +16,7 @@ class PrismApplication : Application() {
         super.onCreate()
         applyAppLanguage(prefs.loadSettings().system.language)
         VpnController.rules = prefs.loadRules()
-        openIpregionDb(ipregionFile(this))
+        Thread { openIpregionDb(ipregionFile(this)) }.start()
     }
 }
 

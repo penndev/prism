@@ -3,6 +3,7 @@ package tun
 import (
 	"context"
 	"log"
+	"time"
 
 	"gvisor.dev/gvisor/pkg/buffer"
 	"gvisor.dev/gvisor/pkg/tcpip/header"
@@ -15,7 +16,7 @@ func (t *Tun) read(packet []byte) (int, error) {
 	bufs := make([][]byte, 1)
 	bufs[0] = packet
 	sizes := make([]int, 1)
-	_, err := (*t.dev).Read(bufs, sizes, t.offset)
+	_, err := t.dev.Read(bufs, sizes, t.offset)
 	return sizes[0], err
 }
 
@@ -24,21 +25,29 @@ func (t *Tun) write(packet []byte) (int, error) {
 	defer t.devWM.Unlock()
 	bufs := make([][]byte, 1)
 	bufs[0] = packet
-	return (*t.dev).Write(bufs, t.offset)
+	return t.dev.Write(bufs, t.offset)
 }
 
 // 从tun读取数据包，并注入到gvisor中
 func (t *Tun) inbound(cancel context.CancelFunc) {
-	defer t.Done()
+	defer t.pumps.Done()
 	defer cancel()
 
+	consec := 0
 	for {
 		data := make([]byte, int(t.mtu)+t.offset)
 		n, err := t.read(data)
 		if err != nil {
-			log.Println("read error:", err)
-			break
+			// 休眠唤醒常见瞬时读错误。设备还在就再试几次，连续失败再退出。
+			consec++
+			if !t.IsAttached() || consec > 5 {
+				log.Println("read error:", err)
+				break
+			}
+			time.Sleep(50 * time.Millisecond)
+			continue
 		}
+		consec = 0
 		if n == 0 || n > int(t.mtu) || !t.IsAttached() {
 			continue
 		}
@@ -59,7 +68,7 @@ func (t *Tun) inbound(cancel context.CancelFunc) {
 
 // 读取gvisor中数据包，并写入tun设备
 func (t *Tun) outbound(ctx context.Context) {
-	defer t.Done()
+	defer t.pumps.Done()
 	for {
 		pkt := t.ReadContext(ctx)
 		if pkt == nil {
@@ -85,9 +94,9 @@ func (t *Tun) outbound(ctx context.Context) {
 // 协议栈启动
 func (t *Tun) Attach(dispatcher stack.NetworkDispatcher) {
 	t.Endpoint.Attach(dispatcher)
-	t.Do(func() {
+	t.startOnce.Do(func() {
 		ctx, cancel := context.WithCancel(context.Background())
-		t.Add(2)
+		t.pumps.Add(2)
 		go t.outbound(ctx)
 		go t.inbound(cancel)
 	})

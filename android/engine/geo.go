@@ -1,9 +1,12 @@
 package engine
 
 import (
+	"context"
 	"encoding/json"
 	"net"
 	"os"
+	"sync"
+	"time"
 
 	"github.com/penndev/gopkg/ipregion"
 )
@@ -53,8 +56,13 @@ type areaNode struct {
 	Children []areaNode `json:"children,omitempty"`
 }
 
-var dbPath string
-var searcher *ipregion.Searcher
+// 库句柄由 Java 线程（换库）和每条连接的 Lookup 同时访问，必须加锁：
+// 换库时把正在 Find 的句柄关掉就是 use-after-close。
+var (
+	geoMu    sync.RWMutex
+	dbPath   string
+	searcher *ipregion.Searcher
+)
 
 // SetIpregionDB opens ipregion.db at path. Java downloads/copies the file first.
 func SetIpregionDB(path string) error {
@@ -62,12 +70,21 @@ func SetIpregionDB(path string) error {
 	if err != nil {
 		return err
 	}
+	geoMu.Lock()
+	old := searcher
 	searcher = s
 	dbPath = path
+	geoMu.Unlock()
+	if old != nil && old != s {
+		_ = old.Close()
+	}
 	return nil
 }
 
 func DBStatus() *DbStatus {
+	geoMu.RLock()
+	defer geoMu.RUnlock()
+
 	out := &DbStatus{Path: dbPath}
 	if dbPath != "" {
 		if fi, err := os.Stat(dbPath); err == nil {
@@ -89,25 +106,28 @@ func DBStatus() *DbStatus {
 
 // AreaTree returns the full region tree as JSON, same shape as desktop /rule/api/areas.
 func AreaTree() string {
-	raw, err := json.Marshal(buildAreaTree(0))
+	geoMu.RLock()
+	defer geoMu.RUnlock()
+	if searcher == nil {
+		return "[]"
+	}
+	raw, err := json.Marshal(buildAreaTree(searcher, 0))
 	if err != nil {
 		return "[]"
 	}
 	return string(raw)
 }
 
-func buildAreaTree(parentID uint32) []areaNode {
-	if searcher == nil {
-		return nil
-	}
-	src := searcher.Areas(parentID)
+// buildAreaTree 递归，所以 searcher 由调用方取好传进来，避免在递归里反复加锁。
+func buildAreaTree(s *ipregion.Searcher, parentID uint32) []areaNode {
+	src := s.Areas(parentID)
 	out := make([]areaNode, 0, len(src))
 	for _, a := range src {
 		out = append(out, areaNode{
 			ID:       a.ID,
 			ParentID: a.ParentID,
 			Name:     a.Name,
-			Children: buildAreaTree(a.ID),
+			Children: buildAreaTree(s, a.ID),
 		})
 	}
 	return out
@@ -115,20 +135,25 @@ func buildAreaTree(parentID uint32) []areaNode {
 
 // Lookup returns the area chain for address (host or host:port), leaf first then parents.
 func Lookup(address string) *AreaList {
-	if searcher == nil {
-		return &AreaList{}
-	}
 	host, _, err := net.SplitHostPort(address)
 	if err != nil {
 		host = address
 	}
 	ip := net.ParseIP(host)
 	if ip == nil {
-		ips, err := net.LookupIP(host)
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		ips, err := net.DefaultResolver.LookupIP(ctx, "ip", host)
+		cancel()
 		if err != nil || len(ips) == 0 {
 			return &AreaList{}
 		}
 		ip = ips[0]
+	}
+
+	geoMu.RLock()
+	defer geoMu.RUnlock()
+	if searcher == nil {
+		return &AreaList{}
 	}
 	info, err := searcher.Find(ip.String())
 	if err != nil || info.Area.ID == 0 {

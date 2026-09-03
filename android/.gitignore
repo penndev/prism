@@ -15,3 +15,5 @@
 *.keystore
 *.jks
 .kotlin
+/engine/*.aar
+/engine/*.jar

@@ -60,6 +60,7 @@
   "serverList.loadFailed": "加载节点失败",
   "serverList.updateSuccess": "修改成功",
   "serverList.addSuccess": "添加成功",
+  "serverList.duplicateServer": "已存在相同协议、账号和地址的节点",
   "serverList.operationFailed": "操作失败",
   "serverList.pingFailed": "测速失败",
   "serverList.pingAll": "测试全部延迟",

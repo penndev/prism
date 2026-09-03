@@ -21,7 +21,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -40,11 +40,11 @@ fun ServerEditScreen(
     server: ServerItem?,
     onBack: () -> Unit,
 ) {
-    var host by remember { mutableStateOf(server?.host.orEmpty()) }
-    var remark by remember { mutableStateOf(server?.remark.orEmpty()) }
-    var protocol by remember { mutableStateOf(server?.protocol ?: "socks5") }
-    var username by remember { mutableStateOf(server?.username.orEmpty()) }
-    var password by remember { mutableStateOf(server?.password.orEmpty()) }
+    var host by rememberSaveable { mutableStateOf(server?.host.orEmpty()) }
+    var remark by rememberSaveable { mutableStateOf(server?.remark.orEmpty()) }
+    var protocol by rememberSaveable { mutableStateOf(server?.protocol ?: "socks5") }
+    var username by rememberSaveable { mutableStateOf(server?.username.orEmpty()) }
+    var password by rememberSaveable { mutableStateOf(server?.password.orEmpty()) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,

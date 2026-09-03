@@ -5,19 +5,24 @@ import (
 	"desktop/internal/tun"
 	"desktop/internal/web"
 	"net/url"
+	"strings"
 	"sync/atomic"
 
 	"github.com/penndev/prism/proxy"
 	"github.com/penndev/prism/transport"
+	"gvisor.dev/gvisor/pkg/tcpip/stack"
 )
 
 type Proxy struct {
 	proxy.Server
 
 	// 远程代理信息，用于检查心跳。
-	remoteURL *url.URL
+	// SetRemote 写、updateDialer 循环读，所以用原子指针。
+	remoteURL atomic.Pointer[url.URL]
 	// tun用
-	dev        *tun.Tun
+	dev *tun.Tun
+	// tun 模式的 gvisor 协议栈，关 tun 时要一起关掉
+	netstack   *stack.Stack
 	readBytes  atomic.Int64
 	writeBytes atomic.Int64
 }
@@ -44,10 +49,12 @@ func (p *Proxy) SetStart(host, user, pass string) error {
 	}
 
 	p.Server.Close()
+	// 在起 goroutine 之前赋值：放进 goroutine 里就会和上面那三个比较、
+	// 以及 ListenAndServe 里读 Addr 形成竞态。
+	p.Addr = host
+	p.Username = user
+	p.Password = pass
 	go func() {
-		p.Addr = host
-		p.Username = user
-		p.Password = pass
 		if err := p.ListenAndServe(); err != nil {
 			internal.App.Event.Emit(
 				internal.AppConfig.LogTypeName_STATUS,
@@ -60,23 +67,36 @@ func (p *Proxy) SetStart(host, user, pass string) error {
 }
 
 func (p *Proxy) SetRemote(remote string) error {
-	var err error
-	p.remoteURL, err = url.Parse(remote)
-	if err != nil {
-		internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, err.Error())
+	remote = strings.TrimSpace(remote)
+	if remote == "" {
+		p.remoteURL.Store(nil)
+		p.HandleConnect = p.handleConnectHook(localHandle, func(network, address string) {
+			internal.App.Event.Emit(internal.AppConfig.LogTypeName_LOG, network+" "+address)
+		})
+		internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "SetRemote-> local")
+		return nil
 	}
-	internal.App.Event.Emit(
-		internal.AppConfig.LogTypeName_STATUS,
-		"SetRemote-> "+p.remoteURL.Scheme+"://"+p.remoteURL.User.String()+"@"+p.remoteURL.Host,
-	)
-	handle, err := transport.FromURL(p.remoteURL)
+	remoteURL, err := url.Parse(remote)
 	if err != nil {
-		internal.App.Event.Emit(internal.AppConfig.LogTypeName_LOG, "SetRemote error: "+err.Error())
+		internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "SetRemote error: "+err.Error())
 		return err
 	}
-	p.HandleConnect = p.handleConnectHook(handle, func(network, address string) {
-		internal.App.Event.Emit(internal.AppConfig.LogTypeName_LOG, network+" "+address)
-	})
+	if remoteURL.Host != "" {
+		internal.App.Event.Emit(
+			internal.AppConfig.LogTypeName_STATUS,
+			"SetRemote-> "+remoteURL.Scheme+"://"+remoteURL.User.String()+"@"+remoteURL.Host,
+		)
+		handle, err := transport.FromURL(remoteURL)
+		if err != nil {
+			internal.App.Event.Emit(internal.AppConfig.LogTypeName_LOG, "SetRemote error: "+err.Error())
+			return err
+		}
+		p.remoteURL.Store(remoteURL)
+		p.HandleConnect = p.handleConnectHook(handle, func(network, address string) {
+			internal.App.Event.Emit(internal.AppConfig.LogTypeName_LOG, network+" "+address)
+		})
+		return nil
+	}
 	return nil
 }
 

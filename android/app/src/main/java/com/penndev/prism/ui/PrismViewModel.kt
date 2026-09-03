@@ -79,12 +79,16 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
     init {
         val settings = prefs.loadSettings()
         val servers = prefs.loadServers()
+        val rules = prefs.loadRules()
         _state.value = PrismUiState(
             settings = settings,
             servers = servers,
             selectedId = prefs.loadSelectedId(),
-            rules = prefs.loadRules(),
+            rules = rules,
         )
+        // Service 读的是 VpnController.rules，只在 updateRules 里写。
+        // 冷启动后不进规则页就直接连，保存过的地域规则和 fakeip 域名会静默失效。
+        VpnController.rules = rules
         appendStatus(str(R.string.status_ready, servers.size))
         observeVpn()
         viewModelScope.launch(Dispatchers.IO) { refreshEngineUi() }
@@ -276,6 +280,17 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
             password = password,
         )
         val current = _state.value.servers.toMutableList()
+        val nextId = SubscriptionParser.identity(
+            payload.host, payload.protocol, payload.username, payload.password,
+        )
+        if (current.any {
+                it.id != payload.id &&
+                    SubscriptionParser.identity(it.host, it.protocol, it.username, it.password) == nextId
+            }
+        ) {
+            snack(str(R.string.server_list_duplicate))
+            return false
+        }
         val idx = current.indexOfFirst { it.id == payload.id }
         val message: String
         if (idx >= 0) {
@@ -424,7 +439,8 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
             val ver = st.version.orEmpty().ifBlank { "-" }
             str(R.string.rules_db_status, ver, formatBytes(st.size), st.areas)
         }
-        _state.update { it.copy(dbStatus = text, dbReady = ready, geoAreas = loadAreaTree()) }
+        val areas = if (ready) loadAreaTree() else emptyList()
+        _state.update { it.copy(dbStatus = text, dbReady = ready, geoAreas = areas) }
     }
 
     private fun fetchSubscription(type: String, url: String): List<ServerItem> {
@@ -439,7 +455,12 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun httpGet(url: String): String {
-        val connection = (URI(url).toURL().openConnection() as HttpURLConnection).apply {
+        val uri = URI(url)
+        val scheme = uri.scheme?.lowercase().orEmpty()
+        if (scheme != "http" && scheme != "https") {
+            throw SubscriptionException(R.string.subscribe_error_fetch)
+        }
+        val connection = (uri.toURL().openConnection() as HttpURLConnection).apply {
             connectTimeout = 15_000
             readTimeout = 15_000
             instanceFollowRedirects = true
@@ -448,7 +469,10 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
         try {
             val code = connection.responseCode
             val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-            val body = stream?.bufferedReader()?.readText().orEmpty()
+            val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+            if (body.length > 2 * 1024 * 1024) {
+                throw SubscriptionException(R.string.subscribe_error_fetch)
+            }
             if (code !in 200..299) {
                 throw SubscriptionException(R.string.subscribe_error_http, code)
             }
