@@ -5,18 +5,25 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/miekg/dns"
 	"github.com/penndev/prism/fakeip"
 )
 
 var domainSet = map[string]struct{}{}
 var domainMu sync.RWMutex
 
-func setDomainMap(list []string) {
-	next := make(map[string]struct{}, len(list))
-	for _, d := range list {
-		if d != "" {
-			next[d] = struct{}{}
+func setDomainMap(text string) {
+	next := make(map[string]struct{})
+	for _, line := range strings.Split(text, "\n") {
+		d := strings.ToLower(strings.TrimSpace(line))
+		d = strings.TrimPrefix(d, ".")
+		if d == "" {
+			continue
 		}
+		if _, ok := dns.IsDomainName(d); !ok {
+			continue
+		}
+		next[d] = struct{}{}
 	}
 	domainMu.Lock()
 	domainSet = next
@@ -55,29 +62,8 @@ func LoadDomains() {
 	}
 	cfg, err := st.GetRuleConfig()
 	if err != nil || cfg == nil {
-		setDomainMap(nil)
+		setDomainMap("")
 		return
 	}
-	setDomainMap(normalizeDomains(cfg.Domains))
-}
-
-func normalizeDomains(list []string) []string {
-	if list == nil {
-		return []string{}
-	}
-	out := make([]string, 0, len(list))
-	seen := make(map[string]struct{}, len(list))
-	for _, item := range list {
-		d := strings.ToLower(strings.TrimSpace(item))
-		d = strings.TrimPrefix(d, ".")
-		if d == "" {
-			continue
-		}
-		if _, ok := seen[d]; ok {
-			continue
-		}
-		seen[d] = struct{}{}
-		out = append(out, d)
-	}
-	return out
+	setDomainMap(cfg.Domains)
 }

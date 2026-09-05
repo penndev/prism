@@ -48,7 +48,9 @@ object VpnController {
     var rules: RuleDraft = RuleDraft()
         set(value) {
             field = value
-            fakeDomains = value.domains.toHashSet()
+            fakeDomains = value.domains.filter { d ->
+                d.isNotEmpty() && android.util.Patterns.DOMAIN_NAME.matcher(d).matches()
+            }.toHashSet()
         }
 
     @Volatile

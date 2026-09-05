@@ -88,8 +88,9 @@ fun DomainRulesScreen(
 }
 
 private fun parseDomainList(raw: String): List<String> {
+    // 按行保留，注释行也存着方便回看；匹配时 fakeDomains 会再过滤。
     val seen = LinkedHashSet<String>()
-    raw.split('\n', '\r', ',', ' ', '\t').forEach { item ->
+    raw.split('\n', '\r').forEach { item ->
         val d = item.trim().trim('.').lowercase()
         if (d.isNotEmpty()) seen.add(d)
     }

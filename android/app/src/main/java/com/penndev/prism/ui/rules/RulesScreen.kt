@@ -28,10 +28,13 @@ fun RulesScreen(
     onOpenGeo: () -> Unit,
 ) {
     val rules = state.rules
-    val domainValue = if (rules.domains.isEmpty()) {
+    val domainCount = rules.domains.count { d ->
+        d.isNotEmpty() && android.util.Patterns.DOMAIN_NAME.matcher(d).matches()
+    }
+    val domainValue = if (domainCount == 0) {
         stringResource(R.string.rules_domain_empty)
     } else {
-        stringResource(R.string.rules_domain_count, rules.domains.size)
+        stringResource(R.string.rules_domain_count, domainCount)
     }
     val geoValue = when (rules.geoMode) {
         GeoMode.Global -> stringResource(R.string.rules_mode_global)

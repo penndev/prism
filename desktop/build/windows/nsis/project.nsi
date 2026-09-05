@@ -1,4 +1,4 @@
-Unicode true
+﻿Unicode true
 
 ####
 ## Please note: Template replacements don't work in this file. They are provided with default defines like
@@ -23,7 +23,7 @@ Unicode true
 ## !define INFO_COMPANYNAME    "My Company" # Default "My Company"
 ## !define INFO_PRODUCTNAME    "My Product Name" # Default "My Product"
 ## !define INFO_PRODUCTVERSION "1.0.0"     # Default "0.1.0"
-## !define INFO_COPYRIGHT      "(c) Now, My Company" # Default "© 2026, My Company"
+## !define INFO_COPYRIGHT      "(c) Now, My Company" # Default "(c) 2026, My Company"
 ###
 ## !define PRODUCT_EXECUTABLE  "Application.exe"      # Default "${INFO_PROJECTNAME}.exe"
 ## !define UNINST_KEY_NAME     "UninstKeyInRegistry"  # Default "${INFO_COMPANYNAME}${INFO_PRODUCTNAME}"
@@ -67,6 +67,9 @@ ManifestDPIAware true
 !insertmacro MUI_LANGUAGE "SimpChinese"
 !insertmacro MUI_LANGUAGE "English" # Set the Language of the installer
 
+LangString CLOSE_APP_PROMPT ${LANG_SIMPCHINESE} "检测到 ${INFO_PRODUCTNAME} 正在运行，需要关闭后才能继续。是否关闭该程序？"
+LangString CLOSE_APP_PROMPT ${LANG_ENGLISH} "${INFO_PRODUCTNAME} is currently running and must be closed to continue. Close it now?"
+
 ## The following two statements can be used to sign the installer and the uninstaller. The path to the binaries are provided in %1
 #!uninstfinalize 'signtool --file "%1"'
 #!finalize 'signtool --file "%1"'
@@ -76,6 +79,29 @@ OutFile "..\..\..\bin\${INFO_PROJECTNAME}-${INFO_PRODUCTVERSION}-${ARCH}-install
 InstallDir "$PROGRAMFILES64\${INFO_COMPANYNAME}\${INFO_PRODUCTNAME}" # Default installing folder ($PROGRAMFILES is Program Files folder).
 ShowInstDetails show # This will always show the installation details.
 
+; Close running app before install/uninstall. Silent mode kills without prompt.
+!macro CloseRunningApp SUFFIX
+  check_${SUFFIX}:
+    nsExec::ExecToStack 'cmd /C tasklist /NH /FI "IMAGENAME eq ${PRODUCT_EXECUTABLE}" 2>nul | find /I "${PRODUCT_EXECUTABLE}" >nul'
+    Pop $0
+    Pop $1
+    IntCmp $0 0 found_${SUFFIX} done_${SUFFIX} done_${SUFFIX}
+  found_${SUFFIX}:
+    IfSilent kill_${SUFFIX} ask_${SUFFIX}
+  ask_${SUFFIX}:
+    MessageBox MB_YESNO|MB_ICONEXCLAMATION "$(CLOSE_APP_PROMPT)" IDYES kill_${SUFFIX} IDNO abort_${SUFFIX}
+  kill_${SUFFIX}:
+    DetailPrint "Closing ${PRODUCT_EXECUTABLE}..."
+    nsExec::ExecToStack 'taskkill /F /IM "${PRODUCT_EXECUTABLE}" /T'
+    Pop $0
+    Pop $1
+    Sleep 1000
+    Goto check_${SUFFIX}
+  abort_${SUFFIX}:
+    Abort
+  done_${SUFFIX}:
+!macroend
+
 Function .onInit
    !insertmacro wails.checkArchitecture
 FunctionEnd
@@ -84,6 +110,8 @@ Section
     !insertmacro wails.setShellContext
 
     !insertmacro wails.webview2runtime
+
+    !insertmacro CloseRunningApp install
 
     SetOutPath $INSTDIR
     
@@ -96,10 +124,14 @@ Section
     !insertmacro wails.associateCustomProtocols
     
     !insertmacro wails.writeUninstaller
+
+    Exec "$INSTDIR\${PRODUCT_EXECUTABLE}"
 SectionEnd
 
 Section "uninstall" 
     !insertmacro wails.setShellContext
+
+    !insertmacro CloseRunningApp uninstall
 
     RMDir /r "$AppData\${PRODUCT_EXECUTABLE}" # Remove the WebView2 DataPath
 

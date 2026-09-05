@@ -77,8 +77,8 @@ type RuleConfig struct {
 	AreaMode string `json:"areaMode"`
 	// AreaIDs 选中的地域 ID 列表（global/none 时可为空）。
 	AreaIDs []uint32 `json:"areaIds"`
-	// Domains 需要走代理的域名。空列表表示域名规则暂不生效。
-	Domains []string `json:"domains"`
+	// Domains 域名规则原文（按行）。空字符串表示域名规则暂不生效。
+	Domains string `json:"domains"`
 }
 
 const (

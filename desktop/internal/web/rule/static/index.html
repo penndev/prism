@@ -91,7 +91,6 @@
         </div>
         <textarea id="domains" spellcheck="false" placeholder="example.com&#10;github.com"></textarea>
         <div class="row">
-          <span id="domainCount" class="muted"></span>
           <span id="domainMsg" class="muted"></span>
         </div>
       </div>
@@ -129,7 +128,6 @@
     const selectedCount = document.getElementById('selectedCount');
     const geoMsg = document.getElementById('geoMsg');
     const domainsEl = document.getElementById('domains');
-    const domainCount = document.getElementById('domainCount');
     const domainMsg = document.getElementById('domainMsg');
 
     function t(key, params) {
@@ -182,7 +180,6 @@
         btnChangeDb.textContent = editingDb ? t('button.cancel') : t('button.replace');
       }
       updateSelectedCount();
-      updateDomainCount();
     }
 
     function getMode() {
@@ -210,26 +207,6 @@
       updateSelectedCount();
     }
 
-    function parseDomainsFromTextarea() {
-      const raw = domainsEl.value || '';
-      const parts = raw.split(/[\n\r,\s]+/);
-      const seen = new Set();
-      const out = [];
-      for (const item of parts) {
-        let d = String(item || '').trim().toLowerCase();
-        d = d.replace(/^\.+/, '');
-        if (!d || seen.has(d)) continue;
-        seen.add(d);
-        out.push(d);
-      }
-      return out;
-    }
-
-    function updateDomainCount() {
-      const n = parseDomainsFromTextarea().length;
-      domainCount.textContent = t('domain.count', { count: n });
-    }
-
     function selectedAreaIds() {
       return (Array.isArray(areaIds) ? areaIds : []).map(Number).filter((id) => id > 0);
     }
@@ -248,7 +225,7 @@
       return {
         areaMode: getMode(),
         areaIds: selectedAreaIds(),
-        domains: parseDomainsFromTextarea()
+        domains: domainsEl.value || ''
       };
     }
 
@@ -410,8 +387,7 @@
       const cfg = await api('/rule/api/config');
       areaIds = Array.isArray(cfg.areaIds) ? cfg.areaIds.map(Number).filter((id) => id > 0) : [];
       setMode(cfg.areaMode || 'global');
-      domainsEl.value = Array.isArray(cfg.domains) ? cfg.domains.join('\n') : '';
-      updateDomainCount();
+      domainsEl.value = cfg.domains || '';
     }
 
     async function saveConfig(payload, msgEl) {
@@ -431,7 +407,6 @@
         areaIds = Array.isArray(res.areaIds) ? res.areaIds.map(Number).filter((id) => id > 0) : payload.areaIds;
         el.textContent = t('status.saved');
         updateSelectedCount();
-        updateDomainCount();
       } catch (e) {
         el.textContent = e.message;
         throw e;
@@ -580,7 +555,6 @@
       el.addEventListener('change', onModeChange);
     });
     domainsEl.addEventListener('input', () => {
-      updateDomainCount();
       scheduleSaveFromUI(domainMsg);
     });
     areaFilter.addEventListener('input', renderAreaChecks);

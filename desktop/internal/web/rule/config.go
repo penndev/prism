@@ -21,12 +21,12 @@ func HandleRuleConfig(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if cfg == nil {
-			cfg = &storage.RuleConfig{AreaMode: "global", AreaIDs: []uint32{}, Domains: []string{}}
+			cfg = &storage.RuleConfig{AreaMode: "global", AreaIDs: []uint32{}, Domains: ""}
 		}
 		out := storage.RuleConfig{
 			AreaMode: normalizeMode(cfg.AreaMode),
 			AreaIDs:  normalizeAreaIDs(cfg.AreaIDs),
-			Domains:  normalizeDomains(cfg.Domains),
+			Domains:  cfg.Domains,
 		}
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
@@ -40,7 +40,7 @@ func HandleRuleConfig(w http.ResponseWriter, r *http.Request) {
 		cfg := storage.RuleConfig{
 			AreaMode: normalizeMode(payload.AreaMode),
 			AreaIDs:  normalizeAreaIDs(payload.AreaIDs),
-			Domains:  normalizeDomains(payload.Domains),
+			Domains:  payload.Domains,
 		}
 		if err := st.SetRuleConfig(cfg); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -96,10 +96,10 @@ func resetRuleToGlobal() {
 	next := storage.RuleConfig{
 		AreaMode: "global",
 		AreaIDs:  []uint32{},
-		Domains:  []string{},
+		Domains:  "",
 	}
 	if cfg, err := st.GetRuleConfig(); err == nil && cfg != nil {
-		next.Domains = normalizeDomains(cfg.Domains)
+		next.Domains = cfg.Domains
 	}
 	_ = st.SetRuleConfig(next)
 	setDomainMap(next.Domains)
