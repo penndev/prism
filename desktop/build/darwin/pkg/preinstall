@@ -1,0 +1,12 @@
+#!/bin/bash
+# Close running Prism so the installer can overwrite /Applications/Prism.app.
+# Installer PATH is limited; use absolute paths.
+/usr/bin/killall Prism >/dev/null 2>&1 || true
+i=0
+while [ "$i" -lt 5 ]; do
+  /usr/bin/pgrep -x Prism >/dev/null 2>&1 || exit 0
+  /bin/sleep 0.4
+  i=$((i + 1))
+done
+/usr/bin/killall -9 Prism >/dev/null 2>&1 || true
+exit 0

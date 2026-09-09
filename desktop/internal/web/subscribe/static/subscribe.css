@@ -9,14 +9,18 @@
   --accent-hover: #3d8bfd;
   --danger: #ff4d4f;
   --success: #52c41a;
+  --btn-border: #d6deea;
+  --btn-hover-bg: #f8fbff;
+  --btn-hover-border: #aebad0;
   --radius: 10px;
   --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+  color-scheme: light;
 }
 
 :root[data-theme="dark"] {
   --bg: #0f172a;
   --surface: #111827;
-  --surface-soft: #0b1220;
+  --surface-soft: #1a2436;
   --border: #263244;
   --text: #e5e7eb;
   --muted: #94a3b8;
@@ -24,6 +28,10 @@
   --accent-hover: #60a5fa;
   --danger: #ef4444;
   --success: #22c55e;
+  --btn-border: #334155;
+  --btn-hover-bg: #243044;
+  --btn-hover-border: #475569;
+  color-scheme: dark;
 }
 
 *,
@@ -134,7 +142,7 @@ header.page-head {
   height: 36px;
   padding: 0 0.9rem;
   border-radius: 6px;
-  border: 1px solid #d6deea;
+  border: 1px solid var(--btn-border);
   background: var(--surface-soft);
   color: var(--text);
   cursor: pointer;
@@ -142,8 +150,8 @@ header.page-head {
 }
 
 .file-pick-btn:hover {
-  border-color: #aebad0;
-  background: #f8fbff;
+  border-color: var(--btn-hover-border);
+  background: var(--btn-hover-bg);
 }
 
 .file-hidden-input {
@@ -196,14 +204,14 @@ button {
   cursor: pointer;
   padding: 0.5rem 0.9rem;
   border-radius: 6px;
-  border: 1px solid #d6deea;
+  border: 1px solid var(--btn-border);
   background: var(--surface-soft);
   color: var(--text);
 }
 
 button:hover {
-  border-color: #aebad0;
-  background: #f8fbff;
+  border-color: var(--btn-hover-border);
+  background: var(--btn-hover-bg);
 }
 
 button.primary {
