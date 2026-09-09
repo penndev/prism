@@ -21,42 +21,29 @@ func httpConnet(conn, remote net.Conn, user, pass, address string) error {
 		Host:   address,
 		Header: make(http.Header),
 	}
-	// 注入身份验证
 	if user != "" || pass != "" {
 		auth := base64.StdEncoding.EncodeToString([]byte(user + ":" + pass))
 		req.Header.Set("Proxy-Authorization", "Basic "+auth)
 	}
-
-	// 3. 发送请求并解析响应
-	// 使用 req.Write 直接将标准格式的请求写入连接
 	if err := req.Write(remote); err != nil {
-		remote.Close()
 		return err
 	}
 
-	// 使用 bufio 配合官方库解析响应，确保严谨
 	br := bufio.NewReader(remote)
 	resp, err := http.ReadResponse(br, req)
 	if err != nil {
-		remote.Close()
 		return err
 	}
-	// 必须手动关闭 Body，虽然 CONNECT 响应通常没有 Body
 	resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		remote.Close()
 		return fmt.Errorf("proxy CONNECT failed: %s", resp.Status)
 	}
-
-	// 4. 核心：封装残留数据的连接
 	// 即使是官方库，http.ReadResponse 也会因为 bufio 的机制导致预读
 	if n := br.Buffered(); n > 0 {
 		peeked, _ := br.Peek(n)
 		conn.Write(peeked) // 趁 Pipe 还没开始，先把“陈粮”塞给客户端
 	}
-
-	// 5. 双向转发
 	util.Pipe(conn, remote)
 	return nil
 }

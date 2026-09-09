@@ -32,6 +32,7 @@ func main() {
 	}
 	s := proxy.New(*addr, *user, *pass)
 	s.HandleConnect = func(conn net.Conn, network, address string) error {
+		defer conn.Close()
 		log.Println("req ->", network, address)
 		return handle(conn, network, address)
 	}

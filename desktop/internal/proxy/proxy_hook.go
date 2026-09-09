@@ -14,6 +14,7 @@ import (
 
 func (p *Proxy) handleConnectHook(handle transport.HandleConnect, callback func(network, address string)) transport.HandleConnect {
 	return func(conn net.Conn, network, address string) error {
+		defer conn.Close()
 		host, port, err := net.SplitHostPort(address)
 		if err != nil {
 			return err
