@@ -25,7 +25,7 @@
       <div class="rule-section" id="geoSection">
         <div class="rule-section-head">
           <h3 id="geoTitle">地域规则</h3>
-          <p id="geoDesc" class="subline">四种模式互斥：全局代理、全不代理，或代理某些区域，或绕过某些区域。</p>
+          <p id="geoDesc" class="subline">四种模式互斥：全局模式、本地模式、代理选定区域、绕过选定区域。</p>
         </div>
 
         <div class="db-block">
@@ -55,19 +55,19 @@
         <div class="mode-row">
           <label class="mode-option">
             <input type="radio" name="geoMode" value="global" checked>
-            <span id="labelModeGlobal">全局代理</span>
+            <span id="labelModeGlobal">全局模式</span>
           </label>
           <label class="mode-option">
             <input type="radio" name="geoMode" value="none">
-            <span id="labelModeNone">全不代理</span>
+            <span id="labelModeNone">本地模式</span>
           </label>
           <label class="mode-option">
             <input type="radio" name="geoMode" value="proxy">
-            <span id="labelModeProxy">代理某些区域</span>
+            <span id="labelModeProxy">代理选定区域</span>
           </label>
           <label class="mode-option">
             <input type="radio" name="geoMode" value="bypass">
-            <span id="labelModeBypass">绕过某些区域</span>
+            <span id="labelModeBypass">绕过选定区域</span>
           </label>
         </div>
 

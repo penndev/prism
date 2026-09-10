@@ -176,6 +176,30 @@ main {
   font-size: 17px;
 }
 
+.block h4 {
+  margin: 20px 0 8px;
+  font-size: 15px;
+}
+
+.install {
+  margin: 12px 0 0;
+  padding: 14px 16px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.install h4 {
+  margin: 0 0 8px;
+}
+
+.install ol {
+  margin: 0;
+}
+
+.install .muted {
+  margin: 8px 0 0;
+}
+
 .muted {
   color: var(--muted);
   font-size: 14px;

@@ -17,7 +17,7 @@ func setDomainMap(text string) {
 	for _, line := range strings.Split(text, "\n") {
 		d := strings.ToLower(strings.TrimSpace(line))
 		d = strings.TrimPrefix(d, ".")
-		if d == "" {
+		if d == "" || strings.HasPrefix(d, "!") {
 			continue
 		}
 		if _, ok := dns.IsDomainName(d); !ok {

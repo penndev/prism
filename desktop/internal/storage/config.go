@@ -73,7 +73,7 @@ func normalizeServers(servers []ServerEntry) []ServerEntry {
 
 // RuleConfig 规则配置。
 type RuleConfig struct {
-	// AreaMode: global=全局代理，none=全不代理，proxy=代理某些区域，bypass=绕过某些区域。
+	// AreaMode: global=全局模式，none=本地模式，proxy=代理选定区域，bypass=绕过选定区域。
 	AreaMode string `json:"areaMode"`
 	// AreaIDs 选中的地域 ID 列表（global/none 时可为空）。
 	AreaIDs []uint32 `json:"areaIds"`

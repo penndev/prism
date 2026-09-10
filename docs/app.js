@@ -40,25 +40,40 @@ function pickAsset(assets, test) {
   return (assets || []).find((a) => test(a.name || ""));
 }
 
+function paintBtn(el, asset) {
+  if (!el) return;
+  if (asset) {
+    el.href = asset.browser_download_url;
+    el.textContent = text("downloadFile").replace("{name}", asset.name);
+  } else {
+    el.href = RELEASES;
+    el.textContent = text("goReleases");
+  }
+}
+
 function paintRelease() {
   const meta = document.getElementById("release-meta");
   const win = document.getElementById("dl-windows");
   const mac = document.getElementById("dl-darwin");
+  const android = document.getElementById("dl-android");
+  const ios = document.getElementById("dl-ios");
   if (!meta || !win || !mac) return;
 
   if (releaseFailed) {
     meta.innerHTML = text("releaseFail");
-    win.textContent = text("goReleases");
-    mac.textContent = text("goReleases");
-    win.href = RELEASES;
-    mac.href = RELEASES;
+    paintBtn(win);
+    paintBtn(mac);
+    paintBtn(android);
+    paintBtn(ios);
     return;
   }
 
   if (!latestRelease) {
     meta.textContent = text("releaseLoading");
-    win.textContent = text("goReleases");
-    mac.textContent = text("goReleases");
+    paintBtn(win);
+    paintBtn(mac);
+    paintBtn(android);
+    paintBtn(ios);
     return;
   }
 
@@ -79,22 +94,20 @@ function paintRelease() {
     assets,
     (name) => name.includes("darwin") && name.endsWith(".dmg"),
   );
+  const apk = pickAsset(
+    assets,
+    (name) => name.toLowerCase().endsWith(".apk") || name.toLowerCase().includes("android"),
+  );
+  const ipa = pickAsset(
+    assets,
+    (name) => name.toLowerCase().endsWith(".ipa") || name.toLowerCase().includes("ios"),
+  );
 
-  if (exe) {
-    win.href = exe.browser_download_url;
-    win.textContent = text("downloadFile").replace("{name}", exe.name);
-  } else {
-    win.href = RELEASES;
-    win.textContent = text("goReleases");
-  }
-  if (dmg) {
-    mac.href = dmg.browser_download_url;
-    mac.textContent = text("downloadFile").replace("{name}", dmg.name);
-  } else {
-    mac.href = RELEASES;
-    mac.textContent = text("goReleases");
-  }
-  if (!exe && !dmg) {
+  paintBtn(win, exe);
+  paintBtn(mac, dmg);
+  paintBtn(android, apk);
+  paintBtn(ios, ipa);
+  if (!exe && !dmg && !apk && !ipa) {
     meta.textContent = text("releaseNoAsset").replace("{tag}", tag);
   }
 }

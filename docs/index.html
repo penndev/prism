@@ -3,11 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Prism · 下载与使用说明</title>
-    <meta
-      name="description"
-      content="Prism 桌面代理客户端下载站。支持 SOCKS5 / HTTP，手动模式与 TUN 模式。"
-    />
+    <title>Prism</title>
+    <meta name="description" content="" />
     <link rel="icon" href="./logo.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./styles.css" />
     <noscript>
@@ -27,8 +24,8 @@
       </a>
       <div class="top-right">
         <nav>
-          <a href="#download" data-i18n="navDownload">下载</a>
-          <a href="#guide" data-i18n="navGuide">使用说明</a>
+          <a href="#download" data-i18n="navDownload"></a>
+          <a href="#guide" data-i18n="navGuide"></a>
           <a href="https://github.com/penndev/socks5" target="_blank" rel="noopener"
             >GitHub</a
           >
@@ -48,199 +45,184 @@
       <section class="hero">
         <img class="hero-logo" src="./logo.svg" width="72" height="72" alt="" />
         <h1>Prism</h1>
-        <p class="lead" data-i18n="lead">
-          桌面代理客户端。把远程 SOCKS5 / HTTP 节点接到本机，按需走手动代理或
-          TUN 全局接管。
-        </p>
+        <p class="lead" data-i18n="lead"></p>
       </section>
 
       <section id="download" class="block">
-        <h2 data-i18n="downloadTitle">下载桌面端</h2>
-        <p class="muted" id="release-meta">正在读取 GitHub Release…</p>
+        <h2 data-i18n="downloadTitle"></h2>
+        <p class="muted" id="release-meta" data-i18n="releaseLoading"></p>
         <div class="cards">
           <article class="card">
             <h3>Windows</h3>
-            <p data-i18n="winDesc">amd64 安装包</p>
+            <p data-i18n="winDesc"></p>
             <a
               class="btn"
               id="dl-windows"
               href="https://github.com/penndev/socks5/releases"
-              >前往 Releases</a
-            >
+              data-i18n="goReleases"
+            ></a>
           </article>
           <article class="card">
             <h3>macOS</h3>
-            <p data-i18n="macDesc">Apple Silicon (arm64)</p>
+            <p data-i18n="macDesc"></p>
             <a
               class="btn"
               id="dl-darwin"
               href="https://github.com/penndev/socks5/releases"
-              >前往 Releases</a
-            >
+              data-i18n="goReleases"
+            ></a>
+          </article>
+          <article class="card">
+            <h3>Android</h3>
+            <p data-i18n="androidDesc"></p>
+            <a
+              class="btn"
+              id="dl-android"
+              href="https://github.com/penndev/socks5/releases"
+              data-i18n="goReleases"
+            ></a>
+          </article>
+          <article class="card">
+            <h3>iOS</h3>
+            <p data-i18n="iosDesc"></p>
+            <a
+              class="btn"
+              id="dl-ios"
+              href="https://github.com/penndev/socks5/releases"
+              data-i18n="goReleases"
+            ></a>
           </article>
         </div>
-        <p class="muted" data-html="downloadHint">
-          安装包来自
-          <a href="https://github.com/penndev/socks5/releases">GitHub Releases</a>。
-          Android / iOS 稍后单独提供。
-        </p>
+        <p class="muted" data-html="downloadHint"></p>
       </section>
 
       <section id="guide" class="block">
-        <h2 data-i18n="guideTitle">使用说明</h2>
+        <h2 data-i18n="guideTitle"></h2>
 
-        <h3 data-i18n="installTitle">1. 安装</h3>
+        <h3 data-i18n="installTitle"></h3>
+
+        <div class="install">
+          <h4>Windows</h4>
+          <ol data-html="installWinSteps"></ol>
+          <p class="muted" data-i18n="installWinSign"></p>
+        </div>
+
+        <div class="install">
+          <h4>iOS</h4>
+          <ol data-html="installIosSteps"></ol>
+          <p class="muted" data-i18n="installIosSign"></p>
+        </div>
+
+        <div class="install">
+          <h4>Android</h4>
+          <ol data-html="installAndroidSteps"></ol>
+        </div>
+
+        <div class="install">
+          <h4>macOS</h4>
+          <ol data-html="installMacSteps"></ol>
+          <p class="muted" data-i18n="installMacSign"></p>
+        </div>
+
+        <h3 data-i18n="nodeTitle"></h3>
+        <p data-i18n="nodeIntro"></p>
         <ul>
-          <li data-html="installWin">
-            <strong>Windows</strong>：运行
-            <code>Prism-windows-amd64-installer.exe</code>，按向导安装后从开始菜单打开。
-          </li>
-          <li data-html="installMac">
-            <strong>macOS</strong>：打开
-            <code>Prism-darwin-arm64.dmg</code>，把 Prism 拖进「应用程序」。
-          </li>
+          <li data-html="nodeHost"></li>
+          <li data-html="nodeProto"></li>
+          <li data-html="nodeAuth"></li>
+          <li data-html="nodeRemark"></li>
         </ul>
-        <p data-i18n="installSign">
-          包目前未做代码签名。Windows 可能弹出 SmartScreen，选「仍要运行」。macOS
-          若提示无法验证开发者：系统设置 → 隐私与安全性 → 仍要打开。
-        </p>
+        <p data-i18n="nodeSub"></p>
 
-        <h3 data-i18n="nodeTitle">2. 添加节点</h3>
-        <p data-i18n="nodeIntro">主界面下方「添加节点」，填这些即可：</p>
-        <ul>
-          <li data-html="nodeHost">
-            <strong>地址</strong>：<code>host:port</code>，例如
-            <code>1.2.3.4:1080</code>
-          </li>
-          <li data-html="nodeProto">
-            <strong>协议</strong>：<code>socks5</code> /
-            <code>socks5s</code>（TLS）/ <code>http</code> /
-            <code>https</code>
-          </li>
-          <li data-html="nodeAuth">
-            <strong>用户名 / 密码</strong>：节点需要认证再填
-          </li>
-          <li data-html="nodeRemark"><strong>备注</strong>：可选，方便辨认</li>
-        </ul>
-        <p data-i18n="nodeSub">
-          批量导入：点节点列表右上角编辑按钮，浏览器会打开订阅页。支持 Prism
-          订阅、Shadowrocket 订阅，以及桌面导出的 JSON。解析预览确认后才会覆盖当前列表。
-        </p>
-
-        <h3 data-i18n="connectTitle">3. 连接</h3>
+        <h3 data-i18n="connectTitle"></h3>
         <ol>
-          <li data-i18n="connect1">在节点列表里点选一个节点。</li>
-          <li data-i18n="connect2">上方代理面板会出现当前节点。</li>
-          <li data-i18n="connect3">选模式：</li>
+          <li data-i18n="connect1"></li>
+          <li data-i18n="connect2"></li>
+          <li data-i18n="connect3"></li>
         </ol>
         <ul>
-          <li data-html="modeManual">
-            <strong>手动模式</strong>：只在本机开一个本地代理端口，浏览器或其他软件自己填代理。
-          </li>
-          <li data-html="modeTun">
-            <strong>TUN 模式</strong>：创建虚拟网卡接管系统流量。必须先选好节点；Windows
-            需要能加载 wintun，失败时用管理员身份再开一次。
-          </li>
+          <li data-html="modeManual"></li>
+          <li data-html="modeTun"></li>
         </ul>
 
-        <h3 data-i18n="localTitle">4. 本地代理（手动模式）</h3>
-        <p data-i18n="localIntro">右侧设置 → 本地代理：</p>
+        <h3 data-i18n="localTitle"></h3>
+        <p data-i18n="localIntro"></p>
         <ul>
-          <li data-html="localIp">
-            <strong>IP</strong>：<code>127.0.0.1</code> 仅本机；<code>0.0.0.0</code>
-            允许局域网设备连进来。
-          </li>
-          <li data-html="localPort">
-            <strong>端口</strong>：默认 <code>1080</code>。被占用就换一个。
-          </li>
-          <li data-html="localAuth">
-            <strong>用户名 / 密码</strong>：可选。填了之后，连这个本地端口也要带同样的账号。
-          </li>
+          <li data-html="localIp"></li>
+          <li data-html="localPort"></li>
+          <li data-html="localAuth"></li>
         </ul>
-        <p data-i18n="localBrowser">浏览器或系统代理一般填：</p>
-        <pre data-i18n="localSample">协议 SOCKS5
-主机 127.0.0.1
-端口 1080</pre>
+        <p data-i18n="localBrowser"></p>
+        <pre data-i18n="localSample"></pre>
 
-        <h3 data-i18n="ruleTitle">5. 分流规则</h3>
-        <p data-html="ruleOpen">
-          选好节点后，代理面板右上角漏斗图标会打开规则页（地址形如
-          <code>http://127.0.0.1:1080/rule/</code>）。
-        </p>
-        <p data-html="ruleGeo"><strong>地域规则</strong>四种模式互斥：</p>
+        <h3 data-i18n="ruleTitle"></h3>
+        <p data-html="ruleOpen"></p>
+        <p data-html="ruleOrder"></p>
+        <ol>
+          <li data-html="ruleOrder1"></li>
+          <li data-html="ruleOrder2"></li>
+        </ol>
+        <p data-html="ruleManual"></p>
+
+        <h4 data-i18n="ruleGeoTitle"></h4>
+        <p data-html="ruleGeo"></p>
         <ul>
-          <li data-i18n="ruleGlobal">全局代理</li>
-          <li data-i18n="ruleNone">全不代理</li>
-          <li data-i18n="ruleProxy">代理某些区域</li>
-          <li data-i18n="ruleBypass">绕过某些区域</li>
+          <li data-html="ruleGlobal"></li>
+          <li data-html="ruleNone"></li>
+          <li data-html="ruleProxy"></li>
+          <li data-html="ruleBypass"></li>
         </ul>
-        <p data-html="ruleDb">
-          后两种要先准备 IP 库
-          <code>ipregion.db</code>，可在规则页下载或上传。库文件说明见
-          <a
-            href="https://github.com/penndev/gopkg/tree/main/ipregion"
-            target="_blank"
-            rel="noopener"
-            >penndev/gopkg ipregion</a
-          >。
-        </p>
-        <p data-html="ruleDomain">
-          <strong>域名规则</strong>：一行一个域名。写
-          <code>google.com</code> 时 <code>www.google.com</code> 也会命中。
-        </p>
+        <p data-html="ruleDb"></p>
 
-        <h3 data-i18n="otherTitle">6. 其它设置</h3>
+        <h4 data-i18n="ruleDomainTitle"></h4>
+        <p data-html="ruleDomain"></p>
         <ul>
-          <li data-html="otherPing">
-            <strong>测速域名</strong>：测全部节点延迟时用。不填则无法测速。
-          </li>
-          <li data-html="otherSort">
-            <strong>测速后自动排序</strong>：测完按延迟从低到高排。
-          </li>
-          <li data-html="otherTheme">
-            <strong>语言 / 主题</strong>：中文、English；浅色、深色、跟随系统。
-          </li>
-          <li data-html="otherBoot">
-            <strong>开机启动</strong>：登录系统后自动打开 Prism。
-          </li>
-          <li data-html="otherLog">
-            <strong>日志开关</strong>：打开后窗口底部出现状态日志、连接日志和流量。
-          </li>
+          <li data-html="ruleDomainLine"></li>
+          <li data-html="ruleDomainComment"></li>
+          <li data-html="ruleDomainMatch"></li>
+          <li data-html="ruleDomainNoUrl"></li>
+        </ul>
+        <p data-html="ruleDomainExample"></p>
+        <pre>! [Google Services (谷歌服务与生态)]
+google.com
+googleapis.com
+youtube.com
+
+! [AI & Developer Tools (人工智能与开发工具)]
+github.com
+openai.com
+cursor.com</pre>
+
+        <h3 data-i18n="otherTitle"></h3>
+        <ul>
+          <li data-html="otherPing"></li>
+          <li data-html="otherSort"></li>
+          <li data-html="otherTheme"></li>
+          <li data-html="otherBoot"></li>
+          <li data-html="otherLog"></li>
         </ul>
 
-        <h3 data-i18n="faqTitle">7. 常见问题</h3>
+        <h3 data-i18n="faqTitle"></h3>
         <dl class="faq">
-          <dt data-i18n="faqRuleQ">规则页或订阅页打不开</dt>
-          <dd data-i18n="faqRuleA">
-            先在设置里填一个有效的本地端口，并保证 Prism 正在运行。
-          </dd>
-          <dt data-i18n="faqTunQ">TUN 开不起来</dt>
-          <dd data-i18n="faqTunA">
-            确认已选节点。Windows 用管理员启动；仍失败就检查是否拦截了虚拟网卡。
-          </dd>
-          <dt data-i18n="faqSaveQ">改了设置好像没保存</dt>
-          <dd data-i18n="faqSaveA">
-            设置是改完自动写入的。关掉再开应能看到上次的值。
-          </dd>
-          <dt data-i18n="faqPingQ">测速全失败</dt>
-          <dd data-html="faqPingA">
-            设置里的测速域名要能从该节点访问，例如
-            <code>google.com</code> 或 <code>host:port</code>。
-          </dd>
+          <dt data-i18n="faqRuleQ"></dt>
+          <dd data-i18n="faqRuleA"></dd>
+          <dt data-i18n="faqTunQ"></dt>
+          <dd data-i18n="faqTunA"></dd>
+          <dt data-i18n="faqSaveQ"></dt>
+          <dd data-i18n="faqSaveA"></dd>
+          <dt data-i18n="faqPingQ"></dt>
+          <dd data-html="faqPingA"></dd>
         </dl>
       </section>
     </main>
 
     <footer>
       <span>Prism</span>
-      <a href="https://github.com/penndev/socks5" data-i18n="footerSource"
-        >源代码</a
-      >
+      <a href="https://github.com/penndev/socks5" data-i18n="footerSource"></a>
       <a
         href="https://github.com/penndev/socks5/releases"
         data-i18n="footerReleases"
-        >全部版本</a
-      >
+      ></a>
     </footer>
 
     <script src="./i18n.js"></script>
