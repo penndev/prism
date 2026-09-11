@@ -58,6 +58,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -179,14 +180,11 @@ fun HomeScreen(
                         onClick = { viewModel.pingAll() },
                         enabled = !state.pingingAll && state.servers.isNotEmpty(),
                     ) {
-                        if (state.pingingAll) {
-                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                        } else {
-                            Icon(
-                                Icons.Filled.Refresh,
-                                contentDescription = stringResource(R.string.server_list_ping_all),
-                            )
-                        }
+                        Icon(
+                            Icons.Filled.Refresh,
+                            contentDescription = stringResource(R.string.server_list_ping_all),
+                            modifier = Modifier.alpha(if (state.pingingAll) 0.35f else 1f),
+                        )
                     }
                 }
             },

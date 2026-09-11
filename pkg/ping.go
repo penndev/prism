@@ -14,7 +14,8 @@ import (
 	"github.com/penndev/prism/transport"
 )
 
-const pingDeadline = 5 * time.Second
+// PingTimeout is the max wait for a latency test (desktop / Android / iOS).
+const PingTimeout = 5 * time.Second
 
 // Ping measures HTTP TTFB through the proxy in proxyURL.
 // latencyHost is host or host:port (default port 80).
@@ -67,7 +68,7 @@ func Ping(proxyURL *url.URL, latencyHost string) (time.Duration, error) {
 	}()
 
 	start := time.Now()
-	_ = c2.SetDeadline(start.Add(pingDeadline))
+	_ = c2.SetDeadline(start.Add(PingTimeout))
 	if _, err := c2.Write(buf.Bytes()); err != nil {
 		return 0, err
 	}
@@ -77,7 +78,7 @@ func Ping(proxyURL *url.URL, latencyHost string) (time.Duration, error) {
 		overCH <- err
 	}()
 
-	timer := time.NewTimer(pingDeadline)
+	timer := time.NewTimer(PingTimeout)
 	defer timer.Stop()
 	select {
 	case err := <-overCH:

@@ -4,6 +4,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -42,7 +43,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.penndev.prism.R
@@ -87,8 +87,6 @@ fun GeoRulesScreen(
     val pickDb = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) viewModel.importDb(uri)
     }
-    val uriHandler = LocalUriHandler.current
-    val dbPage = stringResource(R.string.rules_db_page)
     val rows = remember(state.geoAreas, areaFilter, expandedIds, rules.selectedAreaIds) {
         flattenAreas(state.geoAreas, expandedIds, areaFilter, rules.selectedAreaIds)
     }
@@ -149,15 +147,6 @@ fun GeoRulesScreen(
                         )
                     }
                     if (showDbEditor) {
-                        Text(
-                            stringResource(R.string.rules_db_hint),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { uriHandler.openUri(dbPage) }
-                                .padding(horizontal = 16.dp, vertical = 4.dp),
-                        )
                         OutlinedTextField(
                             value = dbUrlDraft,
                             onValueChange = { dbUrlDraft = it },
@@ -307,8 +296,11 @@ private fun AreaTreeRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Spacer(Modifier.width((12 + row.depth * 16).dp))
-        if (row.expandable) {
-            IconButton(onClick = onToggleExpand, modifier = Modifier.size(36.dp)) {
+        Box(
+            modifier = Modifier.size(40.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (row.expandable) {
                 Icon(
                     imageVector = if (row.expanded) {
                         Icons.Filled.KeyboardArrowDown
@@ -316,10 +308,11 @@ private fun AreaTreeRow(
                         Icons.AutoMirrored.Filled.KeyboardArrowRight
                     },
                     contentDescription = null,
+                    modifier = Modifier
+                        .size(22.dp)
+                        .clickable(onClick = onToggleExpand),
                 )
             }
-        } else {
-            Spacer(Modifier.width(36.dp))
         }
         Checkbox(checked = row.selected, onCheckedChange = { onToggleSelect() })
         Text(

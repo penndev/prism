@@ -34,5 +34,6 @@ func newRouter() *http.ServeMux {
 	router.HandleFunc("/rule/api/db", rule.HandleRuleDB)
 	router.HandleFunc("/rule/api/db/download", rule.HandleRuleDBDownload)
 	router.HandleFunc("/rule/api/db/upload", rule.HandleRuleDBUpload)
+	router.HandleFunc("/rule/api/fetch", rule.HandleRuleFetchText)
 	return router
 }

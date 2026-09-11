@@ -1,0 +1,8 @@
+.DS_Store
+xcuserdata/
+DerivedData/
+*.xcuserstate
+*.xcframework
+engine/Engine.framework
+engine/*.a
+build/

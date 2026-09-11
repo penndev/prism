@@ -10,8 +10,7 @@
             :disabled="pingingAll || servers.length === 0"
             @click="pingAllServers"
           >
-            <LoadingOutlined v-if="pingingAll" spin />
-            <SignalFilled v-else />
+            <SignalFilled :style="{ opacity: pingingAll ? 0.35 : 1 }" />
           </a-button>
         </a-tooltip>
         <a-tooltip :title="t('serverList.openSubscribeEditor')">
@@ -170,7 +169,6 @@ import {
   DeleteOutlined,
   EditFilled,
   EditOutlined,
-  LoadingOutlined,
   PlusOutlined,
   SignalFilled,
 } from "@ant-design/icons-vue";

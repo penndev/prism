@@ -35,11 +35,8 @@
           </div>
           <div id="dbStatus" class="status-box has-path-tip" title="">-</div>
           <div id="dbEditor" hidden>
-            <p id="dbHint" class="muted db-hint">
-              <a id="dbHintLink" href="https://github.com/penndev/gopkg/tree/main/ipregion" target="_blank" rel="noopener noreferrer"></a>
-            </p>
             <div class="row">
-              <input id="dbUrl" type="url" placeholder="https://.../ipregion.db" spellcheck="false">
+              <input id="dbUrl" type="url" placeholder="" spellcheck="false">
               <button id="btnDownload" class="primary" type="button">下载</button>
             </div>
             <div class="row">
@@ -89,6 +86,14 @@
           <h3 id="domainTitle">域名规则</h3>
           <p id="domainDesc" class="subline">填写需要代理的域名。不需要代理的域名不必填写，每行一个。</p>
         </div>
+        <div class="row">
+          <input id="domainUrl" type="url" placeholder="https://…" spellcheck="false">
+          <button id="btnDomainFetch" class="primary" type="button">获取</button>
+        </div>
+        <div class="row">
+          <input id="domainFile" type="file" accept=".txt,.list,text/plain">
+          <button id="btnDomainFile" type="button">上传文件</button>
+        </div>
         <textarea id="domains" spellcheck="false" placeholder="example.com&#10;github.com"></textarea>
         <div class="row">
           <span id="domainMsg" class="muted"></span>
@@ -128,6 +133,10 @@
     const selectedCount = document.getElementById('selectedCount');
     const geoMsg = document.getElementById('geoMsg');
     const domainsEl = document.getElementById('domains');
+    const domainUrlEl = document.getElementById('domainUrl');
+    const domainFileEl = document.getElementById('domainFile');
+    const btnDomainFetch = document.getElementById('btnDomainFetch');
+    const btnDomainFile = document.getElementById('btnDomainFile');
     const domainMsg = document.getElementById('domainMsg');
 
     function t(key, params) {
@@ -171,9 +180,11 @@
       document.getElementById('domainTitle').textContent = t('domain.title');
       document.getElementById('domainDesc').textContent = t('domain.desc');
       domainsEl.placeholder = t('domain.placeholder');
+      domainUrlEl.placeholder = t('domain.url.placeholder');
+      btnDomainFetch.textContent = t('domain.fetch');
+      btnDomainFile.textContent = t('domain.importFile');
       areaFilter.placeholder = t('area.filter');
       dbUrlEl.placeholder = t('db.url.placeholder');
-      document.getElementById('dbHintLink').textContent = t('db.hint');
       btnDownload.textContent = t('button.download');
       btnUpload.textContent = t('button.upload');
       if (dbExists) {
@@ -569,6 +580,53 @@
     });
     btnDownload.addEventListener('click', downloadDb);
     btnUpload.addEventListener('click', uploadDb);
+    btnDomainFetch.addEventListener('click', async () => {
+      const url = domainUrlEl.value.trim();
+      if (!url) {
+        domainMsg.textContent = t('domain.error.noUrl');
+        return;
+      }
+      btnDomainFetch.disabled = true;
+      try {
+        const res = await api('/rule/api/fetch', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ url })
+        });
+        const body = String((res && res.text) || '').trim();
+        if (!body) {
+          domainMsg.textContent = t('domain.fetchError');
+          return;
+        }
+        const cur = (domainsEl.value || '').trim();
+        domainsEl.value = cur ? cur + '\n' + body : body;
+        scheduleSaveFromUI(domainMsg);
+      } catch (e) {
+        domainMsg.textContent = t('domain.fetchError');
+      } finally {
+        btnDomainFetch.disabled = false;
+      }
+    });
+    btnDomainFile.addEventListener('click', async () => {
+      const file = domainFileEl.files && domainFileEl.files[0];
+      if (!file) {
+        domainMsg.textContent = t('db.error.noFile');
+        return;
+      }
+      try {
+        const text = await file.text();
+        const body = String(text || '').trim();
+        if (!body) {
+          domainMsg.textContent = t('domain.error.emptyFile');
+          return;
+        }
+        const cur = (domainsEl.value || '').trim();
+        domainsEl.value = cur ? cur + '\n' + body : body;
+        scheduleSaveFromUI(domainMsg);
+      } catch (e) {
+        domainMsg.textContent = t('domain.error.emptyFile');
+      }
+    });
 
     (async function bootstrap() {
       await loadAppConfig();
