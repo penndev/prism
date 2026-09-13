@@ -2,9 +2,15 @@
 <html lang="zh-CN" class="i18n-pending">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Prism</title>
-    <meta name="description" content="" />
+    <meta
+      name="description"
+      content="Prism 代理客户端下载站。桌面端支持 SOCKS5 / HTTP，手动模式与 TUN；移动端走本地 VPN。"
+    />
+    <link rel="canonical" href="https://penndev.github.io/prism/" />
+    <meta name="theme-color" content="#0088cc" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)" />
     <link rel="icon" href="./logo.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./styles.css" />
     <noscript>
@@ -22,24 +28,16 @@
         <img src="./logo.svg" width="32" height="32" alt="" />
         <span>Prism</span>
       </a>
-      <div class="top-right">
-        <nav>
-          <a href="#download" data-i18n="navDownload"></a>
-          <a href="#proxy" data-i18n="navProxy"></a>
-          <a href="#rules" data-i18n="navRules"></a>
-          <a href="#other" data-i18n="navOther"></a>
-          <a href="https://github.com/penndev/prism" target="_blank" rel="noopener"
-            >GitHub</a
-          >
-        </nav>
-        <div class="lang">
-          <button type="button" data-lang="zh-CN" aria-pressed="true">
-            简体中文
-          </button>
-          <button type="button" data-lang="en" aria-pressed="false">
-            English
-          </button>
-        </div>
+      <nav>
+        <a href="#download" data-i18n="navDownload"></a>
+        <a href="#proxy" data-i18n="navProxy"></a>
+        <a href="#rules" data-i18n="navRules"></a>
+        <a href="#other" data-i18n="navOther"></a>
+        <a href="https://github.com/penndev/prism" target="_blank" rel="noopener">GitHub</a>
+      </nav>
+      <div class="lang">
+        <button type="button" data-lang="zh-CN" aria-pressed="true">简体中文</button>
+        <button type="button" data-lang="en" aria-pressed="false">English</button>
       </div>
     </header>
 
@@ -61,64 +59,44 @@
           <article class="card">
             <h3 data-i18n="platformWin"></h3>
             <p data-i18n="winDesc"></p>
-            <a
-              class="btn"
-              id="dl-windows"
-              href="https://github.com/penndev/prism/releases"
-              data-i18n="goReleases"
-            ></a>
+            <a class="btn" id="dl-windows" href="https://github.com/penndev/prism/releases" data-i18n="goReleases"></a>
             <details class="card-install">
               <summary data-i18n="installToggle"></summary>
-              <ol data-html="installWinSteps"></ol>
+              <ol data-i18n="installWinSteps"></ol>
               <p class="muted" data-i18n="installWinSign"></p>
             </details>
           </article>
           <article class="card">
             <h3 data-i18n="platformMac"></h3>
             <p data-i18n="macDesc"></p>
-            <a
-              class="btn"
-              id="dl-darwin"
-              href="https://github.com/penndev/prism/releases"
-              data-i18n="goReleases"
-            ></a>
+            <a class="btn" id="dl-darwin" href="https://github.com/penndev/prism/releases" data-i18n="goReleases"></a>
             <details class="card-install">
               <summary data-i18n="installToggle"></summary>
-              <ol data-html="installMacSteps"></ol>
+              <ol data-i18n="installMacSteps"></ol>
               <p class="muted" data-i18n="installMacSign"></p>
             </details>
           </article>
           <article class="card">
             <h3 data-i18n="platformAndroid"></h3>
             <p data-i18n="androidDesc"></p>
-            <a
-              class="btn"
-              id="dl-android"
-              href="https://github.com/penndev/prism/releases"
-              data-i18n="goReleases"
-            ></a>
+            <a class="btn" id="dl-android" href="https://github.com/penndev/prism/releases" data-i18n="goReleases"></a>
             <details class="card-install">
               <summary data-i18n="installToggle"></summary>
-              <ol data-html="installAndroidSteps"></ol>
+              <ol data-i18n="installAndroidSteps"></ol>
             </details>
           </article>
           <article class="card">
             <h3 data-i18n="platformIos"></h3>
             <p data-i18n="iosDesc"></p>
-            <a
-              class="btn"
-              id="dl-ios"
-              href="https://github.com/penndev/prism/releases"
-              data-i18n="goReleases"
-            ></a>
+            <a class="btn" id="dl-ios" href="https://github.com/penndev/prism/releases" data-i18n="goReleases"></a>
             <details class="card-install">
               <summary data-i18n="installToggle"></summary>
-              <ol data-html="installIosSteps"></ol>
+              <ol data-i18n="installIosSteps"></ol>
               <p class="muted" data-i18n="installIosSign"></p>
             </details>
           </article>
         </div>
-        <p class="muted" data-html="downloadHint"></p>
+        <p class="muted" data-i18n="downloadHint"></p>
       </section>
 
       <section id="proxy" class="block">
@@ -131,60 +109,57 @@
         </ol>
 
         <h3 data-i18n="proxyManualTitle"></h3>
-        <p data-html="proxyManualLead"></p>
+        <p data-i18n="proxyManualLead"></p>
         <p data-i18n="localIntro"></p>
         <ul>
-          <li data-html="localIp"></li>
-          <li data-html="localPort"></li>
-          <li data-html="localAuth"></li>
+          <li data-i18n="localIp"></li>
+          <li data-i18n="localPort"></li>
+          <li data-i18n="localAuth"></li>
         </ul>
         <p data-i18n="localBrowser"></p>
-        <p data-html="proxyManualDns"></p>
+        <p data-i18n="proxyManualDns"></p>
 
         <h3 data-i18n="proxyTunTitle"></h3>
-        <p data-html="proxyTunLead"></p>
+        <p data-i18n="proxyTunLead"></p>
         <ul>
-          <li data-html="proxyTunNeed"></li>
-          <li data-html="proxyTunWin"></li>
-          <li data-html="proxyTunDns"></li>
-          <li data-html="proxyTunMobile"></li>
+          <li data-i18n="proxyTunNeed"></li>
+          <li data-i18n="proxyTunWin"></li>
+          <li data-i18n="proxyTunDns"></li>
+          <li data-i18n="proxyTunMobile"></li>
         </ul>
       </section>
 
       <section id="rules" class="block">
         <h2 data-i18n="ruleTitle"></h2>
-        <p data-html="ruleOpen"></p>
-        <p data-html="ruleOrder"></p>
+        <p data-i18n="ruleOpen"></p>
+        <p data-i18n="ruleOrder"></p>
 
         <h3 data-i18n="ruleDomainTitle"></h3>
-        <p data-html="ruleDomain"></p>
+        <p data-i18n="ruleDomain"></p>
         <ul>
-          <li data-html="ruleDomainLine"></li>
-          <li data-html="ruleDomainComment"></li>
-          <li data-html="ruleDomainMatch"></li>
-          <li data-html="ruleDomainNoUrl"></li>
+          <li data-i18n="ruleDomainLine"></li>
+          <li data-i18n="ruleDomainComment"></li>
+          <li data-i18n="ruleDomainMatch"></li>
+          <li data-i18n="ruleDomainNoUrl"></li>
         </ul>
-        <p data-html="ruleDomainTun"></p>
+        <p data-i18n="ruleDomainTun"></p>
         <p>
           <span data-i18n="ruleDomainHint"></span>
-          <a href="https://penndev.github.io/prism/domain.txt"
-            >https://penndev.github.io/prism/domain.txt</a
-          >
+          <a href="https://penndev.github.io/prism/domain.txt">https://penndev.github.io/prism/domain.txt</a>
         </p>
 
         <h3 data-i18n="ruleGeoTitle"></h3>
-        <p data-html="ruleGeo"></p>
+        <p data-i18n="ruleGeo"></p>
         <ul>
-          <li data-html="ruleGlobal"></li>
-          <li data-html="ruleNone"></li>
-          <li data-html="ruleProxy"></li>
-          <li data-html="ruleBypass"></li>
+          <li data-i18n="ruleGlobal"></li>
+          <li data-i18n="ruleNone"></li>
+          <li data-i18n="ruleProxy"></li>
+          <li data-i18n="ruleBypass"></li>
         </ul>
         <p data-i18n="ruleDb"></p>
         <p>
           <span data-i18n="ruleDbHint"></span>
-          <a
-            href="https://github.com/penndev/gopkg/releases/download/ipregion-db/ipregion.db"
+          <a href="https://github.com/penndev/gopkg/releases/download/ipregion-db/ipregion.db"
             >https://github.com/penndev/gopkg/releases/download/ipregion-db/ipregion.db</a
           >
         </p>
@@ -197,20 +172,20 @@
         <h3 data-i18n="nodeTitle"></h3>
         <p data-i18n="nodeIntro"></p>
         <ul>
-          <li data-html="nodeHost"></li>
-          <li data-html="nodeProto"></li>
-          <li data-html="nodeAuth"></li>
-          <li data-html="nodeRemark"></li>
+          <li data-i18n="nodeHost"></li>
+          <li data-i18n="nodeProto"></li>
+          <li data-i18n="nodeAuth"></li>
+          <li data-i18n="nodeRemark"></li>
         </ul>
         <p data-i18n="nodeSub"></p>
 
         <h3 data-i18n="otherSettingsTitle"></h3>
         <ul>
-          <li data-html="otherPing"></li>
-          <li data-html="otherSort"></li>
-          <li data-html="otherTheme"></li>
-          <li data-html="otherBoot"></li>
-          <li data-html="otherLog"></li>
+          <li data-i18n="otherPing"></li>
+          <li data-i18n="otherSort"></li>
+          <li data-i18n="otherTheme"></li>
+          <li data-i18n="otherBoot"></li>
+          <li data-i18n="otherLog"></li>
         </ul>
 
         <h3 data-i18n="faqTitle"></h3>
@@ -233,7 +208,7 @@
           </details>
           <details>
             <summary data-i18n="faqPingQ"></summary>
-            <p data-html="faqPingA"></p>
+            <p data-i18n="faqPingA"></p>
           </details>
         </div>
       </section>
@@ -242,10 +217,7 @@
     <footer>
       <span>Prism</span>
       <a href="https://github.com/penndev/prism" data-i18n="footerSource"></a>
-      <a
-        href="https://github.com/penndev/prism/releases"
-        data-i18n="footerReleases"
-      ></a>
+      <a href="https://github.com/penndev/prism/releases" data-i18n="footerReleases"></a>
     </footer>
 
     <script src="./i18n.js"></script>

@@ -8,7 +8,7 @@
   --accent-hover: #0076b3;
   --radius: 12px;
   --font: "Segoe UI", system-ui, -apple-system, sans-serif;
-  --top-offset: 57px;
+  color-scheme: light dark;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -29,7 +29,13 @@
 
 html {
   scroll-behavior: smooth;
-  scroll-padding-top: var(--top-offset);
+  scroll-padding-top: 72px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
 }
 
 html.i18n-pending main,
@@ -44,7 +50,13 @@ body {
   font-size: 16px;
   line-height: 1.6;
   color: var(--text);
-  background: var(--bg);
+  background:
+    radial-gradient(
+      ellipse 80% 42% at 50% -12%,
+      color-mix(in srgb, var(--accent) 14%, transparent),
+      transparent 70%
+    ),
+    var(--bg);
 }
 
 a {
@@ -70,9 +82,9 @@ a:hover {
   top: 0;
   z-index: 10;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  gap: 10px 16px;
   padding: 12px 20px;
   background: color-mix(in srgb, var(--bg) 88%, transparent);
   backdrop-filter: blur(10px);
@@ -83,26 +95,19 @@ a:hover {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-right: auto;
   color: var(--text);
   font-weight: 700;
   text-decoration: none;
 }
 
 .brand:hover {
-  text-decoration: none;
   color: var(--text);
+  text-decoration: none;
 }
 
 .brand img {
   border-radius: 8px;
-}
-
-.top-right {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
 }
 
 nav {
@@ -155,6 +160,7 @@ main {
 
 .hero-logo {
   border-radius: 16px;
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
 .hero h1 {
@@ -224,44 +230,6 @@ main {
   font-size: 17px;
 }
 
-.block h4 {
-  margin: 20px 0 8px;
-  font-size: 15px;
-}
-
-.card-install {
-  margin-top: 12px;
-  padding-top: 10px;
-  border-top: 1px solid var(--line);
-}
-
-.card-install summary {
-  cursor: pointer;
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 600;
-  user-select: none;
-}
-
-.card-install summary:hover {
-  color: var(--accent);
-}
-
-.card-install[open] summary {
-  margin-bottom: 8px;
-  color: var(--text);
-}
-
-.card-install ol {
-  margin: 0;
-  color: var(--text);
-  font-size: 14px;
-}
-
-.card-install .muted {
-  margin: 8px 0 0;
-}
-
 .muted {
   color: var(--muted);
   font-size: 14px;
@@ -312,6 +280,43 @@ main {
   text-decoration: none;
 }
 
+.card-install {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.card-install summary,
+.faq summary {
+  cursor: pointer;
+  user-select: none;
+}
+
+.card-install summary {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.card-install summary:hover,
+.faq summary:hover {
+  color: var(--accent);
+}
+
+.card-install[open] summary {
+  margin-bottom: 8px;
+  color: var(--text);
+}
+
+.card-install ol {
+  margin: 0;
+  font-size: 14px;
+}
+
+.card-install .muted {
+  margin: 8px 0 0;
+}
+
 ul,
 ol {
   padding-left: 1.2em;
@@ -321,24 +326,12 @@ li + li {
   margin-top: 6px;
 }
 
-pre,
-code {
-  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 0.92em;
-}
-
 code {
   padding: 1px 6px;
   border-radius: 4px;
   background: color-mix(in srgb, var(--accent) 10%, var(--surface));
-}
-
-pre {
-  padding: 12px 14px;
-  overflow: auto;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
-  border: 1px solid var(--line);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.92em;
 }
 
 .faq details {
@@ -352,13 +345,7 @@ pre {
 }
 
 .faq summary {
-  cursor: pointer;
   font-weight: 600;
-  user-select: none;
-}
-
-.faq summary:hover {
-  color: var(--accent);
 }
 
 .faq details p {
@@ -376,21 +363,28 @@ footer {
 }
 
 @media (max-width: 640px) {
-  .cards {
-    grid-template-columns: 1fr;
-  }
-
-  .top {
-    flex-wrap: wrap;
-  }
-
-  .top-right {
-    width: 100%;
-    justify-content: space-between;
+  html {
+    scroll-padding-top: 128px;
   }
 
   nav {
+    flex: 1 1 100%;
+    order: 3;
     overflow-x: auto;
+  }
+
+  .pager {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .pager #release-meta {
+    order: -1;
+    grid-column: 1 / -1;
+  }
+
+  .cards {
+    grid-template-columns: 1fr;
   }
 
   .hero h1 {
