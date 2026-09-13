@@ -32,9 +32,9 @@ Engine.lookup(address)             // 该 IP 的地域链（叶 → 父）
 
 ```sh
 go install golang.org/x/mobile/cmd/gomobile@latest
-export PATH="$(go env GOPATH)/bin:$PATH"
 gomobile init   # 只需第一次
 
 # 若 sumdb 超时（常见于 goproxy.cn）：加上 GOSUMDB=off
-GOSUMDB=off gomobile bind -target=ios -iosversion=16.0 -o ios/engine/Engine.xcframework github.com/penndev/prism/ios/engine
+gomobile bind -target=ios -iosversion=16.0 -o ios/engine/Engine.xcframework github.com/penndev/prism/ios/engine
 ```
+
