@@ -114,6 +114,20 @@
             </a-form-item>
           </a-form>
         </section>
+
+        <section class="setting-section">
+          <div class="section-header">
+            <span class="section-title">{{ t("settings.about") }}</span>
+          </div>
+          <a-form layout="vertical" class="section-form">
+            <a-form-item :label="t('settings.version')">
+              <span>{{ appVersion }}</span>
+            </a-form-item>
+            <a-form-item :label="t('settings.website')">
+              <a href="#" @click.prevent="openWebsite">{{ websiteURL }}</a>
+            </a-form-item>
+          </a-form>
+        </section>
       </div>
     </div>
   </div>
@@ -124,9 +138,16 @@ import type { PropType } from "vue";
 import { useSettingsStore } from "@/stores/settings";
 import { t } from "@/locale";
 import { theme } from "ant-design-vue";
+import { OpenExternalURL } from "@bindings/desktop/internal/appconst";
 
 const { token } = theme.useToken();
 const settingsStore = useSettingsStore();
+const appVersion = "<version>";
+const websiteURL = "<website>";
+
+async function openWebsite() {
+  await OpenExternalURL(websiteURL);
+}
 
 defineProps({
   startWidthResize: {

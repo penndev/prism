@@ -2,8 +2,11 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject private var store: Store
+    @Environment(\.openURL) private var openURL
     @State private var dialog: SettingsDialog = .none
     @State private var latencyDraft = ""
+    private let aboutVersion = "0.0.1"
+    private let aboutWebsite = "https://penndev.github.io/prism/"
 
     var body: some View {
         ScrollView {
@@ -54,6 +57,20 @@ struct SettingsView: View {
                             },
                         ),
                     )
+                }
+                PreferenceGroup(title: store.t("settings_about")) {
+                    PreferenceRow(
+                        title: store.t("settings_version"),
+                        value: aboutVersion,
+                        showChevron: false,
+                    )
+                    PreferenceDivider()
+                    PreferenceRow(
+                        title: store.t("settings_website"),
+                        value: aboutWebsite,
+                    ) {
+                        if let url = URL(string: aboutWebsite) { openURL(url) }
+                    }
                 }
             }
             .padding(.vertical, 8)

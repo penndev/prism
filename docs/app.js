@@ -1,8 +1,9 @@
-const REPO = "penndev/socks5";
+const REPO = "penndev/prism";
 const RELEASES = `https://github.com/${REPO}/releases`;
 
 let locale = "zh-CN";
-let latestRelease = null;
+let releases = [];
+let releaseIndex = 0;
 let releaseFailed = false;
 
 function text(key) {
@@ -40,6 +41,30 @@ function pickAsset(assets, test) {
   return (assets || []).find((a) => test(a.name || ""));
 }
 
+function pickWindows(assets) {
+  return (
+    pickAsset(assets, (n) => /windows/i.test(n) && n.endsWith("-installer.exe")) ||
+    pickAsset(assets, (n) => /installer/i.test(n) && n.endsWith(".exe")) ||
+    pickAsset(assets, (n) => /windows/i.test(n) && n.endsWith(".exe"))
+  );
+}
+
+function pickMac(assets) {
+  return (
+    pickAsset(assets, (n) => /darwin/i.test(n) && n.endsWith(".pkg")) ||
+    pickAsset(assets, (n) => /darwin/i.test(n) && n.endsWith(".dmg")) ||
+    pickAsset(assets, (n) => /darwin/i.test(n) && n.endsWith(".zip"))
+  );
+}
+
+function pickAndroid(assets) {
+  return pickAsset(assets, (n) => n.toLowerCase().endsWith(".apk"));
+}
+
+function pickIos(assets) {
+  return pickAsset(assets, (n) => n.toLowerCase().endsWith(".ipa"));
+}
+
 function paintBtn(el, asset) {
   if (!el) return;
   if (asset) {
@@ -53,11 +78,16 @@ function paintBtn(el, asset) {
 
 function paintRelease() {
   const meta = document.getElementById("release-meta");
+  const newer = document.getElementById("rel-newer");
+  const older = document.getElementById("rel-older");
   const win = document.getElementById("dl-windows");
   const mac = document.getElementById("dl-darwin");
   const android = document.getElementById("dl-android");
   const ios = document.getElementById("dl-ios");
-  if (!meta || !win || !mac) return;
+  if (!meta) return;
+
+  if (newer) newer.disabled = releaseFailed || releaseIndex <= 0;
+  if (older) older.disabled = releaseFailed || releaseIndex >= releases.length - 1;
 
   if (releaseFailed) {
     meta.innerHTML = text("releaseFail");
@@ -68,7 +98,7 @@ function paintRelease() {
     return;
   }
 
-  if (!latestRelease) {
+  if (!releases.length) {
     meta.textContent = text("releaseLoading");
     paintBtn(win);
     paintBtn(mac);
@@ -77,37 +107,33 @@ function paintRelease() {
     return;
   }
 
+  const latestRelease = releases[releaseIndex];
   const tag = latestRelease.tag_name || "latest";
   const date = latestRelease.published_at
     ? new Date(latestRelease.published_at).toLocaleDateString(locale)
     : "";
+  const page = text("releasePage")
+    .replace("{n}", String(releaseIndex + 1))
+    .replace("{total}", String(releases.length));
   meta.textContent = date
-    ? text("releaseVersion").replace("{tag}", tag).replace("{date}", date)
-    : text("releaseVersionOnly").replace("{tag}", tag);
+    ? text("releaseVersion")
+        .replace("{tag}", tag)
+        .replace("{date}", date)
+        .replace("{page}", page)
+    : text("releaseVersionOnly").replace("{tag}", tag).replace("{page}", page);
 
   const assets = latestRelease.assets || [];
-  const exe = pickAsset(
-    assets,
-    (name) => name.includes("windows") && name.endsWith(".exe"),
-  );
-  const dmg = pickAsset(
-    assets,
-    (name) => name.includes("darwin") && name.endsWith(".dmg"),
-  );
-  const apk = pickAsset(
-    assets,
-    (name) => name.toLowerCase().endsWith(".apk") || name.toLowerCase().includes("android"),
-  );
-  const ipa = pickAsset(
-    assets,
-    (name) => name.toLowerCase().endsWith(".ipa") || name.toLowerCase().includes("ios"),
-  );
+  const exe = pickWindows(assets);
+  const pkg = pickMac(assets);
+  const apk = pickAndroid(assets);
+  const ipa = pickIos(assets);
 
   paintBtn(win, exe);
-  paintBtn(mac, dmg);
+  paintBtn(mac, pkg);
   paintBtn(android, apk);
   paintBtn(ios, ipa);
-  if (!exe && !dmg && !apk && !ipa) {
+
+  if (!exe && !pkg && !apk && !ipa) {
     meta.textContent = text("releaseNoAsset").replace("{tag}", tag);
   }
 }
@@ -115,20 +141,64 @@ function paintRelease() {
 async function loadRelease() {
   try {
     const res = await fetch(
-      `https://api.github.com/repos/${REPO}/releases/latest`,
+      `https://api.github.com/repos/${REPO}/releases?per_page=30`,
     );
     if (!res.ok) throw new Error(String(res.status));
-    latestRelease = await res.json();
+    const list = await res.json();
+    releases = (Array.isArray(list) ? list : []).filter((r) => r && !r.draft);
+    releaseIndex = 0;
+    if (!releases.length) throw new Error("empty");
   } catch {
     releaseFailed = true;
   }
   paintRelease();
 }
 
-applyLocale("zh-CN");
+let startLocale = "zh-CN";
+try {
+  const saved = localStorage.getItem("prism-lang");
+  if (saved && messages[saved]) startLocale = saved;
+} catch {
+  /* ignore */
+}
+applyLocale(startLocale);
 
 document.querySelectorAll("[data-lang]").forEach((btn) => {
-  btn.addEventListener("click", () => applyLocale(btn.getAttribute("data-lang")));
+  btn.addEventListener("click", () => {
+    const next = btn.getAttribute("data-lang");
+    try {
+      localStorage.setItem("prism-lang", next);
+    } catch {
+      /* ignore */
+    }
+    applyLocale(next);
+  });
+});
+
+document.getElementById("rel-newer")?.addEventListener("click", () => {
+  if (releaseIndex > 0) {
+    releaseIndex -= 1;
+    paintRelease();
+  }
+});
+
+document.getElementById("rel-older")?.addEventListener("click", () => {
+  if (releaseIndex < releases.length - 1) {
+    releaseIndex += 1;
+    paintRelease();
+  }
 });
 
 loadRelease();
+
+const topBar = document.querySelector(".top");
+if (topBar) {
+  const syncTopOffset = () => {
+    document.documentElement.style.setProperty(
+      "--top-offset",
+      Math.ceil(topBar.getBoundingClientRect().height) + "px",
+    );
+  };
+  syncTopOffset();
+  new ResizeObserver(syncTopOffset).observe(topBar);
+}

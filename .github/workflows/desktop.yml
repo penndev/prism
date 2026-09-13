@@ -38,6 +38,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -69,6 +71,25 @@ jobs:
 
       - name: Install Wails3 CLI
         run: go install github.com/wailsapp/wails/v3/cmd/wails3@${{ env.WAILS3_VERSION }}
+
+      - name: Fill about placeholders
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="$(git tag -l 'v*' --sort=-v:refname | head -n1)"
+          fi
+          if [[ -z "${TAG}" ]]; then
+            echo "no v* tag" >&2
+            exit 1
+          fi
+          WEBSITE="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/"
+          FILE="frontend/src/components/SettingPanel.vue"
+          sed -i.bak "s|<version>|${TAG}|g" "$FILE"
+          sed -i.bak "s|<website>|${WEBSITE}|g" "$FILE"
+          rm -f "${FILE}.bak"
 
       - name: Package
         run: wails3 package

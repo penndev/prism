@@ -27,6 +27,9 @@
     <string name="settings_rule_title">设置代理规则</string>
     <string name="settings_enable_log">日志记录</string>
     <string name="settings_enable_log_desc">关闭后日志页不再记录内容</string>
+    <string name="settings_about">关于</string>
+    <string name="settings_version">版本</string>
+    <string name="settings_website">官网</string>
     <string name="settings_save_success">设置已保存</string>
     <string name="settings_confirm">确定</string>
     <string name="lang_system">跟随系统</string>

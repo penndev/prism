@@ -1,5 +1,7 @@
 package com.penndev.prism.ui.settings
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
@@ -26,6 +28,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.penndev.prism.R
@@ -47,6 +50,9 @@ fun SettingsScreen(
     viewModel: PrismViewModel,
 ) {
     val settings = state.settings
+    val context = LocalContext.current
+    val aboutVersion = "0.0.1"
+    val aboutWebsite = "https://penndev.github.io/prism/"
     var dialog by remember { mutableStateOf(SettingsDialog.None) }
     val languageLabel = when (settings.system.language) {
         "zh-CN" -> stringResource(R.string.lang_zh)
@@ -111,6 +117,21 @@ fun SettingsScreen(
                     checked = settings.system.enableLogRecording,
                     onCheckedChange = { checked ->
                         viewModel.updateSystemSettings { it.copy(enableLogRecording = checked) }
+                    },
+                )
+            }
+            PreferenceGroup(title = stringResource(R.string.settings_about)) {
+                PreferenceRow(
+                    title = stringResource(R.string.settings_version),
+                    value = aboutVersion,
+                    showChevron = false,
+                )
+                PreferenceDivider()
+                PreferenceRow(
+                    title = stringResource(R.string.settings_website),
+                    value = aboutWebsite,
+                    onClick = {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(aboutWebsite)))
                     },
                 )
             }

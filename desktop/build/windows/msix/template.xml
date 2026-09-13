@@ -25,7 +25,7 @@
         </Capabilities>
         <Applications>
             <Application
-                Id="com.example.socks5desktop"
+                Id="com.example.prismdesktop"
                 Description="A prism-desktop application"
                 DisplayName="My Product"
                 ExecutableName="prism-desktop.exe"

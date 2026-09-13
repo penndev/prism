@@ -27,6 +27,9 @@
     <string name="settings_rule_title">Set proxy rules</string>
     <string name="settings_enable_log">Logging</string>
     <string name="settings_enable_log_desc">When off, the logs page stops recording</string>
+    <string name="settings_about">About</string>
+    <string name="settings_version">Version</string>
+    <string name="settings_website">Website</string>
     <string name="settings_save_success">Settings saved</string>
     <string name="settings_confirm">OK</string>
     <string name="lang_system">Follow system</string>

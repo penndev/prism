@@ -125,6 +125,8 @@ vimeo.com
 wikimedia.org
 wikipedia.org
 wsj.com
+steamcommunity.com
+steampowered.com
 
 ! [Search, Cloud & Technology (搜索引擎与综合科技)]
 1drv.ms

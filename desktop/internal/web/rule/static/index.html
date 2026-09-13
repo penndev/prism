@@ -14,19 +14,31 @@
         <img class="brand-logo" src="/subscribe/logo.png" width="38" height="38" alt="Prism">
         <div>
           <h1 id="titleMain">Prism 规则管理</h1>
-          <p id="titleDesc">按类型分区管理：地域规则与域名规则。</p>
+          <p id="titleDesc">按类型分区管理：域名规则与地域规则。</p>
         </div>
       </div>
     </header>
 
-    <section class="panel" id="panelRules">
-      <h2 id="sectionRulesTitle">规则</h2>
+    <section class="panel" id="domainSection">
+      <h2 id="domainTitle">域名规则</h2>
+      <p id="domainDesc" class="subline">填写需要代理的域名。不需要代理的域名不必填写，每行一个。</p>
+      <div class="row">
+        <input id="domainUrl" type="url" placeholder="https://…" spellcheck="false">
+        <button id="btnDomainFetch" class="primary" type="button">获取</button>
+      </div>
+      <div class="row">
+        <input id="domainFile" type="file" accept=".txt,.list,text/plain">
+        <button id="btnDomainFile" type="button">上传文件</button>
+      </div>
+      <textarea id="domains" spellcheck="false" placeholder="example.com&#10;github.com"></textarea>
+      <div class="row">
+        <span id="domainMsg" class="muted"></span>
+      </div>
+    </section>
 
-      <div class="rule-section" id="geoSection">
-        <div class="rule-section-head">
-          <h3 id="geoTitle">地域规则</h3>
-          <p id="geoDesc" class="subline">四种模式互斥：全局模式、本地模式、代理选定区域、绕过选定区域。</p>
-        </div>
+    <section class="panel" id="geoSection">
+      <h2 id="geoTitle">地域规则</h2>
+      <p id="geoDesc" class="subline">四种模式互斥：全局模式、本地模式、代理选定区域、绕过选定区域。</p>
 
         <div class="db-block">
           <div class="db-head">
@@ -76,28 +88,8 @@
           <div id="areaChecks" class="area-checks"></div>
         </div>
 
-        <div class="row">
-          <span id="geoMsg" class="muted"></span>
-        </div>
-      </div>
-
-      <div class="rule-section" id="domainSection">
-        <div class="rule-section-head">
-          <h3 id="domainTitle">域名规则</h3>
-          <p id="domainDesc" class="subline">填写需要代理的域名。不需要代理的域名不必填写，每行一个。</p>
-        </div>
-        <div class="row">
-          <input id="domainUrl" type="url" placeholder="https://…" spellcheck="false">
-          <button id="btnDomainFetch" class="primary" type="button">获取</button>
-        </div>
-        <div class="row">
-          <input id="domainFile" type="file" accept=".txt,.list,text/plain">
-          <button id="btnDomainFile" type="button">上传文件</button>
-        </div>
-        <textarea id="domains" spellcheck="false" placeholder="example.com&#10;github.com"></textarea>
-        <div class="row">
-          <span id="domainMsg" class="muted"></span>
-        </div>
+      <div class="row">
+        <span id="geoMsg" class="muted"></span>
       </div>
     </section>
   </div>
@@ -169,7 +161,6 @@
       document.title = t('title.document');
       document.getElementById('titleMain').textContent = t('title.main');
       document.getElementById('titleDesc').textContent = t('title.desc');
-      document.getElementById('sectionRulesTitle').textContent = t('section.rules.title');
       document.getElementById('geoTitle').textContent = t('geo.title');
       document.getElementById('geoDesc').textContent = t('geo.desc');
       document.getElementById('dbLabel').textContent = t('db.label');

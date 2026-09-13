@@ -11,7 +11,7 @@
 		<key>CFBundleIconName</key>
 		<string>appicon</string>
 		<key>CFBundleIdentifier</key>
-		<string>com.socks5.desktop</string>
+		<string>com.prism.desktop</string>
 		<key>CFBundleName</key>
 		<string>Prism</string>
 		<key>CFBundlePackageType</key>

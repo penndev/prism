@@ -99,7 +99,7 @@ window.WEB_I18N = {
     "zh-CN": {
       "title.document": "Prism · 规则管理",
       "title.main": "Prism 规则管理",
-      "title.desc": "按类型分区管理：地域规则与域名规则。",
+      "title.desc": "按类型分区管理：域名规则与地域规则。",
       "section.rules.title": "规则",
       "geo.title": "地域规则",
       "geo.desc": "四种模式互斥：全局模式、本地模式、代理选定区域、绕过选定区域。",
@@ -140,7 +140,7 @@ window.WEB_I18N = {
     "en": {
       "title.document": "Prism · Rules",
       "title.main": "Prism Rules",
-      "title.desc": "Manage rules by type: geo rules and domain rules.",
+      "title.desc": "Manage rules by type: domain rules and geo rules.",
       "section.rules.title": "Rules",
       "geo.title": "Geo Rules",
       "geo.desc": "Four mutually exclusive modes: global, local, proxy selected regions, or bypass selected regions.",

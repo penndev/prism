@@ -25,8 +25,10 @@
       <div class="top-right">
         <nav>
           <a href="#download" data-i18n="navDownload"></a>
-          <a href="#guide" data-i18n="navGuide"></a>
-          <a href="https://github.com/penndev/socks5" target="_blank" rel="noopener"
+          <a href="#proxy" data-i18n="navProxy"></a>
+          <a href="#rules" data-i18n="navRules"></a>
+          <a href="#other" data-i18n="navOther"></a>
+          <a href="https://github.com/penndev/prism" target="_blank" rel="noopener"
             >GitHub</a
           >
         </nav>
@@ -50,79 +52,147 @@
 
       <section id="download" class="block">
         <h2 data-i18n="downloadTitle"></h2>
-        <p class="muted" id="release-meta" data-i18n="releaseLoading"></p>
+        <div class="pager">
+          <button type="button" id="rel-newer" disabled data-i18n="releaseNewer"></button>
+          <p class="muted" id="release-meta" data-i18n="releaseLoading"></p>
+          <button type="button" id="rel-older" disabled data-i18n="releaseOlder"></button>
+        </div>
         <div class="cards">
           <article class="card">
-            <h3>Windows</h3>
+            <h3 data-i18n="platformWin"></h3>
             <p data-i18n="winDesc"></p>
             <a
               class="btn"
               id="dl-windows"
-              href="https://github.com/penndev/socks5/releases"
+              href="https://github.com/penndev/prism/releases"
               data-i18n="goReleases"
             ></a>
+            <details class="card-install">
+              <summary data-i18n="installToggle"></summary>
+              <ol data-html="installWinSteps"></ol>
+              <p class="muted" data-i18n="installWinSign"></p>
+            </details>
           </article>
           <article class="card">
-            <h3>macOS</h3>
+            <h3 data-i18n="platformMac"></h3>
             <p data-i18n="macDesc"></p>
             <a
               class="btn"
               id="dl-darwin"
-              href="https://github.com/penndev/socks5/releases"
+              href="https://github.com/penndev/prism/releases"
               data-i18n="goReleases"
             ></a>
+            <details class="card-install">
+              <summary data-i18n="installToggle"></summary>
+              <ol data-html="installMacSteps"></ol>
+              <p class="muted" data-i18n="installMacSign"></p>
+            </details>
           </article>
           <article class="card">
-            <h3>Android</h3>
+            <h3 data-i18n="platformAndroid"></h3>
             <p data-i18n="androidDesc"></p>
             <a
               class="btn"
               id="dl-android"
-              href="https://github.com/penndev/socks5/releases"
+              href="https://github.com/penndev/prism/releases"
               data-i18n="goReleases"
             ></a>
+            <details class="card-install">
+              <summary data-i18n="installToggle"></summary>
+              <ol data-html="installAndroidSteps"></ol>
+            </details>
           </article>
           <article class="card">
-            <h3>iOS</h3>
+            <h3 data-i18n="platformIos"></h3>
             <p data-i18n="iosDesc"></p>
             <a
               class="btn"
               id="dl-ios"
-              href="https://github.com/penndev/socks5/releases"
+              href="https://github.com/penndev/prism/releases"
               data-i18n="goReleases"
             ></a>
+            <details class="card-install">
+              <summary data-i18n="installToggle"></summary>
+              <ol data-html="installIosSteps"></ol>
+              <p class="muted" data-i18n="installIosSign"></p>
+            </details>
           </article>
         </div>
         <p class="muted" data-html="downloadHint"></p>
       </section>
 
-      <section id="guide" class="block">
-        <h2 data-i18n="guideTitle"></h2>
+      <section id="proxy" class="block">
+        <h2 data-i18n="proxyTitle"></h2>
+        <p data-i18n="proxyIntro"></p>
+        <ol>
+          <li data-i18n="proxyStep1"></li>
+          <li data-i18n="proxyStep2"></li>
+          <li data-i18n="proxyStep3"></li>
+        </ol>
 
-        <h3 data-i18n="installTitle"></h3>
+        <h3 data-i18n="proxyManualTitle"></h3>
+        <p data-html="proxyManualLead"></p>
+        <p data-i18n="localIntro"></p>
+        <ul>
+          <li data-html="localIp"></li>
+          <li data-html="localPort"></li>
+          <li data-html="localAuth"></li>
+        </ul>
+        <p data-i18n="localBrowser"></p>
+        <p data-html="proxyManualDns"></p>
 
-        <div class="install">
-          <h4>Windows</h4>
-          <ol data-html="installWinSteps"></ol>
-          <p class="muted" data-i18n="installWinSign"></p>
-        </div>
+        <h3 data-i18n="proxyTunTitle"></h3>
+        <p data-html="proxyTunLead"></p>
+        <ul>
+          <li data-html="proxyTunNeed"></li>
+          <li data-html="proxyTunWin"></li>
+          <li data-html="proxyTunDns"></li>
+          <li data-html="proxyTunMobile"></li>
+        </ul>
+      </section>
 
-        <div class="install">
-          <h4>iOS</h4>
-          <ol data-html="installIosSteps"></ol>
-          <p class="muted" data-i18n="installIosSign"></p>
-        </div>
+      <section id="rules" class="block">
+        <h2 data-i18n="ruleTitle"></h2>
+        <p data-html="ruleOpen"></p>
+        <p data-html="ruleOrder"></p>
 
-        <div class="install">
-          <h4>Android</h4>
-          <ol data-html="installAndroidSteps"></ol>
-        </div>
+        <h3 data-i18n="ruleDomainTitle"></h3>
+        <p data-html="ruleDomain"></p>
+        <ul>
+          <li data-html="ruleDomainLine"></li>
+          <li data-html="ruleDomainComment"></li>
+          <li data-html="ruleDomainMatch"></li>
+          <li data-html="ruleDomainNoUrl"></li>
+        </ul>
+        <p data-html="ruleDomainTun"></p>
+        <p>
+          <span data-i18n="ruleDomainHint"></span>
+          <a href="https://penndev.github.io/prism/domain.txt"
+            >https://penndev.github.io/prism/domain.txt</a
+          >
+        </p>
 
-        <div class="install">
-          <h4>macOS</h4>
-          <ol data-html="installMacSteps"></ol>
-          <p class="muted" data-i18n="installMacSign"></p>
-        </div>
+        <h3 data-i18n="ruleGeoTitle"></h3>
+        <p data-html="ruleGeo"></p>
+        <ul>
+          <li data-html="ruleGlobal"></li>
+          <li data-html="ruleNone"></li>
+          <li data-html="ruleProxy"></li>
+          <li data-html="ruleBypass"></li>
+        </ul>
+        <p data-i18n="ruleDb"></p>
+        <p>
+          <span data-i18n="ruleDbHint"></span>
+          <a
+            href="https://github.com/penndev/gopkg/releases/download/ipregion-db/ipregion.db"
+            >https://github.com/penndev/gopkg/releases/download/ipregion-db/ipregion.db</a
+          >
+        </p>
+        <p data-i18n="ruleManual"></p>
+      </section>
+
+      <section id="other" class="block">
+        <h2 data-i18n="otherTitle"></h2>
 
         <h3 data-i18n="nodeTitle"></h3>
         <p data-i18n="nodeIntro"></p>
@@ -134,66 +204,7 @@
         </ul>
         <p data-i18n="nodeSub"></p>
 
-        <h3 data-i18n="connectTitle"></h3>
-        <ol>
-          <li data-i18n="connect1"></li>
-          <li data-i18n="connect2"></li>
-          <li data-i18n="connect3"></li>
-        </ol>
-        <ul>
-          <li data-html="modeManual"></li>
-          <li data-html="modeTun"></li>
-        </ul>
-
-        <h3 data-i18n="localTitle"></h3>
-        <p data-i18n="localIntro"></p>
-        <ul>
-          <li data-html="localIp"></li>
-          <li data-html="localPort"></li>
-          <li data-html="localAuth"></li>
-        </ul>
-        <p data-i18n="localBrowser"></p>
-        <pre data-i18n="localSample"></pre>
-
-        <h3 data-i18n="ruleTitle"></h3>
-        <p data-html="ruleOpen"></p>
-        <p data-html="ruleOrder"></p>
-        <ol>
-          <li data-html="ruleOrder1"></li>
-          <li data-html="ruleOrder2"></li>
-        </ol>
-        <p data-html="ruleManual"></p>
-
-        <h4 data-i18n="ruleGeoTitle"></h4>
-        <p data-html="ruleGeo"></p>
-        <ul>
-          <li data-html="ruleGlobal"></li>
-          <li data-html="ruleNone"></li>
-          <li data-html="ruleProxy"></li>
-          <li data-html="ruleBypass"></li>
-        </ul>
-        <p data-html="ruleDb"></p>
-
-        <h4 data-i18n="ruleDomainTitle"></h4>
-        <p data-html="ruleDomain"></p>
-        <ul>
-          <li data-html="ruleDomainLine"></li>
-          <li data-html="ruleDomainComment"></li>
-          <li data-html="ruleDomainMatch"></li>
-          <li data-html="ruleDomainNoUrl"></li>
-        </ul>
-        <p data-html="ruleDomainExample"></p>
-        <pre>! [Google Services (谷歌服务与生态)]
-google.com
-googleapis.com
-youtube.com
-
-! [AI & Developer Tools (人工智能与开发工具)]
-github.com
-openai.com
-cursor.com</pre>
-
-        <h3 data-i18n="otherTitle"></h3>
+        <h3 data-i18n="otherSettingsTitle"></h3>
         <ul>
           <li data-html="otherPing"></li>
           <li data-html="otherSort"></li>
@@ -203,24 +214,36 @@ cursor.com</pre>
         </ul>
 
         <h3 data-i18n="faqTitle"></h3>
-        <dl class="faq">
-          <dt data-i18n="faqRuleQ"></dt>
-          <dd data-i18n="faqRuleA"></dd>
-          <dt data-i18n="faqTunQ"></dt>
-          <dd data-i18n="faqTunA"></dd>
-          <dt data-i18n="faqSaveQ"></dt>
-          <dd data-i18n="faqSaveA"></dd>
-          <dt data-i18n="faqPingQ"></dt>
-          <dd data-html="faqPingA"></dd>
-        </dl>
+        <div class="faq">
+          <details>
+            <summary data-i18n="faqRuleQ"></summary>
+            <p data-i18n="faqRuleA"></p>
+          </details>
+          <details>
+            <summary data-i18n="faqTunQ"></summary>
+            <p data-i18n="faqTunA"></p>
+          </details>
+          <details>
+            <summary data-i18n="faqVpnQ"></summary>
+            <p data-i18n="faqVpnA"></p>
+          </details>
+          <details>
+            <summary data-i18n="faqSaveQ"></summary>
+            <p data-i18n="faqSaveA"></p>
+          </details>
+          <details>
+            <summary data-i18n="faqPingQ"></summary>
+            <p data-html="faqPingA"></p>
+          </details>
+        </div>
       </section>
     </main>
 
     <footer>
       <span>Prism</span>
-      <a href="https://github.com/penndev/socks5" data-i18n="footerSource"></a>
+      <a href="https://github.com/penndev/prism" data-i18n="footerSource"></a>
       <a
-        href="https://github.com/penndev/socks5/releases"
+        href="https://github.com/penndev/prism/releases"
         data-i18n="footerReleases"
       ></a>
     </footer>

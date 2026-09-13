@@ -15,9 +15,6 @@
     </template>
 
     <div v-if="!serverStore.selectedServer" class="proxy-empty">
-      <span class="proxy-empty-icon">
-        <CloudServerOutlined />
-      </span>
       <span class="proxy-empty-text">{{ t("proxy.selectTip") }}</span>
     </div>
 
@@ -55,7 +52,7 @@
 <script setup>
 import { ref, watch } from "vue";
 import { theme, message } from "ant-design-vue";
-import { CloudServerOutlined, FilterOutlined } from "@ant-design/icons-vue";
+import { FilterOutlined } from "@ant-design/icons-vue";
 
 import { useServerStore } from "../stores/server";
 import { useSettingsStore } from "@/stores/settings";
@@ -195,25 +192,11 @@ watch(() => settingsStore.proxy, debounce(startLocalProxy, 1000), { deep: true }
   .proxy-empty {
     display: flex;
     align-items: center;
-    gap: 10px;
     min-height: 56px;
     padding: 10px 12px;
     background: v-bind("token.colorFillAlter");
     border: 1px dashed v-bind("token.colorBorder");
     border-radius: 8px;
-
-    .proxy-empty-icon {
-      flex-shrink: 0;
-      width: 32px;
-      height: 32px;
-      border-radius: 8px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      background: v-bind("token.colorPrimaryBg");
-      color: v-bind("token.colorPrimary");
-      font-size: 16px;
-    }
 
     .proxy-empty-text {
       font-size: 13px;

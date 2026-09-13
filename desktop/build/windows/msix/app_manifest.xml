@@ -29,7 +29,7 @@
   </Resources>
   
   <Applications>
-    <Application Id="com.example.socks5desktop" Executable="prism-desktop.exe" EntryPoint="Windows.FullTrustApplication">
+    <Application Id="com.example.prismdesktop" Executable="prism-desktop.exe" EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements
         DisplayName="My Product"
         Description="A prism-desktop application"
