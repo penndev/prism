@@ -9,7 +9,7 @@ struct EngineError: LocalizedError {
 }
 
 /// 转发到 gomobile 生成的 `Engine.xcframework`。
-/// Start/Stop 仍是 Go 侧模拟（未接 TUN）；Ping / IP 库是真实现。
+/// Start 挂 gVisor；包经 `writePacket` / `Handler.writePacket` 进出。
 enum Engine {
     static func start(_ opt: EngineOptions) throws {
         var err: NSError?
@@ -20,6 +20,10 @@ enum Engine {
 
     static func stop() {
         EngineStop()
+    }
+
+    static func writePacket(_ pkt: Data?) {
+        EngineWritePacket(pkt)
     }
 
     static func ping(_ proxy: String, _ latencyHost: String) -> Int64 {

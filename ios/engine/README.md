@@ -2,7 +2,7 @@
 
 本目录同时放 **Go 源码** 和预编译 `Engine.xcframework`。Xcode 里 Prism target 链接并 embed 该 framework，不在 Xcode 里编 Go。
 
-`Ping` / `SetIpregionDB` / `AreaTree` / `Lookup` 和 Android 一样是真实现。`Start` / `Stop` 目前是模拟：只校验代理 URL 并标记已启动。iOS 的 TUN 走 Network Extension 的 `packetFlow`，协议栈和 VPN 权限以后再对接。
+`Ping` / `SetIpregionDB` / `AreaTree` / `Lookup` 和 Android 一样是真实现。`Start` / `Stop` 挂 gVisor channel 端点；iOS 没有 TUN fd，包经 `Engine.writePacket` / `handler.writePacket` 进出。主 App 暂不嵌入 PacketTunnel，进程内 Start 时 handler 的 `writePacket` 是空实现。
 
 Swift 经 `Shared/Engine.swift` 调用 gomobile 符号（`EnginePing`、`EngineStart` 等）。
 
@@ -15,6 +15,7 @@ opt.proxy = "socks5://user:pass@host:port" // socks5 / socks5s / http / https
 opt.upstream = systemDns
 opt.handler = handler
 try Engine.start(opt)
+Engine.writePacket(packet)      // packetFlow.readPackets 推入
 Engine.stop()
 
 Engine.ping(proxyURL, latencyHost) // ms，失败 -1
@@ -24,7 +25,9 @@ Engine.areaTree()                  // JSON，形状同桌面 /rule/api/areas
 Engine.lookup(address)             // 该 IP 的地域链（叶 → 父）
 ```
 
-下载 IP 库、选模式和勾选地域都在 Swift 完成。域名列表也在 Swift：`needFake` 判断是否 fake。
+下载 IP 库、选模式和勾选地域都在 Swift 完成。域名列表也在 Swift：`needFake` 判断是否 fake。`Engine.writePacket` 是 Swift 写入栈；`handler.writePacket` 把出站包写回 `packetFlow`。主 App 进程内 Start 给空实现即可。
+
+改过 `Start` / `WritePacket` 之后要重编 xcframework，否则 Xcode 对不上新符号。
 
 ## 重编 xcframework
 

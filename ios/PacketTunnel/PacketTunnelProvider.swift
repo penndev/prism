@@ -1,7 +1,9 @@
+import Darwin
 import NetworkExtension
 
 // 预留：主 App 暂不嵌入、不申请 VPN 权限。接 TUN 时再编进 Prism。
 class PacketTunnelProvider: NEPacketTunnelProvider {
+    private var reading = false
 
     override func startTunnel(options: [String: NSObject]?, completionHandler: @escaping (Error?) -> Void) {
         let proto = protocolConfiguration as? NETunnelProviderProtocol
@@ -25,9 +27,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             opt.mtu = 1500
             opt.proxy = proxy
             opt.upstream = upstream
-            opt.handler = TunnelHandler()
+            opt.handler = TunnelHandler(flow: self.packetFlow)
             do {
                 try Engine.start(opt)
+                self.reading = true
+                self.readLoop()
                 completionHandler(nil)
             } catch {
                 completionHandler(error)
@@ -36,12 +40,27 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
+        reading = false
         Engine.stop()
         completionHandler()
+    }
+
+    private func readLoop() {
+        packetFlow.readPackets { [weak self] packets, _ in
+            guard let self, self.reading else { return }
+            for p in packets { Engine.writePacket(p) }
+            self.readLoop()
+        }
     }
 }
 
 private final class TunnelHandler: NSObject, EngineHandlerProtocol {
+    private let flow: NEPacketTunnelFlow
+
+    init(flow: NEPacketTunnelFlow) {
+        self.flow = flow
+    }
+
     func onLog(_ line: String?) {
         if let line { NSLog("%@", line) }
     }
@@ -74,6 +93,12 @@ private final class TunnelHandler: NSObject, EngineHandlerProtocol {
 
     func onProxyRead(_ n: Int64) {}
     func onProxyWrite(_ n: Int64) {}
+
+    func writePacket(_ pkt: Data?) {
+        guard let pkt, !pkt.isEmpty else { return }
+        let af: NSNumber = (pkt[0] >> 4) == 6 ? NSNumber(value: AF_INET6) : NSNumber(value: AF_INET)
+        flow.writePackets([pkt], withProtocols: [af])
+    }
 
     private func inSelectedAreas(_ address: String, _ ids: Set<Int64>) -> Bool {
         if ids.isEmpty { return false }

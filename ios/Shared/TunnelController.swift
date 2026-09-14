@@ -183,6 +183,8 @@ private final class InProcessHandler: NSObject, EngineHandlerProtocol {
         TunnelController.shared.addDownload(n)
     }
 
+    func writePacket(_ pkt: Data?) {}
+
     private func shouldProxy(_ address: String) -> Bool {
         let rules = TunnelController.shared.rules
         switch rules.geoMode {
