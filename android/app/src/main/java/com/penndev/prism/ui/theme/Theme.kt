@@ -8,6 +8,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import com.penndev.prism.data.ThemeMode
 
+private val LightSurface = Color.White
+private val DarkSurface = Color(0xFF1F1F1F)
+
 private val LightColors = lightColorScheme(
     primary = PrismBlue,
     onPrimary = Color.White,
@@ -15,8 +18,14 @@ private val LightColors = lightColorScheme(
     onPrimaryContainer = Color(0xFF003A8C),
     secondary = PrismBlue,
     background = Color(0xFFF5F5F5),
-    surface = Color.White,
-    surfaceContainer = Color.White,
+    surface = LightSurface,
+    surfaceBright = LightSurface,
+    surfaceContainerLowest = LightSurface,
+    surfaceContainerLow = LightSurface,
+    surfaceContainer = LightSurface,
+    surfaceContainerHigh = LightSurface,
+    surfaceContainerHighest = LightSurface,
+    surfaceTint = Color.Transparent,
     surfaceVariant = Color(0xFFF5F5F5),
     outline = Color(0xFFD9D9D9),
     onSurface = Color(0xFF1F1F1F),
@@ -30,8 +39,14 @@ private val DarkColors = darkColorScheme(
     onPrimaryContainer = Color(0xFFD6E8FF),
     secondary = PrismBlueDark,
     background = Color(0xFF141414),
-    surface = Color(0xFF1F1F1F),
-    surfaceContainer = Color(0xFF1F1F1F),
+    surface = DarkSurface,
+    surfaceBright = DarkSurface,
+    surfaceContainerLowest = DarkSurface,
+    surfaceContainerLow = DarkSurface,
+    surfaceContainer = DarkSurface,
+    surfaceContainerHigh = DarkSurface,
+    surfaceContainerHighest = DarkSurface,
+    surfaceTint = Color.Transparent,
     surfaceVariant = Color(0xFF2A2A2A),
     outline = Color(0xFF434343),
     onSurface = Color(0xFFFAFAFA),

@@ -2,7 +2,6 @@
 package storage
 
 import (
-	"desktop/internal/lang"
 	"encoding/json"
 	"errors"
 	"os"
@@ -53,7 +52,7 @@ func (s *Storage) GetSettings() (*Settings, error) {
 		return nil, err
 	}
 	if out.System.Language == "" {
-		out.System.Language = lang.DefaultLang.CurrentLocale()
+		out.System.Language = "system"
 	}
 	return &out, nil
 }

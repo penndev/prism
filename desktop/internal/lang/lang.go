@@ -8,8 +8,29 @@ import (
 	"errors"
 	"path"
 	"sort"
+	"strings"
 	"sync"
 )
+
+const LocaleSystem = "system"
+
+// Resolve 把设置里的语言偏好收成实际文案包 id。
+// 空值或 system 跟操作系统 UI 语言；中文都落到 zh-CN，其余落到 en。
+func Resolve(pref string) string {
+	pref = strings.TrimSpace(pref)
+	if pref != "" && !strings.EqualFold(pref, LocaleSystem) {
+		return pref
+	}
+	tag := strings.ToLower(osLanguageTag())
+	tag = strings.ReplaceAll(tag, "_", "-")
+	if i := strings.IndexAny(tag, ".@"); i >= 0 {
+		tag = tag[:i]
+	}
+	if strings.HasPrefix(tag, "zh") {
+		return "zh-CN"
+	}
+	return "en"
+}
 
 //go:embed locales/*.json
 var localeFS embed.FS
@@ -49,7 +70,7 @@ func New() (*Lang, error) {
 		bundles[id] = m
 	}
 	l := &Lang{
-		locale:  "en",
+		locale:  Resolve(LocaleSystem),
 		bundles: bundles,
 	}
 	if _, ok := bundles[l.locale]; !ok {
@@ -82,6 +103,7 @@ func (l *Lang) CurrentLocale() string {
 
 // SetLocale 切换语言并向前端派发 localeChanged 事件。
 func (l *Lang) SetLocale(locale string) error {
+	locale = Resolve(locale)
 	l.mu.Lock()
 	if l.locale == locale {
 		l.mu.Unlock()
@@ -115,6 +137,7 @@ func (l *Lang) T(key string) string {
 
 // Bundle 返回指定语言的完整键值表（用于前端一次性注入）；未知语言返回空 map。
 func (l *Lang) Bundle(locale string) map[string]string {
+	locale = Resolve(locale)
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 	src := l.bundles[locale]

@@ -2,8 +2,7 @@ import { defineStore } from "pinia";
 import { Storage } from "@bindings/desktop/internal/storage";
 import { notification } from "ant-design-vue";
 import { debounce } from "@/utils";
-import { t, subscribeLocaleEvents } from "@/locale";
-import { SetLocale } from "@bindings/desktop/internal/lang/lang";
+import { t, subscribeLocaleEvents, applyLocale, LANGUAGE_SYSTEM } from "@/locale";
 import { Enable, Disable } from "@bindings/desktop/internal/autostart/autostart";
 
 // 已生效的值。save() 每次改动都会跑，只有这两项真正变化时才需要动后端语言和注册表启动项。
@@ -23,7 +22,7 @@ export const useSettingsStore = defineStore("settings", {
       sortAfterPing: true,
     },
     system: {
-      language: '',
+      language: LANGUAGE_SYSTEM,
       themeMode: "system",
       startupOnBoot: false,
       enableLogRecording: false,
@@ -58,7 +57,7 @@ export const useSettingsStore = defineStore("settings", {
         if (this.system.language !== appliedLanguage) {
           appliedLanguage = this.system.language;
           // 前端文案和托盘文案都由后端的 localeChanged 事件驱动，这里只负责通知后端
-          await SetLocale(this.system.language);
+          await applyLocale(this.system.language);
         }
         if (this.system.startupOnBoot !== appliedStartupOnBoot) {
           appliedStartupOnBoot = this.system.startupOnBoot;
@@ -100,13 +99,9 @@ export const useSettingsStore = defineStore("settings", {
           };
 
           this.proxyMode = storedSettings.proxyMode || this.proxyMode;
-        }else{
-          // 强制设置默认语言环境
-          if(navigator.language.startsWith("zh")){
-            this.system.language = "zh-CN";
-          }else{
-            this.system.language = "en";
-          }
+        }
+        if (!this.system.language) {
+          this.system.language = LANGUAGE_SYSTEM;
         }
         // 设置初始语言与开机启动
         appliedLanguage = this.system.language;

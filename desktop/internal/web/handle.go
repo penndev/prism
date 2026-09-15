@@ -1,6 +1,7 @@
 package web
 
 import (
+	"desktop/internal/lang"
 	"desktop/internal/storage"
 	"embed"
 	"encoding/json"
@@ -24,11 +25,11 @@ func handleAppConfig(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	language := "zh-CN"
+	language := lang.Resolve(lang.LocaleSystem)
 	themeMode := "system"
 	if settings != nil {
 		if v := strings.TrimSpace(settings.System.Language); v != "" {
-			language = v
+			language = lang.Resolve(v)
 		}
 		if v := strings.TrimSpace(settings.System.ThemeMode); v != "" {
 			themeMode = strings.ToLower(v)

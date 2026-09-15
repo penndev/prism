@@ -78,6 +78,9 @@
                 :placeholder="t('settings.selectLanguage')"
                 style="width: 100%"
               >
+                <a-select-option value="system">
+                  {{ t("settings.language.system") }}
+                </a-select-option>
                 <a-select-option value="zh-CN">简体中文</a-select-option>
                 <a-select-option value="en">English</a-select-option>
               </a-select>
@@ -119,14 +122,16 @@
           <div class="section-header">
             <span class="section-title">{{ t("settings.about") }}</span>
           </div>
-          <a-form layout="vertical" class="section-form">
-            <a-form-item :label="t('settings.version')">
-              <span>{{ appVersion }}</span>
-            </a-form-item>
-            <a-form-item :label="t('settings.website')">
-              <a href="#" @click.prevent="openWebsite">{{ websiteURL }}</a>
-            </a-form-item>
-          </a-form>
+          <div class="about-rows">
+            <div class="about-row">
+              <span>{{ t("settings.version") }}</span>
+              <span class="about-row-meta">{{ appVersion }}</span>
+            </div>
+            <button type="button" class="about-row about-row-btn" @click="openWebsite">
+              <span>{{ t("settings.website") }}</span>
+              <span class="about-row-meta">{{ websiteURL }}</span>
+            </button>
+          </div>
         </section>
       </div>
     </div>
@@ -220,6 +225,41 @@ defineProps({
     font-size: 12px;
     color: v-bind("token.colorTextSecondary");
     line-height: 1.45;
+  }
+
+  .about-rows {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .about-row {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0;
+    padding: 10px 0;
+    border: 0;
+    border-bottom: 1px solid v-bind("token.colorBorderSecondary");
+    background: transparent;
+    font-size: 13px;
+    color: v-bind("token.colorText");
+    text-align: left;
+
+    &:last-child {
+      padding-bottom: 0;
+      border-bottom: 0;
+    }
+  }
+
+  .about-row-btn {
+    cursor: pointer;
+  }
+
+  .about-row-meta {
+    font-size: 12px;
+    color: v-bind("token.colorTextSecondary");
   }
 }
 </style>

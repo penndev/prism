@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -11,8 +12,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -28,9 +29,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import com.penndev.prism.R
 import com.penndev.prism.data.LANGUAGE_SYSTEM
 import com.penndev.prism.data.ThemeMode
@@ -170,32 +173,45 @@ fun SettingsScreen(
         )
         SettingsDialog.LatencyHost -> {
             var draft by remember { mutableStateOf(settings.latencyTest.host) }
-            AlertDialog(
-                onDismissRequest = { dialog = SettingsDialog.None },
-                title = { Text(stringResource(R.string.settings_latency_test_host)) },
-                text = {
+            Dialog(onDismissRequest = { dialog = SettingsDialog.None }) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surface)
+                        .padding(20.dp),
+                ) {
+                    Text(
+                        stringResource(R.string.settings_latency_test_host),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
                     OutlinedTextField(
                         value = draft,
                         onValueChange = { draft = it },
                         placeholder = { Text(stringResource(R.string.settings_latency_test_host_placeholder)) },
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp),
                     )
-                },
-                confirmButton = {
-                    TextButton(onClick = {
-                        viewModel.updateLatencySettings { it.copy(host = draft.trim()) }
-                        dialog = SettingsDialog.None
-                    }) {
-                        Text(stringResource(R.string.settings_confirm))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        TextButton(onClick = { dialog = SettingsDialog.None }) {
+                            Text(stringResource(R.string.server_list_delete_cancel))
+                        }
+                        TextButton(onClick = {
+                            viewModel.updateLatencySettings { it.copy(host = draft.trim()) }
+                            dialog = SettingsDialog.None
+                        }) {
+                            Text(stringResource(R.string.settings_confirm))
+                        }
                     }
-                },
-                dismissButton = {
-                    TextButton(onClick = { dialog = SettingsDialog.None }) {
-                        Text(stringResource(R.string.server_list_delete_cancel))
-                    }
-                },
-            )
+                }
+            }
         }
     }
 }
@@ -208,29 +224,39 @@ private fun OptionDialog(
     onDismiss: () -> Unit,
     onSelect: (String) -> Unit,
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            Column {
-                options.forEach { (key, label) ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onSelect(key) }
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(selected = key == selected, onClick = { onSelect(key) })
-                        Text(label)
-                    }
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surface),
+        ) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            )
+            PreferenceDivider()
+            options.forEach { (key, label) ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSelect(key) }
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(selected = key == selected, onClick = { onSelect(key) })
+                    Text(label, style = MaterialTheme.typography.bodyLarge)
                 }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .align(Alignment.End)
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+            ) {
                 Text(stringResource(R.string.server_list_delete_cancel))
             }
-        },
-    )
+        }
+    }
 }

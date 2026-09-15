@@ -18,6 +18,7 @@
   "settings.system": "System",
   "settings.systemLanguage": "Language",
   "settings.selectLanguage": "Select language",
+  "settings.language.system": "Follow system",
   "settings.theme": "Theme",
   "settings.theme.system": "Follow system",
   "settings.theme.light": "Light",

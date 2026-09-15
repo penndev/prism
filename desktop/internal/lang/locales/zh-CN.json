@@ -18,6 +18,7 @@
   "settings.system": "系统",
   "settings.systemLanguage": "系统语言",
   "settings.selectLanguage": "选择语言",
+  "settings.language.system": "跟随系统",
   "settings.theme": "主题模式",
   "settings.theme.system": "跟随系统",
   "settings.theme.light": "浅色模式",
