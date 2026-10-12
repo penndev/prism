@@ -55,10 +55,9 @@ class PrismVpnService : VpnService() {
     }
 
     private fun startTunnel() {
-        if (running.get()) {
-            // 已经在跑了，也要回一次状态，否则 UI 的 vpnBusy 复位不了
-            VpnController.markRunning(true)
-            return
+        if (running.getAndSet(false)) {
+            // 切换节点时服务已在跑。先停掉旧隧道，再用当前 session 重新建立。
+            runCatching { Engine.stop() }
         }
 
         val server = VpnController.session
@@ -216,6 +215,7 @@ class PrismVpnService : VpnService() {
         override fun needFake(name: String?): Boolean {
             val host = name.orEmpty().trim('.').lowercase()
             if (host.isEmpty()) return false
+            if (VpnController.rules.geoMode == GeoMode.Global) return true
             val domains = VpnController.fakeDomains
             if (domains.isEmpty()) return false
             var n = host

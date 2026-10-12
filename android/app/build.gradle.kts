@@ -6,19 +6,23 @@ plugins {
 
 android {
     namespace = "com.penndev.prism"
-    compileSdk = 35
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.penndev.prism"
         minSdk = 26
-        targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        targetSdk = 37
+        versionCode = 3
+        versionName = "0.0.1"
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // 1. 开启代码混淆与压缩
+            isMinifyEnabled = true
+
+            // 2. 开启无用资源剔除
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
@@ -60,5 +64,6 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.zxing.android.embedded)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

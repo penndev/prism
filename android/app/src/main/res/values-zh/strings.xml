@@ -148,6 +148,9 @@
     <string name="subscribe_parse">解析</string>
     <string name="subscribe_import_file">导入 JSON</string>
     <string name="subscribe_paste">粘贴</string>
+    <string name="subscribe_scan">扫描二维码</string>
+    <string name="subscribe_scan_saved">链接已暂存</string>
+    <string name="subscribe_scan_prompt">扫描订阅二维码</string>
     <string name="subscribe_list_title">当前节点</string>
     <string name="subscribe_export">导出 JSON</string>
     <string name="subscribe_preview_title">预览</string>

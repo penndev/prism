@@ -37,9 +37,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 import com.penndev.prism.R
 import com.penndev.prism.ui.PrismUiState
 import com.penndev.prism.ui.PrismViewModel
@@ -69,6 +72,13 @@ fun SubscribeScreen(
             viewModel.parseSubscription(subscribeType, text, fromFile = true)
         }
     }
+    val scanQr = rememberLauncherForActivityResult(ScanContract()) { result ->
+        val text = result.contents?.trim().orEmpty()
+        if (text.isNotEmpty()) {
+            subscribeUrl = text
+            viewModel.snack(R.string.subscribe_scan_saved)
+        }
+    }
     val createFile = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json"),
     ) { uri ->
@@ -93,6 +103,25 @@ fun SubscribeScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = {
+                            scanQr.launch(
+                                ScanOptions().apply {
+                                    setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+                                    setPrompt(context.getString(R.string.subscribe_scan_prompt))
+                                    setBeepEnabled(false)
+                                    setOrientationLocked(false)
+                                },
+                            )
+                        },
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_qr_code),
+                            contentDescription = stringResource(R.string.subscribe_scan),
+                        )
                     }
                 },
             )

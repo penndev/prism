@@ -17,3 +17,5 @@
 .kotlin
 /engine/*.aar
 /engine/*.jar
+# 发布文件
+/app/release/ 

@@ -148,6 +148,9 @@
     <string name="subscribe_parse">Parse</string>
     <string name="subscribe_import_file">Import JSON</string>
     <string name="subscribe_paste">Paste</string>
+    <string name="subscribe_scan">Scan QR code</string>
+    <string name="subscribe_scan_saved">Link saved for now</string>
+    <string name="subscribe_scan_prompt">Scan the subscription QR code</string>
     <string name="subscribe_list_title">Saved nodes</string>
     <string name="subscribe_export">Export JSON</string>
     <string name="subscribe_preview_title">Preview</string>

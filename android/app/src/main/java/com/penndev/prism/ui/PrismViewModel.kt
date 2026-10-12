@@ -107,13 +107,18 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun selectServer(server: ServerItem?) {
+        val previous = _state.value.selectedId
         _state.update { it.copy(selectedId = server?.id) }
         prefs.saveSelectedId(server?.id)
         if (server == null) {
             if (_state.value.running) stop()
             appendStatus(str(R.string.status_node_cleared))
-        } else {
-            appendStatus(str(R.string.status_node_selected, server.displayName))
+            return
+        }
+        appendStatus(str(R.string.status_node_selected, server.displayName))
+        if (server.id != previous && _state.value.running) {
+            VpnController.start(app, server)
+            appendStatus(str(R.string.status_vpn_starting, server.displayName))
         }
     }
 

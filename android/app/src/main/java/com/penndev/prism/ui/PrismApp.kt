@@ -1,5 +1,6 @@
 package com.penndev.prism.ui
 
+import android.net.Uri
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -57,7 +58,6 @@ private object Routes {
     const val RulesGeo = "rules/geo"
     const val Subscribe = "subscribe"
     const val ServerEdit = "server/edit"
-    const val ServerEditId = "server/edit/{id}"
 }
 
 @Composable
@@ -141,7 +141,9 @@ fun PrismApp(viewModel: PrismViewModel) {
                         viewModel = viewModel,
                         onOpenSubscribe = { navController.navigate(Routes.Subscribe) },
                         onAddServer = { navController.navigate(Routes.ServerEdit) },
-                        onEditServer = { navController.navigate("${Routes.ServerEdit}/${it.id}") },
+                        onEditServer = {
+                            navController.navigate("${Routes.ServerEdit}?id=${Uri.encode(it.id)}")
+                        },
                     )
                 }
                 composable(Routes.Settings) {
@@ -178,21 +180,20 @@ fun PrismApp(viewModel: PrismViewModel) {
                         onBack = { navController.popBackStack() },
                     )
                 }
-                composable(Routes.ServerEdit) {
-                    ServerEditScreen(
-                        viewModel = viewModel,
-                        server = null,
-                        onBack = { navController.popBackStack() },
-                    )
-                }
                 composable(
-                    route = Routes.ServerEditId,
-                    arguments = listOf(navArgument("id") { type = NavType.StringType }),
+                    route = "${Routes.ServerEdit}?id={id}",
+                    arguments = listOf(
+                        navArgument("id") {
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
+                        },
+                    ),
                 ) { entry ->
                     val id = entry.arguments?.getString("id")
                     ServerEditScreen(
                         viewModel = viewModel,
-                        server = state.servers.firstOrNull { it.id == id },
+                        server = id?.let { serverId -> state.servers.firstOrNull { it.id == serverId } },
                         onBack = { navController.popBackStack() },
                     )
                 }
