@@ -7,7 +7,7 @@ struct RulesView: View {
 
     var body: some View {
         ScrollView {
-            PreferenceGroup(title: store.t("rules_section")) {
+            PreferenceGroup(title: "") {
                 PreferenceRow(
                     title: store.t("rules_entry_domain"),
                     value: domainValue,
@@ -49,51 +49,49 @@ struct DomainRulesView: View {
     @State private var sourceUrl = ""
     @State private var fetching = false
     @State private var importingFile = false
+    @State private var linkDialog = false
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
                 Text(store.t("rules_domain_hint"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                TextField(store.t("rules_domain_url_placeholder"), text: $sourceUrl)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .padding(12)
-                    .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10))
-                HStack(spacing: 10) {
-                    Button {
-                        fetchUrl()
-                    } label: {
-                        if fetching {
-                            ProgressView()
-                                .frame(maxWidth: .infinity)
-                        } else {
-                            Text(store.t("rules_domain_fetch"))
-                                .frame(maxWidth: .infinity)
-                        }
+                    .padding(.horizontal, 4)
+                ZStack(alignment: .topLeading) {
+                    TextEditor(text: $text)
+                        .font(.body)
+                        .frame(minHeight: 220)
+                        .padding(8)
+                        .scrollContentBackground(.hidden)
+                    if text.isEmpty {
+                        Text(store.t("rules_domain_placeholder"))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 13)
+                            .padding(.vertical, 16)
+                            .allowsHitTesting(false)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(fetching)
-                    Button {
-                        importingFile = true
-                    } label: {
-                        Text(store.t("rules_domain_import_file"))
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(fetching)
                 }
-                TextEditor(text: $text)
-                    .font(.body)
-                    .frame(minHeight: 240)
-                    .padding(8)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color(.separator), lineWidth: 1)
-                    )
+                .background(Color(.secondarySystemGroupedBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
             }
             .padding(16)
+        }
+        .safeAreaInset(edge: .bottom) {
+            Button {
+                importingFile = true
+            } label: {
+                Text(store.t("rules_domain_import_file"))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                    .background(Color(.secondarySystemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Color(.systemGroupedBackground))
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle(store.t("rules_domain_title"))
@@ -107,6 +105,20 @@ struct DomainRulesView: View {
                     Image(systemName: "chevron.left")
                 }
             }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    linkDialog = true
+                } label: {
+                    Image(systemName: "link")
+                }
+                .disabled(fetching)
+                .accessibilityLabel(store.t("rules_domain_import_url"))
+            }
+        }
+        .alert(store.t("rules_domain_import_url"), isPresented: $linkDialog) {
+            TextField(store.t("rules_domain_url_placeholder"), text: $sourceUrl)
+            Button(store.t("server_list_delete_cancel"), role: .cancel) {}
+            Button(store.t("rules_domain_fetch")) { fetchUrl() }
         }
         .fileImporter(
             isPresented: $importingFile,

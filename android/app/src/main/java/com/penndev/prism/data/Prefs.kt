@@ -75,6 +75,7 @@ class Prefs(context: Context) {
                             password = password,
                             protocol = protocol,
                             latencyMs = if (obj.isNull("latencyMs")) null else obj.optInt("latencyMs"),
+                            subscriptionId = obj.optString("subscriptionId").ifBlank { null },
                         ),
                     )
                 }
@@ -93,10 +94,45 @@ class Prefs(context: Context) {
                     .put("username", server.username)
                     .put("password", server.password)
                     .put("protocol", server.protocol)
-                    .put("latencyMs", server.latencyMs ?: JSONObject.NULL),
+                    .put("latencyMs", server.latencyMs ?: JSONObject.NULL)
+                    .put("subscriptionId", server.subscriptionId ?: JSONObject.NULL),
             )
         }
         prefs.edit().putString(KEY_SERVERS, arr.toString()).apply()
+    }
+
+    fun loadSubscription(): Subscription? {
+        val raw = prefs.getString(KEY_SUBSCRIPTION, null) ?: return null
+        return runCatching {
+            val obj = JSONObject(raw)
+            val type = obj.optString("type")
+            val url = obj.optString("url")
+            if (type.isBlank() && url.isBlank()) return null
+            Subscription(
+                id = obj.optString("id").ifBlank { Subscription.ID },
+                type = type,
+                url = url,
+                remark = obj.optString("remark"),
+            )
+        }.getOrNull()
+    }
+
+    fun clearSubscription() {
+        prefs.edit().remove(KEY_SUBSCRIPTION).apply()
+    }
+
+    fun saveSubscription(subscription: Subscription) {
+        prefs.edit()
+            .putString(
+                KEY_SUBSCRIPTION,
+                JSONObject()
+                    .put("id", subscription.id)
+                    .put("type", subscription.type)
+                    .put("url", subscription.url)
+                    .put("remark", subscription.remark)
+                    .toString(),
+            )
+            .apply()
     }
 
     fun loadSelectedId(): String? = prefs.getString(KEY_SELECTED, null)
@@ -131,6 +167,9 @@ class Prefs(context: Context) {
                             if (d.isNotEmpty()) add(d)
                         }
                     }
+                    if (!obj.optBoolean("domainsSeeded", false) && "google.com" !in this) {
+                        add(0, "google.com")
+                    }
                 },
             )
         }.getOrDefault(RuleDraft())
@@ -149,6 +188,7 @@ class Prefs(context: Context) {
                     .put("selectedAreaIds", areas)
                     .put("dbUrl", draft.dbUrl)
                     .put("domains", domains)
+                    .put("domainsSeeded", true)
                     .toString(),
             )
             .apply()
@@ -156,6 +196,7 @@ class Prefs(context: Context) {
 
     private companion object {
         const val KEY_SERVERS = "servers"
+        const val KEY_SUBSCRIPTION = "subscription"
         const val KEY_SELECTED = "selected_id"
         const val KEY_SETTINGS = "settings"
         const val KEY_RULES = "rules"

@@ -139,7 +139,10 @@ fun PrismApp(viewModel: PrismViewModel) {
                     HomeScreen(
                         state = state,
                         viewModel = viewModel,
-                        onOpenSubscribe = { navController.navigate(Routes.Subscribe) },
+                        onOpenSubscribe = { edit ->
+                            val route = if (edit) "${Routes.Subscribe}?edit=true" else Routes.Subscribe
+                            navController.navigate(route)
+                        },
                         onAddServer = { navController.navigate(Routes.ServerEdit) },
                         onEditServer = {
                             navController.navigate("${Routes.ServerEdit}?id=${Uri.encode(it.id)}")
@@ -173,10 +176,19 @@ fun PrismApp(viewModel: PrismViewModel) {
                         onBack = { navController.popBackStack() },
                     )
                 }
-                composable(Routes.Subscribe) {
+                composable(
+                    route = "${Routes.Subscribe}?edit={edit}",
+                    arguments = listOf(
+                        navArgument("edit") {
+                            type = NavType.BoolType
+                            defaultValue = false
+                        },
+                    ),
+                ) { entry ->
                     SubscribeScreen(
                         state = state,
                         viewModel = viewModel,
+                        editing = entry.arguments?.getBoolean("edit") == true,
                         onBack = { navController.popBackStack() },
                     )
                 }

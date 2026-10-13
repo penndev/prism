@@ -31,6 +31,25 @@ enum SubscriptionParser {
         }
     }
 
+    static func parseOne(_ raw: String) throws -> ServerItem {
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.isEmpty {
+            throw SubscriptionError("subscribe_error_empty")
+        }
+        let servers: [ServerItem]
+        if text.hasPrefix("{") {
+            servers = try serversFromJson("[\(text)]")
+        } else if text.hasPrefix("[") {
+            servers = try serversFromJson(text)
+        } else {
+            servers = try parseShadowrocket(text)
+        }
+        if servers.count != 1 {
+            throw SubscriptionError("server_list_scan_one")
+        }
+        return servers[0]
+    }
+
     static func exportJson(_ servers: [ServerItem]) -> String {
         let arr: [[String: String]] = servers.map { server in
             [

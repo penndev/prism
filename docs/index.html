@@ -9,8 +9,8 @@
       content="Prism 代理客户端下载站。桌面端支持 SOCKS5 / HTTP，手动模式与 TUN；移动端走本地 VPN。"
     />
     <link rel="canonical" href="https://penndev.github.io/prism/" />
-    <meta name="theme-color" content="#0088cc" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)" />
     <link rel="icon" href="./logo.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./styles.css" />
     <noscript>
@@ -32,7 +32,6 @@
         <a href="#download" data-i18n="navDownload"></a>
         <a href="#proxy" data-i18n="navProxy"></a>
         <a href="#rules" data-i18n="navRules"></a>
-        <a href="#other" data-i18n="navOther"></a>
         <a href="https://github.com/penndev/prism" target="_blank" rel="noopener">GitHub</a>
       </nav>
       <div class="lang">
@@ -42,61 +41,111 @@
     </header>
 
     <main>
-      <section class="hero">
-        <img class="hero-logo" src="./logo.svg" width="72" height="72" alt="" />
+      <section id="download" class="hero">
+        <img class="hero-logo" src="./logo.svg" width="132" height="132" alt="" />
         <h1>Prism</h1>
         <p class="lead" data-i18n="lead"></p>
-      </section>
-
-      <section id="download" class="block">
-        <h2 data-i18n="downloadTitle"></h2>
-        <div class="pager">
-          <button type="button" id="rel-newer" disabled data-i18n="releaseNewer"></button>
-          <p class="muted" id="release-meta" data-i18n="releaseLoading"></p>
-          <button type="button" id="rel-older" disabled data-i18n="releaseOlder"></button>
-        </div>
-        <div class="cards">
-          <article class="card">
-            <h3 data-i18n="platformWin"></h3>
-            <p data-i18n="winDesc"></p>
-            <a class="btn" id="dl-windows" href="https://github.com/penndev/prism/releases" data-i18n="goReleases"></a>
-            <details class="card-install">
-              <summary data-i18n="installToggle"></summary>
+        <div class="os-row">
+          <div>
+            <a
+              class="os-link"
+              href="https://github.com/penndev/prism/releases/latest/download/Prism-windows-amd64-installer.exe"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  fill="currentColor"
+                  d="M3 5.2 10.4 4.2v6.9H3V5.2zm8.1-1.15L21 2.8v8.3h-9.9V4.05zM3 12.9h7.4v6.9L3 18.8v-5.9zm8.1 0H21v8.3l-9.9-1.3v-7z"
+                />
+              </svg>
+              <span>
+                <strong data-i18n="platformWin"></strong>
+                <small data-i18n="winDesc"></small>
+              </span>
+            </a>
+            <details class="install">
+              <summary data-i18n="installWinToggle"></summary>
               <ol data-i18n="installWinSteps"></ol>
               <p class="muted" data-i18n="installWinSign"></p>
             </details>
-          </article>
-          <article class="card">
-            <h3 data-i18n="platformMac"></h3>
-            <p data-i18n="macDesc"></p>
-            <a class="btn" id="dl-darwin" href="https://github.com/penndev/prism/releases" data-i18n="goReleases"></a>
-            <details class="card-install">
-              <summary data-i18n="installToggle"></summary>
+          </div>
+          <div>
+            <a
+              class="os-link"
+              href="https://github.com/penndev/prism/releases/latest/download/Prism-darwin-arm64.pkg"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  fill="currentColor"
+                  d="M16.4 12.7c0-2.2 1.8-3.3 1.9-3.4-1-1.5-2.6-1.7-3.2-1.7-1.3-.1-2.6.8-3.3.8s-1.7-.8-2.8-.7c-1.4 0-2.8.8-3.5 2.1-1.5 2.6-.4 6.5 1.1 8.6.7 1 1.6 2.2 2.7 2.1 1.1 0 1.5-.7 2.8-.7s1.6.7 2.8.7 1.9-1.1 2.6-2.1c.8-1.2 1.1-2.3 1.2-2.4-.1 0-2.2-.8-2.3-3.3zM14.7 6.4c.6-.7 1-1.7.9-2.7-0.8 0-1.9.6-2.5 1.3-.5.6-1 1.6-.9 2.6 1 .1 1.9-.5 2.5-1.2z"
+                />
+              </svg>
+              <span>
+                <strong data-i18n="platformMac"></strong>
+                <small data-i18n="macDesc"></small>
+              </span>
+            </a>
+            <details class="install">
+              <summary data-i18n="installMacToggle"></summary>
               <ol data-i18n="installMacSteps"></ol>
               <p class="muted" data-i18n="installMacSign"></p>
             </details>
-          </article>
-          <article class="card">
-            <h3 data-i18n="platformAndroid"></h3>
-            <p data-i18n="androidDesc"></p>
-            <a class="btn" id="dl-android" href="https://github.com/penndev/prism/releases" data-i18n="goReleases"></a>
-            <details class="card-install">
-              <summary data-i18n="installToggle"></summary>
-              <ol data-i18n="installAndroidSteps"></ol>
-            </details>
-          </article>
-          <article class="card">
-            <h3 data-i18n="platformIos"></h3>
-            <p data-i18n="iosDesc"></p>
-            <a class="btn" id="dl-ios" href="https://github.com/penndev/prism/releases" data-i18n="goReleases"></a>
-            <details class="card-install">
-              <summary data-i18n="installToggle"></summary>
-              <ol data-i18n="installIosSteps"></ol>
-              <p class="muted" data-i18n="installIosSign"></p>
-            </details>
-          </article>
+          </div>
+          <a class="os-link">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M17.6 9.5 16.3 8.2A6.4 6.4 0 0 0 12 6.6c-1.6 0-3 .5-4.2 1.5L6.4 6.7a.5.5 0 0 0-.7.7l1.2 1.2A6.9 6.9 0 0 0 5 13.5V14h14v-.5c0-1.6-.6-3.1-1.4-4zM9.2 12a.8.8 0 1 1 0-1.6.8.8 0 0 1 0 1.6zm5.6 0a.8.8 0 1 1 0-1.6.8.8 0 0 1 0 1.6zM6 15.2v2.3c0 .8.7 1.5 1.5 1.5h.8v2c0 .6.4 1 1 1s1-.4 1-1v-2h3.4v2c0 .6.4 1 1 1s1-.4 1-1v-2h.8c.8 0 1.5-.7 1.5-1.5v-2.3H6z"
+              />
+            </svg>
+            <span>
+              <strong data-i18n="platformAndroid"></strong>
+              <small data-i18n="androidDesc"></small>
+            </span>
+          </a>
+          <a class="os-link">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm0 2v14h8V4H8zm4 16.2a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"
+              />
+            </svg>
+            <span>
+              <strong data-i18n="platformIos"></strong>
+              <small data-i18n="iosDesc"></small>
+            </span>
+          </a>
         </div>
-        <p class="muted" data-i18n="downloadHint"></p>
+      </section>
+
+      <section class="asset">
+        <div>
+          <h2 data-i18n="assetDomainTitle"></h2>
+          <p data-i18n="assetDomainBody"></p>
+        </div>
+        <div class="asset-side">
+          <a class="asset-dl" href="https://penndev.github.io/prism/domain.txt">
+            <strong>domain.txt</strong>
+            <small data-i18n="assetDownload"></small>
+          </a>
+          <button type="button" class="copy-url" data-i18n="assetCopy"></button>
+        </div>
+      </section>
+
+      <section class="asset">
+        <div>
+          <h2 data-i18n="assetGeoTitle"></h2>
+          <p data-i18n="assetGeoBody"></p>
+        </div>
+        <div class="asset-side">
+          <a
+            class="asset-dl"
+            href="https://github.com/penndev/gopkg/releases/download/ipregion-db/ipregion.db"
+          >
+            <strong>ipregion.db</strong>
+            <small data-i18n="assetDownload"></small>
+          </a>
+          <button type="button" class="copy-url" data-i18n="assetCopy"></button>
+        </div>
       </section>
 
       <section id="proxy" class="block">
@@ -164,53 +213,6 @@
           >
         </p>
         <p data-i18n="ruleManual"></p>
-      </section>
-
-      <section id="other" class="block">
-        <h2 data-i18n="otherTitle"></h2>
-
-        <h3 data-i18n="nodeTitle"></h3>
-        <p data-i18n="nodeIntro"></p>
-        <ul>
-          <li data-i18n="nodeHost"></li>
-          <li data-i18n="nodeProto"></li>
-          <li data-i18n="nodeAuth"></li>
-          <li data-i18n="nodeRemark"></li>
-        </ul>
-        <p data-i18n="nodeSub"></p>
-
-        <h3 data-i18n="otherSettingsTitle"></h3>
-        <ul>
-          <li data-i18n="otherPing"></li>
-          <li data-i18n="otherSort"></li>
-          <li data-i18n="otherTheme"></li>
-          <li data-i18n="otherBoot"></li>
-          <li data-i18n="otherLog"></li>
-        </ul>
-
-        <h3 data-i18n="faqTitle"></h3>
-        <div class="faq">
-          <details>
-            <summary data-i18n="faqRuleQ"></summary>
-            <p data-i18n="faqRuleA"></p>
-          </details>
-          <details>
-            <summary data-i18n="faqTunQ"></summary>
-            <p data-i18n="faqTunA"></p>
-          </details>
-          <details>
-            <summary data-i18n="faqVpnQ"></summary>
-            <p data-i18n="faqVpnA"></p>
-          </details>
-          <details>
-            <summary data-i18n="faqSaveQ"></summary>
-            <p data-i18n="faqSaveA"></p>
-          </details>
-          <details>
-            <summary data-i18n="faqPingQ"></summary>
-            <p data-i18n="faqPingA"></p>
-          </details>
-        </div>
       </section>
     </main>
 

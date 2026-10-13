@@ -7,14 +7,16 @@ struct PreferenceGroup<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(title)
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                if let actions { actions }
+            if !title.isEmpty || actions != nil {
+                HStack {
+                    Text(title)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    if let actions { actions }
+                }
+                .padding(.horizontal, 4)
             }
-            .padding(.horizontal, 4)
             VStack(spacing: 0) {
                 content()
             }

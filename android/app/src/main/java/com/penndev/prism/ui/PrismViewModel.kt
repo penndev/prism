@@ -15,6 +15,7 @@ import com.penndev.prism.data.LatencyTestSettings
 import com.penndev.prism.data.Prefs
 import com.penndev.prism.data.RuleDraft
 import com.penndev.prism.data.ServerItem
+import com.penndev.prism.data.Subscription
 import com.penndev.prism.data.SubscriptionException
 import com.penndev.prism.data.SubscriptionParser
 import com.penndev.prism.data.SystemSettings
@@ -43,15 +44,17 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private const val LOG_LIMIT = 1000
+internal const val PING_MANUAL = "manual"
 
 data class PrismUiState(
     val settings: AppSettings = AppSettings(),
     val servers: List<ServerItem> = emptyList(),
+    val subscription: Subscription? = null,
     val selectedId: String? = null,
     val running: Boolean = false,
     val vpnBusy: Boolean = false,
     val vpnDesired: Boolean = false,
-    val pingingAll: Boolean = false,
+    val pingingGroup: String? = null,
     val importing: Boolean = false,
     val importPreview: List<ServerItem> = emptyList(),
     val importSource: String? = null,
@@ -83,6 +86,7 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
         _state.value = PrismUiState(
             settings = settings,
             servers = servers,
+            subscription = prefs.loadSubscription(),
             selectedId = prefs.loadSelectedId(),
             rules = rules,
         )
@@ -149,17 +153,27 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun pingAll() {
+    fun pingGroup(subscriptionId: String?) {
+        val targets = _state.value.servers.filter { it.subscriptionId == subscriptionId }
+        pingTargets(if (subscriptionId == null) PING_MANUAL else subscriptionId, targets, subscriptionId)
+    }
+
+    fun pingServer(id: String) {
+        val server = _state.value.servers.firstOrNull { it.id == id } ?: return
+        pingTargets("server:$id", listOf(server), server.subscriptionId)
+    }
+
+    private fun pingTargets(key: String, targets: List<ServerItem>, subscriptionId: String?) {
         val host = _state.value.settings.latencyTest.host.trim()
         if (host.isEmpty()) {
             snack(str(R.string.settings_latency_test_host_required))
             return
         }
-        if (_state.value.servers.isEmpty() || _state.value.pingingAll) return
+        if (targets.isEmpty() || _state.value.pingingGroup != null) return
         viewModelScope.launch {
-            _state.update { it.copy(pingingAll = true) }
+            _state.update { it.copy(pingingGroup = key) }
             coroutineScope {
-                _state.value.servers.map { server ->
+                targets.map { server ->
                     async {
                         val latency = withContext(Dispatchers.IO) {
                             runCatching {
@@ -176,20 +190,21 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }.awaitAll()
             }
-            val current = _state.value.servers
-            val sorted = if (_state.value.settings.latencyTest.sortAfterPing) {
-                current.sortedWith(latencyComparator())
+            val latest = _state.value.servers
+            val next = if (_state.value.settings.latencyTest.sortAfterPing) {
+                val cmp = latencyComparator()
+                val manual = latest.filter { it.subscriptionId == null }
+                val subNodes = latest.filter { it.subscriptionId != null }
+                if (subscriptionId == null) manual.sortedWith(cmp) + subNodes else manual + subNodes.sortedWith(cmp)
             } else {
-                current
+                latest
             }
-            prefs.saveServers(sorted)
-            _state.update {
-                it.copy(servers = sorted, pingingAll = false, snackbar = str(R.string.server_list_ping_all_done))
-            }
+            prefs.saveServers(next)
+            _state.update { it.copy(servers = next, pingingGroup = null) }
         }
     }
 
-    fun parseSubscription(type: String, source: String, fromFile: Boolean = false) {
+    fun parseSubscription(type: String, source: String) {
         val trimmed = source.trim()
         if (trimmed.isEmpty()) {
             snack(str(R.string.subscribe_error_url))
@@ -199,10 +214,8 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
             _state.update { it.copy(importing = true) }
             runCatching {
                 withContext(Dispatchers.IO) {
-                    val isUrl = !fromFile && (
-                        trimmed.startsWith("http://", ignoreCase = true) ||
-                            trimmed.startsWith("https://", ignoreCase = true)
-                    )
+                    val isUrl = trimmed.startsWith("http://", ignoreCase = true) ||
+                        trimmed.startsWith("https://", ignoreCase = true)
                     if (isUrl) fetchSubscription(type, trimmed)
                     else SubscriptionParser.parseContent(type, trimmed)
                 }
@@ -211,10 +224,7 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
                     it.copy(
                         importing = false,
                         importPreview = servers,
-                        importSource = str(
-                            if (fromFile) R.string.subscribe_source_file else R.string.subscribe_source_url,
-                        ),
-                        snackbar = str(R.string.subscribe_parsed, servers.size),
+                        importSource = str(R.string.subscribe_source_url),
                     )
                 }
             }.onFailure { error ->
@@ -230,21 +240,79 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun confirmImport() {
+    fun updateSubscriptionInfo(type: String, url: String, remark: String) {
+        val current = _state.value.subscription ?: return
+        val next = current.copy(type = type.trim(), url = url.trim(), remark = remark.trim())
+        prefs.saveSubscription(next)
+        _state.update { it.copy(subscription = next, snackbar = str(R.string.subscribe_saved)) }
+    }
+
+    fun confirmImport(type: String, url: String, remark: String) {
         val preview = _state.value.importPreview
         if (preview.isEmpty()) {
             snack(str(R.string.subscribe_error_no_preview))
             return
         }
-        val selectedStill = preview.firstOrNull { it.id == _state.value.selectedId }
+        saveSubscriptionNodes(
+            Subscription(type = type.trim(), url = url.trim(), remark = remark.trim()),
+            preview,
+        )
+    }
+
+    fun refreshSubscription() {
+        val sub = _state.value.subscription ?: return
+        val source = sub.url.trim()
+        if (source.isEmpty() || _state.value.importing) return
+        viewModelScope.launch {
+            _state.update { it.copy(importing = true) }
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val isUrl = source.startsWith("http://", ignoreCase = true) ||
+                        source.startsWith("https://", ignoreCase = true)
+                    if (isUrl) fetchSubscription(sub.type, source)
+                    else SubscriptionParser.parseContent(sub.type, source)
+                }
+            }.onSuccess { servers ->
+                saveSubscriptionNodes(sub, servers)
+            }.onFailure { error ->
+                _state.update { it.copy(importing = false, snackbar = errorMessage(error)) }
+            }
+        }
+    }
+
+    fun deleteSubscription() {
+        val id = _state.value.subscription?.id ?: return
+        val selectedInSub = _state.value.selectedServer?.subscriptionId == id
+        val remain = _state.value.servers.filter { it.subscriptionId != id }
+        prefs.clearSubscription()
+        prefs.saveServers(remain)
+        _state.update {
+            it.copy(
+                servers = remain,
+                subscription = null,
+                importPreview = emptyList(),
+                importSource = null,
+            )
+        }
+        if (selectedInSub) selectServer(null)
+    }
+
+    private fun saveSubscriptionNodes(subscription: Subscription, preview: List<ServerItem>) {
+        val tagged = preview.map { it.copy(subscriptionId = subscription.id) }
+        val manual = _state.value.servers.filter { it.subscriptionId == null }
+        val merged = manual + tagged
+        val selectedStill = merged.firstOrNull { it.id == _state.value.selectedId }
         val shouldStop = selectedStill == null && _state.value.running
-        prefs.saveServers(preview)
+        prefs.saveSubscription(subscription)
+        prefs.saveServers(merged)
         prefs.saveSelectedId(selectedStill?.id)
         if (shouldStop) stop()
         _state.update {
             it.copy(
-                servers = preview,
+                servers = merged,
+                subscription = subscription,
                 selectedId = selectedStill?.id,
+                importing = false,
                 importPreview = emptyList(),
                 importSource = null,
                 snackbar = str(R.string.subscribe_imported, preview.size),
@@ -253,7 +321,44 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
         appendStatus(str(R.string.status_imported, preview.size))
     }
 
-    fun exportServers(): String = SubscriptionParser.exportJson(_state.value.servers)
+    fun importManualNodes(raw: String, onAdded: () -> Unit) {
+        val text = raw.trim()
+        if (text.isEmpty()) {
+            snack(str(R.string.subscribe_error_empty))
+            return
+        }
+        viewModelScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    if (text.startsWith("{")) listOf(SubscriptionParser.parseOne(text))
+                    else SubscriptionParser.parseContent("prism", text)
+                }
+            }.onSuccess { incoming ->
+                val current = _state.value.servers.toMutableList()
+                var added = 0
+                incoming.forEach { node ->
+                    val id = SubscriptionParser.identity(node.host, node.protocol, node.username, node.password)
+                    val exists = current.any {
+                        SubscriptionParser.identity(it.host, it.protocol, it.username, it.password) == id
+                    }
+                    if (exists) return@forEach
+                    current += node.copy(id = id, subscriptionId = null)
+                    added++
+                }
+                if (added == 0) {
+                    snack(str(R.string.server_list_duplicate))
+                    return@onSuccess
+                }
+                prefs.saveServers(current)
+                _state.update {
+                    it.copy(servers = current, snackbar = str(R.string.server_list_imported, added))
+                }
+                onAdded()
+            }.onFailure { error ->
+                snack(errorMessage(error))
+            }
+        }
+    }
 
     fun addOrUpdateServer(
         editingId: String?,
@@ -276,6 +381,7 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
             snack(str(R.string.server_list_validate_protocol))
             return false
         }
+        val current = _state.value.servers.toMutableList()
         val payload = ServerItem(
             id = editingId ?: UUID.randomUUID().toString(),
             host = trimmedHost,
@@ -283,8 +389,10 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
             protocol = protocol,
             username = username.trim(),
             password = password,
+            subscriptionId = editingId?.let { id ->
+                current.firstOrNull { it.id == id }?.subscriptionId
+            },
         )
-        val current = _state.value.servers.toMutableList()
         val nextId = SubscriptionParser.identity(
             payload.host, payload.protocol, payload.username, payload.password,
         )
@@ -449,8 +557,19 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun fetchSubscription(type: String, url: String): List<ServerItem> {
+        val userAgent = when {
+            type.equals("shadowrocket", ignoreCase = true) -> "shadowrocket/*"
+            type.equals("prism", ignoreCase = true) -> {
+                val version = runCatching {
+                    @Suppress("DEPRECATION")
+                    app.packageManager.getPackageInfo(app.packageName, 0).versionName
+                }.getOrNull().orEmpty().trim()
+                if (version.isEmpty()) "prism/*" else "prism/$version"
+            }
+            else -> null
+        }
         val body = try {
-            httpGet(url)
+            httpGet(url, userAgent)
         } catch (error: SubscriptionException) {
             throw error
         } catch (_: Exception) {
@@ -459,7 +578,7 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
         return SubscriptionParser.parseContent(type, body)
     }
 
-    private fun httpGet(url: String): String {
+    private fun httpGet(url: String, userAgent: String?): String {
         val uri = URI(url)
         val scheme = uri.scheme?.lowercase().orEmpty()
         if (scheme != "http" && scheme != "https") {
@@ -469,7 +588,9 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
             connectTimeout = 15_000
             readTimeout = 15_000
             instanceFollowRedirects = true
-            setRequestProperty("User-Agent", "Prism-Android/0.1")
+            if (!userAgent.isNullOrBlank()) {
+                setRequestProperty("User-Agent", userAgent)
+            }
         }
         try {
             val code = connection.responseCode

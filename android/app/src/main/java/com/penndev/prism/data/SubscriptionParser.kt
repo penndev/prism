@@ -26,6 +26,22 @@ object SubscriptionParser {
         }
     }
 
+    fun parseOne(raw: String): ServerItem {
+        val text = raw.trim()
+        if (text.isEmpty()) {
+            throw SubscriptionException(com.penndev.prism.R.string.subscribe_error_empty)
+        }
+        val servers = when {
+            text.startsWith("{") -> serversFromJson("[$text]")
+            text.startsWith("[") -> serversFromJson(text)
+            else -> parseShadowrocket(text)
+        }
+        if (servers.size != 1) {
+            throw SubscriptionException(com.penndev.prism.R.string.server_list_scan_one)
+        }
+        return servers.first()
+    }
+
     fun exportJson(servers: List<ServerItem>): String {
         val arr = JSONArray()
         servers.forEach { server ->

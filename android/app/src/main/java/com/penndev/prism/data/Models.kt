@@ -8,6 +8,7 @@ data class ServerItem(
     val password: String = "",
     val protocol: String = "socks5",
     val latencyMs: Int? = null,
+    val subscriptionId: String? = null,
 ) {
     val displayName: String get() = remark.ifBlank { host }
 
@@ -19,6 +20,17 @@ data class ServerItem(
             "${encodeUserinfo(username)}:${encodeUserinfo(password)}@"
         }
         return "$scheme://$userinfo$host"
+    }
+}
+
+data class Subscription(
+    val id: String = ID,
+    val type: String,
+    val url: String,
+    val remark: String = "",
+) {
+    companion object {
+        const val ID = "default"
     }
 }
 
@@ -55,7 +67,7 @@ data class RuleDraft(
     val geoMode: GeoMode = GeoMode.Global,
     val selectedAreaIds: Set<Long> = emptySet(),
     val dbUrl: String = "",
-    val domains: List<String> = emptyList(),
+    val domains: List<String> = listOf("google.com"),
 )
 
 data class TrafficUi(

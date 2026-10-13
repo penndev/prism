@@ -3,16 +3,62 @@ import Foundation
 struct ServerItem: Identifiable, Hashable, Codable {
     var id: String
     var host: String
-    var remark: String = ""
-    var username: String = ""
-    var password: String = ""
-    var protocolName: String = "socks5"
-    var latencyMs: Int? = nil
+    var remark: String
+    var username: String
+    var password: String
+    var protocolName: String
+    var latencyMs: Int?
+    var subscriptionId: String?
 
     var displayName: String { remark.isEmpty ? host : remark }
 
+    init(
+        id: String,
+        host: String,
+        remark: String = "",
+        username: String = "",
+        password: String = "",
+        protocolName: String = "socks5",
+        latencyMs: Int? = nil,
+        subscriptionId: String? = nil,
+    ) {
+        self.id = id
+        self.host = host
+        self.remark = remark
+        self.username = username
+        self.password = password
+        self.protocolName = protocolName
+        self.latencyMs = latencyMs
+        self.subscriptionId = subscriptionId
+    }
+
     enum CodingKeys: String, CodingKey {
-        case id, host, remark, username, password, protocolName = "protocol", latencyMs
+        case id, host, remark, username, password, protocolName = "protocol", latencyMs, subscriptionId
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        host = try c.decode(String.self, forKey: .host)
+        remark = try c.decodeIfPresent(String.self, forKey: .remark) ?? ""
+        username = try c.decodeIfPresent(String.self, forKey: .username) ?? ""
+        password = try c.decodeIfPresent(String.self, forKey: .password) ?? ""
+        protocolName = try c.decodeIfPresent(String.self, forKey: .protocolName) ?? "socks5"
+        latencyMs = try c.decodeIfPresent(Int.self, forKey: .latencyMs)
+        let sub = try c.decodeIfPresent(String.self, forKey: .subscriptionId)
+        subscriptionId = (sub?.isEmpty == false) ? sub : nil
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(host, forKey: .host)
+        try c.encode(remark, forKey: .remark)
+        try c.encode(username, forKey: .username)
+        try c.encode(password, forKey: .password)
+        try c.encode(protocolName, forKey: .protocolName)
+        try c.encodeIfPresent(latencyMs, forKey: .latencyMs)
+        try c.encodeIfPresent(subscriptionId, forKey: .subscriptionId)
     }
 
     func toProxyURL() -> String {
@@ -65,11 +111,20 @@ struct AreaUi: Identifiable, Hashable {
     var children: [AreaUi] = []
 }
 
+struct Subscription: Codable, Equatable {
+    static let defaultId = "default"
+
+    var id: String = defaultId
+    var type: String
+    var url: String
+    var remark: String = ""
+}
+
 struct RuleDraft: Equatable {
     var geoMode: GeoMode = .global
     var selectedAreaIds: Set<Int64> = []
     var dbUrl: String = ""
-    var domains: [String] = []
+    var domains: [String] = ["google.com"]
 }
 
 struct TrafficUi: Equatable {

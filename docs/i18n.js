@@ -7,34 +7,34 @@ const messages = {
     navProxy: "代理",
     navRules: "规则",
     navOther: "其它",
-    lead: "代理客户端。把远程 SOCKS5 / HTTP 节点接到本机：桌面端可选手动代理或 TUN，移动端通过本地 VPN 接管流量。",
-    downloadTitle: "下载与安装",
+    lead: "一个代理客户端",
+    assetDomainTitle: "域名规则",
+    assetDomainBody:
+      "一份需要走代理的域名列表，一行一个，按后缀匹配。写 google.com 时，www.google.com 也会命中。在 TUN 或移动端 VPN 下，命中的连接一定走代理，不再按 IP 地域判断。",
+    assetGeoTitle: "地域 IP 库",
+    assetGeoBody:
+      "没有命中域名规则的连接，按目标 IP 查这个库，用来做「代理选定区域」和「绕过选定区域」。全局模式和本地模式不看地区，可以不加载。下载后在规则页导入。",
+    assetDownload: "下载",
+    assetCopy: "复制网址",
+    assetCopied: "已复制",
     platformWin: "Windows",
     platformMac: "macOS",
     platformAndroid: "Android",
     platformIos: "iOS",
     winDesc: "64 位安装包",
     macDesc: "Apple 芯片（arm64）安装包",
-    androidDesc: "安装包（准备中）",
-    iosDesc: "安装包（准备中）",
-    goReleases: "前往发行页",
-    downloadHint:
-      '安装包来自 <a href="https://github.com/penndev/prism/releases">GitHub 发行页</a>。用「较新 / 较旧」切换历史版本，下载按钮会跟着当前版本更新。macOS 为 <code>.pkg</code>。Android / iOS 安装包尚未发布时，按钮会打开同一页面。',
-    installToggle: "安装说明",
+    androidDesc: "暂未提供",
+    iosDesc: "暂未提供",
+    installWinToggle: "Windows 安装说明",
     installWinSteps:
-      "<li>点上方按钮下载 <code>Prism-windows-amd64-installer.exe</code>。</li><li>运行安装向导，装完后从开始菜单打开 Prism。</li>",
+      "<li>点上方 Windows 下载 <code>Prism-windows-amd64-installer.exe</code>。</li><li>运行安装向导，装完后从开始菜单打开 Prism。</li>",
     installWinSign:
       "安装包目前未做代码签名。若弹出 Windows 安全提示，选「更多信息」→「仍要运行」。",
+    installMacToggle: "macOS 安装说明",
     installMacSteps:
-      "<li>点上方按钮下载并打开 <code>Prism-darwin-arm64.pkg</code>。</li><li>按安装向导装到「应用程序」，再从启动台打开。</li><li>较早版本可能是 <code>.dmg</code> 或 <code>.zip</code>，把 Prism 拖进「应用程序」即可。</li>",
+      "<li>点上方 macOS 下载并打开 <code>Prism-darwin-arm64.pkg</code>。</li><li>按安装向导装到「应用程序」，再从启动台打开。</li>",
     installMacSign:
       "若提示无法验证开发者：系统设置 → 隐私与安全性 → 仍要打开。",
-    installAndroidSteps:
-      "<li>点上方按钮下载安装包。包就绪前会先跳到 GitHub 发行页。</li><li>允许「安装未知来源」后打开文件安装。</li>",
-    installIosSteps:
-      "<li>点上方按钮下载。包就绪前会先跳到 GitHub 发行页。</li><li>按下载页提供的方式安装（测试分发 / 描述文件等以实际说明为准）。</li><li>若提示未受信任的开发者：设置 → 通用 → VPN 与设备管理 → 信任该证书。</li>",
-    installIosSign:
-      "尚未上架应用商店时，需要按企业签或侧载说明安装，系统可能会拦截未签名应用。",
     proxyTitle: "代理说明",
     proxyIntro:
       "先选一个节点，再在代理面板里选模式。桌面端是手动模式或 TUN；移动端没有这个开关，一律走系统 VPN，效果接近 TUN。",
@@ -133,16 +133,6 @@ const messages = {
       "设置里的测速域名要能从该节点访问，例如 <code>google.com</code> 或 <code>host:port</code>。",
     footerSource: "源代码",
     footerReleases: "全部版本",
-    releaseLoading: "正在读取发行信息…",
-    releaseNewer: "较新版本",
-    releaseOlder: "较旧版本",
-    releasePage: "{n} / {total}",
-    releaseVersion: "当前版本 {tag} · {date} · {page}",
-    releaseVersionOnly: "当前版本 {tag} · {page}",
-    releaseNoAsset: "已有版本 {tag}，但还没有可识别的安装包。",
-    releaseFail:
-      '暂时读不到正式包，请到 <a href="https://github.com/penndev/prism/releases">GitHub 发行页</a> 查看。',
-    downloadFile: "下载 {name}",
   },
   en: {
     title: "Prism · Download & Guide",
@@ -152,34 +142,34 @@ const messages = {
     navProxy: "Proxy",
     navRules: "Rules",
     navOther: "Other",
-    lead: "A proxy client. Attach a remote SOCKS5 / HTTP node: on desktop use a local proxy or TUN; on mobile, a system VPN takes over traffic.",
-    downloadTitle: "Download & install",
+    lead: "A proxy client.",
+    assetDomainTitle: "Domain rules",
+    assetDomainBody:
+      "A list of domains that should use the proxy, one per line, matched by suffix. google.com also matches www.google.com. In TUN or the mobile VPN, a hit always uses the proxy and skips geo.",
+    assetGeoTitle: "Geo IP database",
+    assetGeoBody:
+      "Connections that missed the domain list are looked up here, for Proxy selected regions and Bypass selected regions. Global and Local modes ignore region, so the database is optional. Import it on the rules page.",
+    assetDownload: "Download",
+    assetCopy: "Copy link",
+    assetCopied: "Copied",
     platformWin: "Windows",
     platformMac: "macOS",
     platformAndroid: "Android",
     platformIos: "iOS",
     winDesc: "64-bit installer",
     macDesc: "Apple silicon (arm64) installer",
-    androidDesc: "Package (coming soon)",
-    iosDesc: "Package (coming soon)",
-    goReleases: "Open releases",
-    downloadHint:
-      'Builds come from <a href="https://github.com/penndev/prism/releases">GitHub Releases</a>. Use Newer / Older to page through tags; buttons follow the selected release. macOS is a <code>.pkg</code>. Android / iOS buttons stay on that page until those packages are published.',
-    installToggle: "Installation",
+    androidDesc: "Not available yet",
+    iosDesc: "Not available yet",
+    installWinToggle: "Windows installation",
     installWinSteps:
-      "<li>Use the button above to get <code>Prism-windows-amd64-installer.exe</code>.</li><li>Run the wizard, then open Prism from the Start menu.</li>",
+      "<li>Use Windows above to get <code>Prism-windows-amd64-installer.exe</code>.</li><li>Run the wizard, then open Prism from the Start menu.</li>",
     installWinSign:
       "Builds are not code-signed yet. If SmartScreen appears, choose More info → Run anyway.",
+    installMacToggle: "macOS installation",
     installMacSteps:
-      "<li>Use the button above to open <code>Prism-darwin-arm64.pkg</code>.</li><li>Follow the installer into Applications, then open Prism from Launchpad.</li><li>Older releases may still be a <code>.dmg</code> or <code>.zip</code> — drag Prism into Applications.</li>",
+      "<li>Use macOS above to open <code>Prism-darwin-arm64.pkg</code>.</li><li>Follow the installer into Applications, then open Prism from Launchpad.</li>",
     installMacSign:
       "If macOS says the developer cannot be verified: System Settings → Privacy & Security → Open Anyway.",
-    installAndroidSteps:
-      "<li>Use the button above to get the APK. Until a package is published, it opens GitHub Releases.</li><li>Allow installs from unknown sources, then open the APK.</li>",
-    installIosSteps:
-      "<li>Use the button above. Until a package is published, it opens GitHub Releases.</li><li>Install with whatever method the download page describes (TestFlight, a profile, etc.).</li><li>If iOS says the developer is untrusted: Settings → General → VPN & Device Management → Trust.</li>",
-    installIosSign:
-      "Until the app is on the App Store, you may need enterprise signing or sideloading. Unsigned apps can be blocked by the system.",
     proxyTitle: "Proxy modes",
     proxyIntro:
       "Select a node, then pick a mode on the proxy panel. Desktop has Manual and TUN. Mobile has no switch — it always uses a system VPN, close to TUN.",
@@ -284,15 +274,5 @@ const messages = {
       "The latency test host must be reachable through that node, e.g. <code>google.com</code> or <code>host:port</code>.",
     footerSource: "Source",
     footerReleases: "All releases",
-    releaseLoading: "Loading GitHub Release…",
-    releaseNewer: "Newer",
-    releaseOlder: "Older",
-    releasePage: "{n} / {total}",
-    releaseVersion: "Version {tag} · {date} · {page}",
-    releaseVersionOnly: "Version {tag} · {page}",
-    releaseNoAsset: "Release {tag} exists, but no matching installer was found.",
-    releaseFail:
-      'Could not load a release. See <a href="https://github.com/penndev/prism/releases">GitHub Releases</a>.',
-    downloadFile: "Download {name}",
   },
 };

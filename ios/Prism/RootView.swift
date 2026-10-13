@@ -5,7 +5,7 @@ enum AppTab: Hashable {
 }
 
 enum AppRoute: Hashable {
-    case subscribe
+    case subscribe(edit: Bool)
     case serverEdit(id: String?)
     case domainRules
     case geoRules
@@ -23,8 +23,8 @@ struct RootView: View {
                 HomeView(path: $homePath)
                     .navigationDestination(for: AppRoute.self) { route in
                         switch route {
-                        case .subscribe:
-                            SubscribeView()
+                        case .subscribe(let edit):
+                            SubscribeView(editing: edit)
                         case .serverEdit(let id):
                             ServerEditView(server: store.servers.first { $0.id == id })
                         default:

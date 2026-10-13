@@ -215,7 +215,6 @@ class PrismVpnService : VpnService() {
         override fun needFake(name: String?): Boolean {
             val host = name.orEmpty().trim('.').lowercase()
             if (host.isEmpty()) return false
-            if (VpnController.rules.geoMode == GeoMode.Global) return true
             val domains = VpnController.fakeDomains
             if (domains.isEmpty()) return false
             var n = host
@@ -256,7 +255,7 @@ class PrismVpnService : VpnService() {
         // 只是告诉系统「隧道内的 DNS 服务器是这个地址」。
         // 实际上所有目标端口 53 的 UDP 都在 Go 侧被 fakeip 无条件劫持，不看目标 IP，
         // 真正的上游是 VPN 启动前抓到的系统 DNS（见 systemDnsIpv4）。
-        private const val TUN_DNS = "114.114.114.114"
+        private const val TUN_DNS = "8.8.8.8"
 
         private const val SHUTDOWN_WAIT_MS = 2000L
     }

@@ -59,6 +59,28 @@ final class Prefs {
         }
     }
 
+    func loadSubscription() -> Subscription? {
+        guard let data = defaults.data(forKey: Key.subscription),
+              var sub = try? JSONDecoder().decode(Subscription.self, from: data)
+        else { return nil }
+        if sub.type.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && sub.url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return nil
+        }
+        if sub.id.isEmpty { sub.id = Subscription.defaultId }
+        return sub
+    }
+
+    func saveSubscription(_ subscription: Subscription) {
+        if let data = try? JSONEncoder().encode(subscription) {
+            defaults.set(data, forKey: Key.subscription)
+        }
+    }
+
+    func clearSubscription() {
+        defaults.removeObject(forKey: Key.subscription)
+    }
+
     func loadRules() -> RuleDraft {
         guard let raw = defaults.string(forKey: Key.rules),
               let data = raw.data(using: .utf8),
@@ -84,6 +106,10 @@ final class Prefs {
                 .lowercased()
             if !d.isEmpty { domains.append(d) }
         }
+        let seeded = obj["domainsSeeded"] as? Bool ?? false
+        if !seeded && !domains.contains("google.com") {
+            domains.insert("google.com", at: 0)
+        }
         return RuleDraft(
             geoMode: mode,
             selectedAreaIds: areaIds,
@@ -98,6 +124,7 @@ final class Prefs {
             "selectedAreaIds": draft.selectedAreaIds.sorted().map { NSNumber(value: $0) },
             "dbUrl": draft.dbUrl,
             "domains": draft.domains,
+            "domainsSeeded": true,
         ]
         if let data = try? JSONSerialization.data(withJSONObject: obj),
            let raw = String(data: data, encoding: .utf8) {
@@ -107,6 +134,7 @@ final class Prefs {
 
     private enum Key {
         static let servers = "servers"
+        static let subscription = "subscription"
         static let selected = "selected_id"
         static let settings = "settings"
         static let rules = "rules"

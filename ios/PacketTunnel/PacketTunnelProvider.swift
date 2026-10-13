@@ -16,7 +16,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // 模拟阶段不劫持默认路由，避免流量进隧道后被丢掉。
         ipv4.includedRoutes = []
         settings.ipv4Settings = ipv4
-        settings.dnsSettings = NEDNSSettings(servers: ["114.114.114.114"])
+        settings.dnsSettings = NEDNSSettings(servers: ["8.8.8.8"])
 
         setTunnelNetworkSettings(settings) { error in
             if let error {

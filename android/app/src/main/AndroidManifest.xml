@@ -30,6 +30,11 @@
         android:theme="@style/Theme.Prism"
         android:usesCleartextTraffic="true">
         <activity
+            android:name=".ui.subscribe.QrScanActivity"
+            android:exported="false"
+            android:stateNotNeeded="true"
+            android:theme="@style/zxing_CaptureTheme" />
+        <activity
             android:name=".MainActivity"
             android:exported="true"
             android:windowSoftInputMode="adjustResize">

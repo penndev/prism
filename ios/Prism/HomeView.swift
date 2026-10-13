@@ -8,6 +8,7 @@ struct HomeView: View {
     @State private var pendingBatchDelete = false
     @State private var pendingDelete: ServerItem?
     @State private var pulse = false
+    @State private var subExpanded = true
 
     var body: some View {
         ScrollView {
@@ -15,54 +16,7 @@ struct HomeView: View {
                 statusCard
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
-                Text(store.t("server_list_title"))
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 20)
-                    .padding(.top, 8)
-                    .padding(.bottom, 6)
-                if store.servers.isEmpty {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(store.t("server_list_empty"))
-                            .font(.body.weight(.medium))
-                        Text(store.t("server_list_empty_hint"))
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 20)
-                } else {
-                    VStack(spacing: 0) {
-                        ForEach(Array(store.servers.enumerated()), id: \.element.id) { index, server in
-                            ServerRow(
-                                server: server,
-                                current: server.id == store.selectedId,
-                                checking: selecting,
-                                checked: checkedIds.contains(server.id),
-                                isFirst: index == 0,
-                                isLast: index == store.servers.count - 1,
-                                showDivider: index < store.servers.count - 1,
-                                onClick: {
-                                    if selecting {
-                                        if checkedIds.contains(server.id) {
-                                            checkedIds.remove(server.id)
-                                        } else {
-                                            checkedIds.insert(server.id)
-                                        }
-                                    } else {
-                                        store.selectServer(server)
-                                    }
-                                },
-                                onLongClick: {
-                                    selecting = true
-                                    checkedIds.insert(server.id)
-                                },
-                                onEdit: { path.append(.serverEdit(id: server.id)) },
-                                onDelete: { pendingDelete = server },
-                            )
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                }
+                serverSections
             }
             .padding(.bottom, 24)
         }
@@ -108,21 +62,12 @@ struct HomeView: View {
                         }
                         .accessibilityLabel(store.t("server_list_add"))
                         Button {
-                            path.append(.subscribe)
+                            path.append(.subscribe(edit: false))
                         } label: {
-                            Image(systemName: "square.and.arrow.down")
+                            Image(systemName: "dot.radiowaves.up.forward")
                                 .frame(width: 24, height: 24)
                         }
                         .accessibilityLabel(store.t("server_list_import"))
-                        Button {
-                            if !store.pingingAll { store.pingAll() }
-                        } label: {
-                            Image(systemName: "arrow.clockwise")
-                                .opacity(store.pingingAll ? 0.35 : 1)
-                                .frame(width: 24, height: 24)
-                        }
-                        .disabled(store.servers.isEmpty)
-                        .accessibilityLabel(store.t("server_list_ping_all"))
                     }
                     .font(.body.weight(.medium))
                     .foregroundStyle(.primary)
@@ -157,6 +102,170 @@ struct HomeView: View {
             Text(store.t("server_list_batch_delete_content", checkedIds.count))
         }
         .onAppear { pulse = true }
+    }
+
+    @ViewBuilder
+    private var serverSections: some View {
+        let manual = store.servers.filter { $0.subscriptionId == nil }
+        let sub = store.subscription
+        let subNodes: [ServerItem] = sub == nil ? [] : store.servers.filter { $0.subscriptionId == sub?.id }
+        if !manual.isEmpty || sub == nil {
+            HStack {
+                Text(store.t("server_list_title"))
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if !manual.isEmpty && !selecting {
+                    pingButton(running: store.pingingGroup == pingManual) {
+                        store.pingGroup(nil)
+                    }
+                }
+            }
+            .padding(.leading, 20)
+            .padding(.trailing, 12)
+            .padding(.top, 8)
+            .padding(.bottom, 6)
+        }
+        if manual.isEmpty && sub == nil {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(store.t("server_list_empty"))
+                    .font(.body.weight(.medium))
+                Text(store.t("server_list_empty_hint"))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 20)
+        }
+        if !manual.isEmpty {
+            VStack(spacing: 0) {
+                ForEach(Array(manual.enumerated()), id: \.element.id) { index, server in
+                    nodeRow(server, index: index, count: manual.count, groupedTop: true)
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+        if let sub {
+            let joined = subExpanded && !subNodes.isEmpty
+            HStack(spacing: 0) {
+                Button {
+                    subExpanded.toggle()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: subExpanded ? "chevron.down" : "chevron.right")
+                            .font(.system(size: 11, weight: .semibold))
+                            .frame(width: 12, height: 12)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(sub.remark.isEmpty ? (sub.type.isEmpty ? store.t("subscribe_title") : sub.type) : sub.remark)
+                                .font(.body.weight(.medium))
+                                .foregroundStyle(.primary)
+                                .lineLimit(1)
+                            if !sub.url.isEmpty {
+                                Text(sub.url)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                        }
+                        Spacer(minLength: 8)
+                        Text("\(subNodes.count)")
+                            .foregroundStyle(.secondary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                if !selecting {
+                    headerIcon("info.circle", label: store.t("subscribe_edit")) {
+                        path.append(.subscribe(edit: true))
+                    }
+                    if !subNodes.isEmpty {
+                        pingButton(running: store.pingingGroup == sub.id, compact: true) {
+                            store.pingGroup(sub.id)
+                        }
+                    }
+                    headerIcon("arrow.clockwise", label: store.t("subscribe_refresh"), enabled: !store.importing) {
+                        store.refreshSubscription()
+                    }
+                }
+            }
+            .padding(.leading, 14)
+            .padding(.trailing, 4)
+            .padding(.vertical, 10)
+            .background(Color(.secondarySystemGroupedBackground))
+            .clipShape(UnevenRoundedRectangle(
+                topLeadingRadius: 12,
+                bottomLeadingRadius: joined ? 0 : 12,
+                bottomTrailingRadius: joined ? 0 : 12,
+                topTrailingRadius: 12,
+            ))
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            if joined {
+                VStack(spacing: 0) {
+                    ForEach(Array(subNodes.enumerated()), id: \.element.id) { index, server in
+                        nodeRow(server, index: index, count: subNodes.count, groupedTop: false)
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+        }
+    }
+
+    private func nodeRow(_ server: ServerItem, index: Int, count: Int, groupedTop: Bool) -> some View {
+        ServerRow(
+            server: server,
+            current: server.id == store.selectedId,
+            checking: selecting,
+            checked: checkedIds.contains(server.id),
+            isFirst: groupedTop && index == 0,
+            isLast: index == count - 1,
+            showDivider: index < count - 1,
+            onClick: {
+                if selecting {
+                    if checkedIds.contains(server.id) {
+                        checkedIds.remove(server.id)
+                    } else {
+                        checkedIds.insert(server.id)
+                    }
+                } else {
+                    store.selectServer(server)
+                }
+            },
+            onLongClick: {
+                selecting = true
+                checkedIds.insert(server.id)
+            },
+            onEdit: { path.append(.serverEdit(id: server.id)) },
+            onDelete: { pendingDelete = server },
+            onPing: { store.pingServer(id: server.id) },
+        )
+    }
+
+    private func pingButton(running: Bool, compact: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Group {
+                if running {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Image(systemName: "speedometer")
+                }
+            }
+            .frame(width: compact ? 26 : 32, height: compact ? 26 : 32)
+        }
+        .buttonStyle(.plain)
+        .disabled(store.pingingGroup != nil)
+        .accessibilityLabel(store.t("server_list_ping"))
+    }
+
+    private func headerIcon(_ name: String, label: String, enabled: Bool = true, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: name)
+                .frame(width: 26, height: 26)
+                .opacity(enabled ? 1 : 0.35)
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .accessibilityLabel(label)
     }
 
     private var statusCard: some View {
@@ -225,6 +334,7 @@ private struct ServerRow: View {
     let onLongClick: () -> Void
     let onEdit: () -> Void
     let onDelete: () -> Void
+    let onPing: () -> Void
 
     @EnvironmentObject private var store: Store
 
@@ -262,6 +372,7 @@ private struct ServerRow: View {
                 .simultaneousGesture(LongPressGesture().onEnded { _ in onLongClick() })
                 if !checking {
                     Menu {
+                        Button(store.t("server_list_ping"), action: onPing)
                         Button(store.t("server_list_edit_title"), action: onEdit)
                         Button(store.t("server_list_delete_ok"), role: .destructive, action: onDelete)
                     } label: {

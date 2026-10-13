@@ -11,7 +11,8 @@ final class Store: ObservableObject {
     @Published var running = false
     @Published var vpnBusy = false
     @Published var vpnDesired = false
-    @Published var pingingAll = false
+    @Published var pingingGroup: String?
+    @Published var subscription: Subscription?
     @Published var importing = false
     @Published var importPreview: [ServerItem] = []
     @Published var importSource: String?
@@ -37,6 +38,7 @@ final class Store: ObservableObject {
     init() {
         settings = prefs.loadSettings()
         servers = prefs.loadServers()
+        subscription = prefs.loadSubscription()
         selectedId = prefs.loadSelectedId()
         rules = prefs.loadRules()
         TunnelController.shared.rules = rules
@@ -93,18 +95,32 @@ final class Store: ObservableObject {
         TunnelController.shared.stop()
     }
 
-    func pingAll() {
+    func pingGroup(_ subscriptionId: String?) {
+        let targets = servers.filter { $0.subscriptionId == subscriptionId }
+        pingTargets(
+            key: subscriptionId ?? pingManual,
+            targets: targets,
+            subscriptionId: subscriptionId,
+        )
+    }
+
+    func pingServer(id: String) {
+        guard let server = servers.first(where: { $0.id == id }) else { return }
+        pingTargets(key: "server:\(id)", targets: [server], subscriptionId: server.subscriptionId)
+    }
+
+    private func pingTargets(key: String, targets: [ServerItem], subscriptionId: String?) {
         let host = settings.latencyTest.host.trimmingCharacters(in: .whitespacesAndNewlines)
         if host.isEmpty {
             snack("settings_latency_test_host_required")
             return
         }
-        if servers.isEmpty || pingingAll { return }
-        pingingAll = true
-        let items = servers
-        Task.detached { [items, host] in
+        if targets.isEmpty || pingingGroup != nil { return }
+        pingingGroup = key
+        let sort = settings.latencyTest.sortAfterPing
+        Task.detached { [targets, host] in
             await withTaskGroup(of: (String, Int).self) { group in
-                for server in items {
+                for server in targets {
                     group.addTask {
                         let ms = Engine.ping(server.toProxyURL(), host)
                         return (server.id, Int(ms))
@@ -119,17 +135,22 @@ final class Store: ObservableObject {
                 }
             }
             await MainActor.run {
-                if self.settings.latencyTest.sortAfterPing {
-                    self.servers.sort(by: latencyLess)
+                var next = self.servers
+                if sort {
+                    let manual = next.filter { $0.subscriptionId == nil }
+                    let subNodes = next.filter { $0.subscriptionId != nil }
+                    next = subscriptionId == nil
+                        ? manual.sorted(by: latencyLess) + subNodes
+                        : manual + subNodes.sorted(by: latencyLess)
                 }
-                self.prefs.saveServers(self.servers)
-                self.pingingAll = false
-                self.snack("server_list_ping_all_done")
+                self.prefs.saveServers(next)
+                self.servers = next
+                self.pingingGroup = nil
             }
         }
     }
 
-    func parseSubscription(type: String, source: String, fromFile: Bool = false) {
+    func parseSubscription(type: String, source: String) {
         let trimmed = source.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
             snack("subscribe_error_url")
@@ -138,9 +159,7 @@ final class Store: ObservableObject {
         importing = true
         Task.detached {
             do {
-                let isURL = !fromFile && (
-                    trimmed.lowercased().hasPrefix("http://") || trimmed.lowercased().hasPrefix("https://")
-                )
+                let isURL = trimmed.lowercased().hasPrefix("http://") || trimmed.lowercased().hasPrefix("https://")
                 let servers: [ServerItem]
                 if isURL {
                     servers = try fetchSubscription(type: type, url: trimmed)
@@ -150,8 +169,7 @@ final class Store: ObservableObject {
                 await MainActor.run {
                     self.importing = false
                     self.importPreview = servers
-                    self.importSource = self.str(fromFile ? "subscribe_source_file" : "subscribe_source_url")
-                    self.snack("subscribe_parsed", servers.count)
+                    self.importSource = self.str("subscribe_source_url")
                 }
             } catch {
                 await MainActor.run {
@@ -164,27 +182,146 @@ final class Store: ObservableObject {
         }
     }
 
-    func confirmImport() {
+    func updateSubscriptionInfo(type: String, url: String, remark: String) {
+        guard let current = subscription else { return }
+        let next = Subscription(
+            id: current.id,
+            type: type.trimmingCharacters(in: .whitespacesAndNewlines),
+            url: url.trimmingCharacters(in: .whitespacesAndNewlines),
+            remark: remark.trimmingCharacters(in: .whitespacesAndNewlines),
+        )
+        prefs.saveSubscription(next)
+        subscription = next
+        snack("subscribe_saved")
+    }
+
+    func confirmImport(type: String, url: String, remark: String) {
         if importPreview.isEmpty {
             snack("subscribe_error_no_preview")
             return
         }
-        let preview = importPreview
-        let selectedStill = preview.first { $0.id == selectedId }
+        saveSubscriptionNodes(
+            Subscription(
+                type: type.trimmingCharacters(in: .whitespacesAndNewlines),
+                url: url.trimmingCharacters(in: .whitespacesAndNewlines),
+                remark: remark.trimmingCharacters(in: .whitespacesAndNewlines),
+            ),
+            preview: importPreview,
+        )
+    }
+
+    func refreshSubscription() {
+        guard let sub = subscription else { return }
+        let source = sub.url.trimmingCharacters(in: .whitespacesAndNewlines)
+        if source.isEmpty || importing { return }
+        importing = true
+        let type = sub.type
+        Task.detached {
+            do {
+                let isURL = source.lowercased().hasPrefix("http://") || source.lowercased().hasPrefix("https://")
+                let servers = try isURL
+                    ? fetchSubscription(type: type, url: source)
+                    : SubscriptionParser.parseContent(type: type, raw: source)
+                await MainActor.run {
+                    self.saveSubscriptionNodes(sub, preview: servers)
+                }
+            } catch {
+                await MainActor.run {
+                    self.importing = false
+                    self.snackbar = self.errorMessage(error)
+                }
+            }
+        }
+    }
+
+    func deleteSubscription() {
+        guard let id = subscription?.id else { return }
+        let selectedInSub = selectedServer?.subscriptionId == id
+        let remain = servers.filter { $0.subscriptionId != id }
+        prefs.clearSubscription()
+        prefs.saveServers(remain)
+        servers = remain
+        subscription = nil
+        importPreview = []
+        importSource = nil
+        if selectedInSub { selectServer(nil) }
+    }
+
+    private func saveSubscriptionNodes(_ subscription: Subscription, preview: [ServerItem]) {
+        let tagged = preview.map { node -> ServerItem in
+            var next = node
+            next.subscriptionId = subscription.id
+            return next
+        }
+        let manual = servers.filter { $0.subscriptionId == nil }
+        let merged = manual + tagged
+        let selectedStill = merged.first { $0.id == selectedId }
         let shouldStop = selectedStill == nil && running
-        prefs.saveServers(preview)
+        prefs.saveSubscription(subscription)
+        prefs.saveServers(merged)
         prefs.saveSelectedId(selectedStill?.id)
         if shouldStop { stop() }
-        servers = preview
+        servers = merged
+        self.subscription = subscription
         selectedId = selectedStill?.id
+        importing = false
         importPreview = []
         importSource = nil
         snack("subscribe_imported", preview.count)
         appendStatus(str("status_imported", preview.count))
     }
 
-    func exportServers() -> String {
-        SubscriptionParser.exportJson(servers)
+    func importManualNodes(_ raw: String, onAdded: @escaping () -> Void) {
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.isEmpty {
+            snack("subscribe_error_empty")
+            return
+        }
+        Task.detached {
+            do {
+                let incoming = try text.hasPrefix("{")
+                    ? [SubscriptionParser.parseOne(text)]
+                    : SubscriptionParser.parseContent(type: "prism", raw: text)
+                await MainActor.run {
+                    var current = self.servers
+                    var added = 0
+                    for node in incoming {
+                        let id = SubscriptionParser.identity(
+                            host: node.host,
+                            protocolName: node.protocolName,
+                            username: node.username,
+                            password: node.password,
+                        )
+                        let exists = current.contains {
+                            SubscriptionParser.identity(
+                                host: $0.host,
+                                protocolName: $0.protocolName,
+                                username: $0.username,
+                                password: $0.password,
+                            ) == id
+                        }
+                        if exists { continue }
+                        var manual = node
+                        manual.id = id
+                        manual.subscriptionId = nil
+                        current.append(manual)
+                        added += 1
+                    }
+                    if added == 0 {
+                        self.snack("server_list_duplicate")
+                        return
+                    }
+                    self.prefs.saveServers(current)
+                    self.servers = current
+                    self.snack("server_list_imported", added)
+                    onAdded()
+                }
+            } catch {
+                await MainActor.run {
+                    self.snackbar = self.errorMessage(error)
+                }
+            }
+        }
     }
 
     func addOrUpdateServer(
@@ -208,6 +345,7 @@ final class Store: ObservableObject {
             snack("server_list_validate_protocol")
             return false
         }
+        var current = servers
         let payload = ServerItem(
             id: editingId ?? UUID().uuidString,
             host: trimmedHost,
@@ -215,8 +353,8 @@ final class Store: ObservableObject {
             username: username.trimmingCharacters(in: .whitespacesAndNewlines),
             password: password,
             protocolName: protocolName,
+            subscriptionId: editingId.flatMap { id in current.first { $0.id == id }?.subscriptionId },
         )
-        var current = servers
         let nextId = SubscriptionParser.identity(
             host: payload.host,
             protocolName: payload.protocolName,
@@ -428,9 +566,21 @@ final class Store: ObservableObject {
 }
 
 private func fetchSubscription(type: String, url: String) throws -> [ServerItem] {
+    let kind = type.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    let userAgent: String?
+    switch kind {
+    case "shadowrocket":
+        userAgent = "shadowrocket/*"
+    case "prism":
+        let version = (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        userAgent = version.isEmpty ? "prism/*" : "prism/\(version)"
+    default:
+        userAgent = nil
+    }
     let body: String
     do {
-        body = try httpGet(url)
+        body = try httpGet(url, userAgent: userAgent)
     } catch let error as SubscriptionError {
         throw error
     } catch {
@@ -439,12 +589,14 @@ private func fetchSubscription(type: String, url: String) throws -> [ServerItem]
     return try SubscriptionParser.parseContent(type: type, raw: body)
 }
 
-private func httpGet(_ url: String) throws -> String {
+private func httpGet(_ url: String, userAgent: String?) throws -> String {
     guard let uri = URL(string: url), let scheme = uri.scheme?.lowercased(),
           scheme == "http" || scheme == "https"
     else { throw SubscriptionError("subscribe_error_fetch") }
     var request = URLRequest(url: uri, timeoutInterval: 15)
-    request.setValue("Prism-iOS/0.1", forHTTPHeaderField: "User-Agent")
+    if let userAgent, !userAgent.isEmpty {
+        request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+    }
     let sem = DispatchSemaphore(value: 0)
     var result: Result<String, Error> = .failure(SubscriptionError("subscribe_error_fetch"))
     let task = URLSession.shared.dataTask(with: request) { data, response, error in
@@ -476,6 +628,8 @@ private func httpGet(_ url: String) throws -> String {
     }
     return try result.get()
 }
+
+let pingManual = "manual"
 
 private func latencyLess(_ a: ServerItem, _ b: ServerItem) -> Bool {
     func rank(_ item: ServerItem) -> (Int, Int) {

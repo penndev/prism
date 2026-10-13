@@ -1,9 +1,13 @@
 package com.penndev.prism.ui.rules
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -12,12 +16,13 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import com.penndev.prism.R
 import com.penndev.prism.data.GeoMode
 import com.penndev.prism.ui.PrismUiState
 import com.penndev.prism.ui.components.PreferenceDivider
-import com.penndev.prism.ui.components.PreferenceGroup
 import com.penndev.prism.ui.components.PreferenceRow
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -56,7 +61,13 @@ fun RulesScreen(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState()),
         ) {
-            PreferenceGroup(title = stringResource(R.string.rules_section)) {
+            Column(
+                Modifier
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surface),
+            ) {
                 PreferenceRow(
                     title = stringResource(R.string.rules_entry_domain),
                     description = stringResource(R.string.rules_entry_domain_desc),

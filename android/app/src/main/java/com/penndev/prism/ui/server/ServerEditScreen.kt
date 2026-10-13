@@ -1,10 +1,12 @@
 package com.penndev.prism.ui.server
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -18,12 +20,15 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -45,6 +50,19 @@ fun ServerEditScreen(
     var protocol by rememberSaveable { mutableStateOf(server?.protocol ?: "socks5") }
     var username by rememberSaveable { mutableStateOf(server?.username.orEmpty()) }
     var password by rememberSaveable { mutableStateOf(server?.password.orEmpty()) }
+    val adding = server == null
+    val context = LocalContext.current
+    val openFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val raw = runCatching {
+            context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+        }.getOrNull().orEmpty()
+        if (raw.isBlank()) {
+            viewModel.snack(R.string.subscribe_error_file)
+        } else {
+            viewModel.importManualNodes(raw, onBack)
+        }
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -53,14 +71,27 @@ fun ServerEditScreen(
             TopAppBar(
                 title = {
                     Text(
-                        if (server == null) stringResource(R.string.server_list_add_title)
+                        if (adding) stringResource(R.string.server_list_add_title)
                         else stringResource(R.string.server_list_edit_title),
                     )
                 },
                 windowInsets = WindowInsets(0),
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                ),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    }
+                },
+                actions = {
+                    if (adding) {
+                        IconButton(onClick = { openFile.launch(arrayOf("*/*")) }) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_file),
+                                contentDescription = stringResource(R.string.subscribe_import_file),
+                            )
+                        }
                     }
                 },
             )

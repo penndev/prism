@@ -12,6 +12,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,7 +34,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -57,8 +57,9 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -69,6 +70,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.penndev.prism.R
 import com.penndev.prism.data.ServerItem
+import com.penndev.prism.ui.PING_MANUAL
 import com.penndev.prism.ui.PrismUiState
 import com.penndev.prism.ui.PrismViewModel
 import com.penndev.prism.ui.components.PreferenceDivider
@@ -83,7 +85,7 @@ import com.penndev.prism.ui.theme.PrismBlue
 fun HomeScreen(
     state: PrismUiState,
     viewModel: PrismViewModel,
-    onOpenSubscribe: () -> Unit,
+    onOpenSubscribe: (edit: Boolean) -> Unit,
     onAddServer: () -> Unit,
     onEditServer: (ServerItem) -> Unit,
 ) {
@@ -100,6 +102,7 @@ fun HomeScreen(
     var waitingPermission by rememberSaveable { mutableStateOf(false) }
     // ServerItem 不可序列化，重建后弹窗消失即可，不影响数据
     var pendingDelete by remember { mutableStateOf<ServerItem?>(null) }
+    var subExpanded by rememberSaveable { mutableStateOf(true) }
     val selected = state.selectedServer
     val context = LocalContext.current
     val vpnPermission = rememberLauncherForActivityResult(
@@ -170,20 +173,10 @@ fun HomeScreen(
                             contentDescription = stringResource(R.string.server_list_add),
                         )
                     }
-                    IconButton(onClick = onOpenSubscribe) {
+                    IconButton(onClick = { onOpenSubscribe(false) }) {
                         Icon(
-                            painter = painterResource(R.drawable.ic_import),
+                            painter = painterResource(R.drawable.ic_rss),
                             contentDescription = stringResource(R.string.server_list_import),
-                        )
-                    }
-                    IconButton(
-                        onClick = { viewModel.pingAll() },
-                        enabled = !state.pingingAll && state.servers.isNotEmpty(),
-                    ) {
-                        Icon(
-                            Icons.Filled.Refresh,
-                            contentDescription = stringResource(R.string.server_list_ping_all),
-                            modifier = Modifier.alpha(if (state.pingingAll) 0.35f else 1f),
                         )
                     }
                 }
@@ -289,15 +282,38 @@ fun HomeScreen(
                     )
                 }
             }
-            item {
-                Text(
-                    text = stringResource(R.string.server_list_title),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 20.dp, end = 16.dp, top = 8.dp, bottom = 6.dp),
-                )
+            val manual = state.servers.filter { it.subscriptionId == null }
+            val sub = state.subscription
+            val subNodes = if (sub == null) {
+                emptyList()
+            } else {
+                state.servers.filter { it.subscriptionId == sub.id }
             }
-            if (state.servers.isEmpty()) {
+            if (manual.isNotEmpty() || sub == null) {
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 20.dp, end = 8.dp, top = 8.dp, bottom = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.server_list_title),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (manual.isNotEmpty() && !selecting) {
+                            PingButton(
+                                running = state.pingingGroup == PING_MANUAL,
+                                enabled = state.pingingGroup == null,
+                                onClick = { viewModel.pingGroup(null) },
+                            )
+                        }
+                    }
+                }
+            }
+            if (manual.isEmpty() && sub == null) {
                 item {
                     Column(Modifier.padding(horizontal = 20.dp, vertical = 20.dp)) {
                         Text(
@@ -313,15 +329,16 @@ fun HomeScreen(
                         )
                     }
                 }
-            } else {
-                itemsIndexed(state.servers, key = { _, server -> server.id }) { index, server ->
+            }
+            if (manual.isNotEmpty()) {
+                itemsIndexed(manual, key = { _, server -> server.id }) { index, server ->
                     ServerRow(
                         server = server,
                         current = server.id == state.selectedId,
                         checking = selecting,
                         checked = server.id in checkedIds,
-                        shape = groupedItemShape(index, state.servers.size),
-                        showDivider = index < state.servers.lastIndex,
+                        shape = groupedItemShape(index, manual.size),
+                        showDivider = index < manual.lastIndex,
                         onClick = {
                             if (selecting) {
                                 checkedIds = if (server.id in checkedIds) {
@@ -339,7 +356,127 @@ fun HomeScreen(
                         },
                         onEdit = { onEditServer(server) },
                         onDelete = { pendingDelete = server },
+                        onPing = { viewModel.pingServer(server.id) },
                     )
+                }
+            }
+            if (sub != null) {
+                val joined = subExpanded && subNodes.isNotEmpty()
+                item {
+                    Row(
+                        modifier = Modifier
+                            .padding(start = 16.dp, end = 16.dp, top = 12.dp)
+                            .fillMaxWidth()
+                            .clip(
+                                if (joined) {
+                                    RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)
+                                } else {
+                                    RoundedCornerShape(12.dp)
+                                },
+                            )
+                            .background(MaterialTheme.colorScheme.surface)
+                            .clickable { subExpanded = !subExpanded }
+                            .padding(start = 14.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(
+                            modifier = Modifier.size(12.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                painter = painterResource(
+                                    if (subExpanded) R.drawable.ic_chevron_down else R.drawable.ic_chevron_right,
+                                ),
+                                contentDescription = stringResource(R.string.subscribe_title),
+                                modifier = Modifier
+                                    .width(if (subExpanded) 12.dp else 8.dp)
+                                    .height(if (subExpanded) 8.dp else 12.dp),
+                            )
+                        }
+                        Column(Modifier.padding(start = 8.dp).weight(1f)) {
+                            Text(
+                                text = sub.remark.ifBlank {
+                                    sub.type.ifBlank { stringResource(R.string.subscribe_title) }
+                                },
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            if (sub.url.isNotBlank()) {
+                                Text(
+                                    text = sub.url,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(top = 2.dp),
+                                )
+                            }
+                        }
+                        Text(
+                            text = subNodes.size.toString(),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        if (!selecting) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                HeaderIcon(
+                                    painter = painterResource(R.drawable.ic_info),
+                                    contentDescription = stringResource(R.string.subscribe_edit),
+                                    onClick = { onOpenSubscribe(true) },
+                                )
+                                if (subNodes.isNotEmpty()) {
+                                    PingButton(
+                                        running = state.pingingGroup == sub.id,
+                                        enabled = state.pingingGroup == null,
+                                        onClick = { viewModel.pingGroup(sub.id) },
+                                        modifier = Modifier.size(26.dp),
+                                    )
+                                }
+                                HeaderIcon(
+                                    painter = painterResource(R.drawable.ic_refresh),
+                                    contentDescription = stringResource(R.string.subscribe_refresh),
+                                    enabled = !state.importing,
+                                    onClick = { viewModel.refreshSubscription() },
+                                )
+                            }
+                        }
+                    }
+                }
+                if (joined) {
+                    itemsIndexed(subNodes, key = { _, server -> "sub-${server.id}" }) { index, server ->
+                        ServerRow(
+                            server = server,
+                            current = server.id == state.selectedId,
+                            checking = selecting,
+                            checked = server.id in checkedIds,
+                            shape = if (index == subNodes.lastIndex) {
+                                RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp)
+                            } else {
+                                RoundedCornerShape(0.dp)
+                            },
+                            showDivider = index < subNodes.lastIndex,
+                            onClick = {
+                                if (selecting) {
+                                    checkedIds = if (server.id in checkedIds) {
+                                        checkedIds - server.id
+                                    } else {
+                                        checkedIds + server.id
+                                    }
+                                } else {
+                                    viewModel.selectServer(server)
+                                }
+                            },
+                            onLongClick = {
+                                selecting = true
+                                checkedIds = checkedIds + server.id
+                            },
+                            onEdit = { onEditServer(server) },
+                            onDelete = { pendingDelete = server },
+                            onPing = { viewModel.pingServer(server.id) },
+                        )
+                    }
                 }
             }
         }
@@ -405,6 +542,7 @@ private fun ServerRow(
     onLongClick: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onPing: () -> Unit,
 ) {
     var menu by remember { mutableStateOf(false) }
     Column(
@@ -479,6 +617,13 @@ private fun ServerRow(
                     }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         DropdownMenuItem(
+                            text = { Text(stringResource(R.string.server_list_ping)) },
+                            onClick = {
+                                menu = false
+                                onPing()
+                            },
+                        )
+                        DropdownMenuItem(
                             text = { Text(stringResource(R.string.server_list_edit_title)) },
                             onClick = {
                                 menu = false
@@ -497,6 +642,60 @@ private fun ServerRow(
             }
         }
         if (showDivider) PreferenceDivider()
+    }
+}
+
+@Composable
+private fun HeaderIcon(
+    painter: Painter,
+    contentDescription: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    tint: Color = Color.Unspecified,
+) {
+    val color = if (tint == Color.Unspecified) MaterialTheme.colorScheme.onSurface else tint
+    Box(
+        modifier = Modifier
+            .size(26.dp)
+            .clip(CircleShape)
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            painter = painter,
+            contentDescription = contentDescription,
+            modifier = Modifier.size(16.dp),
+            tint = if (enabled) color else color.copy(alpha = 0.38f),
+        )
+    }
+}
+
+@Composable
+private fun PingButton(
+    running: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier.size(36.dp),
+) {
+    Box(
+        modifier = modifier
+            .clip(CircleShape)
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (running) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(14.dp),
+                strokeWidth = 2.dp,
+                color = PrismBlue,
+            )
+        } else {
+            Icon(
+                painter = painterResource(R.drawable.ic_speed),
+                contentDescription = stringResource(R.string.server_list_ping),
+                modifier = Modifier.size(16.dp),
+            )
+        }
     }
 }
 

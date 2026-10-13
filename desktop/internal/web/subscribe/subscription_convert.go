@@ -18,7 +18,22 @@ func convertSubscriptionURL(subURL string, subType string) ([]storage.ServerEntr
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
 		return nil, fmt.Errorf("subscription url must be http or https")
 	}
-	resp, err := (&http.Client{Timeout: 15 * time.Second}).Get(addr)
+	req, err := http.NewRequest(http.MethodGet, addr, nil)
+	if err != nil {
+		return nil, fmt.Errorf("fetch subscription failed: %w", err)
+	}
+	switch strings.ToLower(strings.TrimSpace(subType)) {
+	case "shadowrocket":
+		req.Header.Set("User-Agent", "shadowrocket/*")
+	case "prism":
+		version := strings.TrimSpace(appVersion())
+		if version == "" {
+			req.Header.Set("User-Agent", "prism/*")
+		} else {
+			req.Header.Set("User-Agent", "prism/"+version)
+		}
+	}
+	resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetch subscription failed: %w", err)
 	}
