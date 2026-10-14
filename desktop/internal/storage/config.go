@@ -51,8 +51,10 @@ type ServerEntry struct {
 func NormalizeProtocol(raw string) string {
 	key := strings.ToLower(strings.TrimSpace(raw))
 	switch key {
-	case "socks5", "socks5s", "http", "https":
+	case "socks5", "http", "https":
 		return key
+	case "socks5s", "socks5-tls":
+		return "socks5s"
 	default:
 		return "socks5"
 	}

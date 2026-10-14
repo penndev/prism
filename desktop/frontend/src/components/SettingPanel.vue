@@ -129,10 +129,11 @@
             </div>
             <button type="button" class="about-row about-row-btn" @click="openWebsite">
               <span>{{ t("settings.website") }}</span>
-              <span class="about-row-meta">{{ websiteURL }}</span>
+              <RightOutlined class="about-row-icon" />
             </button>
             <button type="button" class="about-row about-row-btn" @click="openPrivacy">
               <span>{{ t("settings.privacy") }}</span>
+              <RightOutlined class="about-row-icon" />
             </button>
           </div>
         </section>
@@ -146,12 +147,13 @@ import type { PropType } from "vue";
 import { useSettingsStore } from "@/stores/settings";
 import { t } from "@/locale";
 import { theme } from "ant-design-vue";
+import { RightOutlined } from "@ant-design/icons-vue";
 import { OpenExternalURL } from "@bindings/desktop/internal/appconst";
 
 const { token } = theme.useToken();
 const settingsStore = useSettingsStore();
 const appVersion = "<version>";
-const websiteURL = "<website>";
+const websiteURL = "https://penndev.github.io/prism/";
 
 async function openWebsite() {
   await OpenExternalURL(websiteURL);
@@ -262,6 +264,11 @@ defineProps({
 
   .about-row-btn {
     cursor: pointer;
+  }
+
+  .about-row-icon {
+    font-size: 12px;
+    color: v-bind("token.colorTextSecondary");
   }
 
   .about-row-meta {

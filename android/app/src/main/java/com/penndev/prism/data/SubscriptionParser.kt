@@ -59,6 +59,7 @@ object SubscriptionParser {
 
     fun normalizeProtocol(raw: String): String {
         val key = raw.trim().lowercase()
+        if (key == "socks5-tls") return "socks5s"
         return if (key in PROXY_SCHEMES) key else "socks5"
     }
 
@@ -91,8 +92,9 @@ object SubscriptionParser {
         val scheme = uri.scheme?.lowercase().orEmpty()
         val protocol = when (scheme) {
             "https" -> "https"
-            "socks5s" -> "socks5s"
-            // Shadowrocket 的 socks5:// 是明文 SOCKS5；带 TLS 的才是 socks5s://
+            "http" -> "http"
+            "socks5s", "socks5-tls" -> "socks5s"
+            // Shadowrocket 的 socks5:// 是明文 SOCKS5；带 TLS 的才是 socks5s:// 或 socks5-tls://
             "socks5", "socks" -> "socks5"
             else -> return null
         }

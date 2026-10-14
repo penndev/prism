@@ -70,6 +70,7 @@ enum SubscriptionParser {
 
     static func normalizeProtocol(_ raw: String) -> String {
         let key = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if key == "socks5-tls" { return "socks5s" }
         return proxySchemes.contains(key) ? key : "socks5"
     }
 
@@ -103,7 +104,8 @@ enum SubscriptionParser {
         let protocolName: String
         switch scheme {
         case "https": protocolName = "https"
-        case "socks5s": protocolName = "socks5s"
+        case "http": protocolName = "http"
+        case "socks5s", "socks5-tls": protocolName = "socks5s"
         case "socks5", "socks": protocolName = "socks5"
         default: return nil
         }

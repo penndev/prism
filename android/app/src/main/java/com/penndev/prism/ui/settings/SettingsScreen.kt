@@ -133,7 +133,6 @@ fun SettingsScreen(
                 PreferenceDivider()
                 PreferenceRow(
                     title = stringResource(R.string.settings_website),
-                    value = aboutWebsite,
                     onClick = {
                         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(aboutWebsite)))
                     },

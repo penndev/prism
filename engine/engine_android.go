@@ -1,4 +1,4 @@
-//go:build linux
+//go:build android
 
 package engine
 
@@ -15,7 +15,9 @@ import (
 	"github.com/penndev/prism/transport"
 	"github.com/penndev/prism/transport/dialer"
 	"golang.org/x/sys/unix"
+	"gvisor.dev/gvisor/pkg/tcpip"
 	gvisorstack "gvisor.dev/gvisor/pkg/tcpip/stack"
+	"gvisor.dev/gvisor/pkg/tcpip/transport/tcp"
 )
 
 var (
@@ -118,6 +120,11 @@ func Start(opt *Options) error {
 		restoreProtect()
 		return err
 	}
+	// 默认 FIN_WAIT_2 / TIME_WAIT 各 60 秒，Stop 里的 stack.Wait 会跟着等。
+	linger := tcpip.TCPLingerTimeoutOption(0)
+	tw := tcpip.TCPTimeWaitTimeoutOption(0)
+	_ = s.SetTransportProtocolOption(tcp.ProtocolNumber, &linger)
+	_ = s.SetTransportProtocolOption(tcp.ProtocolNumber, &tw)
 
 	ep = endpoint
 	netstack = s
@@ -127,12 +134,12 @@ func Start(opt *Options) error {
 	return nil
 }
 
-// Stop 关掉协议栈和 TUN fd。会阻塞到 gVisor 的 dispatch goroutine 全部退出，
-// 调用方不要放在 Android 主线程上。
+// Stop 当场掐掉协议栈里的全部连接，等收尾结束再返回。
+// 不放到后台：连续开关时，下一次 Start 会和还在 Wait 的旧栈叠在一起。
 func Stop() {
 	mu.Lock()
+	defer mu.Unlock()
 	if !started {
-		mu.Unlock()
 		return
 	}
 	fd := tunFD
@@ -144,27 +151,21 @@ func Stop() {
 	netstack = nil
 	handler = nil
 	fakeip.SetNeedFake(nil)
-	mu.Unlock()
 
-	// 先停协议栈，不再派发新连接
+	// Close 会 Abort 当前所有传输端点。读循环靠 eventfd 停，不能只关 tun fd。
 	if s != nil {
 		s.Close()
 	}
-	// fdbased 的 LinkEndpoint.Close() 是空实现，只能靠关 fd 把阻塞在 readv 的
-	// dispatcher 唤醒，所以顺序必须是「关 fd -> Wait」。
+	if endpoint != nil {
+		endpoint.Attach(nil)
+	}
 	if fd >= 0 {
 		_ = unix.Close(fd)
-	}
-	if endpoint != nil {
-		endpoint.Wait()
 	}
 	if s != nil {
 		s.Wait()
 	}
-
-	mu.Lock()
 	restoreProtect()
-	mu.Unlock()
 }
 
 func installProtect(h Handler) {

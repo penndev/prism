@@ -584,19 +584,13 @@ private fun ServerRow(
                         bottom = 12.dp,
                     ),
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = server.displayName,
-                        modifier = Modifier.weight(1f),
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = if (current && !checking) FontWeight.SemiBold else FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    LatencyLabel(server.latencyMs)
-                }
+                Text(
+                    text = server.displayName,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = if (current && !checking) FontWeight.SemiBold else FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
                 Text(
                     text = server.protocol,
                     style = MaterialTheme.typography.bodySmall,
@@ -606,6 +600,7 @@ private fun ServerRow(
                     modifier = Modifier.padding(top = 2.dp),
                 )
             }
+            LatencyLabel(server.latencyMs)
             if (!checking) {
                 Box {
                     IconButton(onClick = { menu = true }, modifier = Modifier.size(36.dp)) {

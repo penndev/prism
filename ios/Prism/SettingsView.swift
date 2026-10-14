@@ -68,7 +68,6 @@ struct SettingsView: View {
                     PreferenceDivider()
                     PreferenceRow(
                         title: store.t("settings_website"),
-                        value: aboutWebsite,
                     ) {
                         if let url = URL(string: aboutWebsite) { openURL(url) }
                     }

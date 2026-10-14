@@ -75,7 +75,11 @@ class Prefs(context: Context) {
                             password = password,
                             protocol = protocol,
                             latencyMs = if (obj.isNull("latencyMs")) null else obj.optInt("latencyMs"),
-                            subscriptionId = obj.optString("subscriptionId").ifBlank { null },
+                            subscriptionId = if (obj.isNull("subscriptionId")) {
+                                null
+                            } else {
+                                obj.optString("subscriptionId").ifBlank { null }
+                            },
                         ),
                     )
                 }

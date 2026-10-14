@@ -56,7 +56,7 @@ type areaNode struct {
 	Children []areaNode `json:"children,omitempty"`
 }
 
-// 库句柄由 Java 线程（换库）和每条连接的 Lookup 同时访问，必须加锁：
+// 库句柄由调用方线程（换库）和每条连接的 Lookup 同时访问，必须加锁：
 // 换库时把正在 Find 的句柄关掉就是 use-after-close。
 var (
 	geoMu    sync.RWMutex
@@ -64,7 +64,7 @@ var (
 	searcher *ipregion.Searcher
 )
 
-// SetIpregionDB opens ipregion.db at path. Java downloads/copies the file first.
+// SetIpregionDB opens ipregion.db at path. The caller downloads or copies the file first.
 func SetIpregionDB(path string) error {
 	s, err := ipregion.Open(path)
 	if err != nil {
