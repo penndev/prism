@@ -16,4 +16,4 @@ open ios/Prism.xcodeproj
 
 ## 编 engine
 
-见 [engine/README-iOS.md](../engine/README-iOS.md)。
+见 [engine/README.md](engine/README.md)。

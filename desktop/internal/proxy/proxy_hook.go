@@ -7,65 +7,53 @@ import (
 	"net"
 	"time"
 
-	"github.com/penndev/prism/fakeip"
-	"github.com/penndev/prism/pkg"
+	"github.com/penndev/prism/engine"
 	"github.com/penndev/prism/transport"
 )
 
-func (p *Proxy) handleConnectHook(handle transport.HandleConnect, callback func(network, address string)) transport.HandleConnect {
+func (p *Proxy) handleConnectHook(handle transport.HandleConnect, callback func(line string)) transport.HandleConnect {
+	h := connectHook{p: p, callback: callback}
 	return func(conn net.Conn, network, address string) error {
+		// 本地代理端口靠这里收尾。Relay 只在失败时关 conn，成功路径不关。
 		defer conn.Close()
-		host, port, err := net.SplitHostPort(address)
-		if err != nil {
-			return err
-		}
+		return engine.Relay(handle, localHandle, h, conn, network, address)
+	}
+}
 
-		// 拦截udp协议 进行中间人攻击替换IP
-		if network == "udp" || network == "udp4" || network == "udp6" {
-			if port == "53" {
-				fakeip.Handle(conn, network, address)
-				callback("fakedns -> "+network, address)
-				return nil
-			}
-		}
+type connectHook struct {
+	p        *Proxy
+	callback func(line string)
+}
 
-		// 判断是否是fakeIP。是的话直接替换然后代理。
-		if domain, ok := fakeip.Lookup(host); ok {
-			fakeaddr := net.JoinHostPort(domain, port)
-			if callback != nil {
-				callback("fakeip -> "+network, address+" - "+fakeaddr)
-			}
-			conn = pkg.WrapConn(conn, func(n int64) { p.readBytes.Add(n) }, func(n int64) { p.writeBytes.Add(n) })
-			return handle(conn, network, fakeaddr)
-		}
+func (h connectHook) OnLog(line string) {
+	if h.callback != nil && line != "" {
+		h.callback(line)
+	}
+}
 
-		// 验证地域规则
-		if st := storage.DefaultStorage; st != nil {
+func (h connectHook) OnProxyRead(n int64)  { h.p.readBytes.Add(n) }
+func (h connectHook) OnProxyWrite(n int64) { h.p.writeBytes.Add(n) }
+
+func (h connectHook) UseProxy(network, address string) bool {
+	if st := storage.DefaultStorage; st != nil {
+		if cfg := st.CachedRuleConfig(); cfg != nil {
 			bypass := false
-			if cfg := st.CachedRuleConfig(); cfg != nil {
-				switch cfg.AreaMode {
-				case "none":
-					bypass = true
-				case "proxy":
-					bypass = len(cfg.AreaIDs) == 0 || !inAreas(address, cfg.AreaIDs)
-				case "bypass":
-					bypass = len(cfg.AreaIDs) > 0 && inAreas(address, cfg.AreaIDs)
-				}
+			switch cfg.AreaMode {
+			case "none":
+				bypass = true
+			case "proxy":
+				bypass = len(cfg.AreaIDs) == 0 || !inAreas(address, cfg.AreaIDs)
+			case "bypass":
+				bypass = len(cfg.AreaIDs) > 0 && inAreas(address, cfg.AreaIDs)
 			}
 			if bypass {
-				if callback != nil {
-					callback("bypass -> "+network, address)
-				}
-				return localHandle(conn, network, address)
+				h.OnLog("bypass -> " + network + " " + address)
+				return false
 			}
 		}
-
-		if callback != nil {
-			callback("proxy -> "+network, address)
-		}
-		conn = pkg.WrapConn(conn, func(n int64) { p.readBytes.Add(n) }, func(n int64) { p.writeBytes.Add(n) })
-		return handle(conn, network, address)
 	}
+	h.OnLog("proxy -> " + network + " " + address)
+	return true
 }
 
 func inAreas(address string, areaIDs []uint32) bool {

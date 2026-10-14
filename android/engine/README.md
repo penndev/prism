@@ -1,6 +1,6 @@
 # engine（Android）
 
-预编译 `engine.aar` 在 `android/engine/`。本目录是 Android 和 iOS 共用的 Go 源码；`engine_android.go` 与 `fdtun.go` 带 `//go:build android`。Android 工程直接依赖 AAR，不在 Gradle 里编 Go。包名是 `com.penndev.prism.engine`。
+本目录放预编译 `engine.aar`。Go 源码在仓库根目录的 `engine/`，说明见 `engine/README.md`。`engine_android.go` 与 `fdtun.go` 带 `//go:build android`。Android 工程直接依赖 AAR，不在 Gradle 里编 Go。包名是 `com.penndev.prism.engine`。
 
 Go 把 gVisor 挂到 VPN 的 TUN fd 上，转发 TCP/UDP。UDP/53 一律在本地交给 fakeip：`needFake` 为真时回假 IP（`198.18.0.0/15`），之后连到这个假 IP 会换回域名再走代理；为假时把查询转到 `upstream`。其余连接由 `useProxy` 决定走代理还是直连。地域库、模式和域名表都在 Java，Go 不保存这些配置。
 

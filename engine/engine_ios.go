@@ -101,10 +101,10 @@ func Start(opt *Options) error {
 	s, err := stack.New(stack.Option{
 		EndPoint: endpoint,
 		HandleTCP: func(f *stack.ForwarderTCPRequest) {
-			relay(proxyH, localH, h, f.Conn, f.RemoteAddr.Network(), f.RemoteAddr.String())
+			Relay(proxyH, localH, h, f.Conn, f.RemoteAddr.Network(), f.RemoteAddr.String())
 		},
 		HandlerUDP: func(f *stack.ForwarderUDPRequest) {
-			relay(proxyH, localH, h, f.Conn, f.RemoteAddr.Network(), f.RemoteAddr.String())
+			Relay(proxyH, localH, h, f.Conn, f.RemoteAddr.Network(), f.RemoteAddr.String())
 		},
 	})
 	if err != nil {
