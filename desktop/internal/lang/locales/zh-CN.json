@@ -33,6 +33,7 @@
   "settings.about": "关于",
   "settings.version": "版本",
   "settings.website": "官网",
+  "settings.privacy": "隐私权政策",
   "settings.saveSuccess": "设置已保存",
   "settings.saveError": "保存失败",
   "settings.loadError": "加载设置失败",

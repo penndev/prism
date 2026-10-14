@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Prism 隐私权政策</title>
+    <meta
+      name="description"
+      content="Prism 客户端隐私权政策：说明应用是否收集数据、收集哪些数据，以及这些数据用来做什么。"
+    />
+    <link rel="canonical" href="https://penndev.github.io/prism/privacy.html" />
+    <link rel="icon" href="./logo.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="top">
+      <a class="brand" href="./">
+        <img src="./logo.svg" width="32" height="32" alt="" />
+        <span>Prism</span>
+      </a>
+      <nav>
+        <a href="./">首页</a>
+        <a href="https://github.com/penndev/prism" target="_blank" rel="noopener">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <article class="block privacy">
+        <h1>Prism 隐私权政策</h1>
+        <p class="muted">生效日期：2026 年 10 月 14 日</p>
+        <p>
+          本政策适用于 Prism 客户端（Android 与 iOS，应用标识
+          <code>com.penndev.prism</code>，以及同名桌面客户端）。Prism
+          是在你的设备上运行的代理客户端：你自己添加远程 SOCKS5 / HTTP
+          节点，再选择让哪些流量经过该节点。
+        </p>
+        <p>
+          我们没有用户账号，不接入广告，也不接入统计或崩溃上报工具。开发者没有服务器接收你的节点、密码或上网内容。
+        </p>
+
+        <h2>保存在你设备上的数据</h2>
+        <p>下列内容只写在本机，用于让你下次打开时还能用，不会上传给我们：</p>
+        <ul>
+          <li>你添加的节点：地址、协议、用户名、密码、备注。</li>
+          <li>你添加的订阅：类型、链接、备注，以及从中解析出的节点。</li>
+          <li>代理规则：域名列表、地域模式、勾选的地区、IP 库地址，以及下载到本地的 IP 库文件。</li>
+          <li>设置：语言、主题、是否记录日志、测速用的域名。</li>
+        </ul>
+        <p>卸载应用后，这些本机数据会随应用数据一起删除。</p>
+
+        <h2>只在本次运行中出现的日志</h2>
+        <p>
+          开启日志时，应用会在内存里记下状态和连接记录，方便你在「日志」页查看。这些记录不会写入我们的服务器，关闭应用后即消失。你可以在设置里关掉日志记录。
+        </p>
+
+        <h2>应用会主动访问的网络</h2>
+        <p>这些请求发往你填写的地址，或本站文档里写明的下载地址，不是发往开发者的账号服务器：</p>
+        <ul>
+          <li>订阅：按你填写的链接拉取订阅内容。</li>
+          <li>域名列表和 IP 库：按你填写的链接，或文档中给出的公开地址下载。</li>
+          <li>测速：通过当前节点访问你设置的测速域名，用来显示延迟。</li>
+        </ul>
+        <p>
+          请求订阅时，应用会带上 User-Agent：Shadowrocket 订阅为
+          <code>shadowrocket/*</code>，Prism 订阅为 <code>prism/</code> 加应用版本号。这只用来表明客户端类型。
+        </p>
+
+        <h2>开启代理或 VPN 之后的流量</h2>
+        <p>
+          你打开本地 VPN（移动端）或 TUN（桌面端）后，设备流量会交给你选中的远程节点转发。手动代理模式下，只有你另行配置为使用本地端口的软件会把流量交给该节点。
+        </p>
+        <p>
+          经过节点的流量由该节点的运营者处理。我们看不到、也不保存这些内容。请只使用你信任的节点。
+        </p>
+
+        <h2>权限</h2>
+        <ul>
+          <li>网络：拉取订阅和规则文件，以及转发你选择要代理的流量。</li>
+          <li>通知：在 Android 上显示 VPN 正在运行的前台服务通知。</li>
+          <li>相机：仅在你扫描订阅二维码时使用。扫描结果是一段文本，不会上传照片或视频。</li>
+        </ul>
+
+        <h2>我们不做什么</h2>
+        <ul>
+          <li>不要求注册，不收集姓名、邮箱、电话或通讯录。</li>
+          <li>不把上述本机数据出售或提供给广告商。</li>
+          <li>不面向儿童设计，也不会有意收集儿童的个人信息。</li>
+        </ul>
+
+        <h2>本页的托管</h2>
+        <p>
+          本政策页面放在 GitHub Pages（<code>penndev.github.io</code>）。你用浏览器打开本页时，GitHub 可能按其自身政策记录访问日志。这与 Prism 应用内保存的数据无关。
+        </p>
+
+        <h2>政策变更</h2>
+        <p>若处理方式有变化，会更新本页并修改上方的生效日期。继续使用应用即表示你了解更新后的政策。</p>
+
+        <h2>联系</h2>
+        <p>
+          对本政策有疑问，请通过
+          <a href="https://github.com/penndev/prism/issues">GitHub Issues</a>
+          联系。
+        </p>
+
+        <h2>Privacy policy (English)</h2>
+        <p class="muted">Effective date: 14 October 2026</p>
+        <p>
+          This policy covers the Prism client on Android and iOS (application id
+          <code>com.penndev.prism</code>) and the desktop client of the same name. Prism runs on your device. You add your own remote SOCKS5 / HTTP nodes and choose which traffic uses a node.
+        </p>
+        <p>
+          There is no account system, no advertising, and no analytics or crash-reporting SDK. The developer does not operate a server that receives your nodes, passwords, or browsing content.
+        </p>
+        <p>The following stays on your device and is not uploaded to us:</p>
+        <ul>
+          <li>Nodes you add: address, protocol, username, password, and remark.</li>
+          <li>A subscription you add: type, URL, remark, and the nodes parsed from it.</li>
+          <li>Rules: domain list, geo mode, selected regions, IP database URL, and the database file saved locally.</li>
+          <li>Settings: language, theme, whether logging is on, and the latency-test host.</li>
+        </ul>
+        <p>Uninstalling the app deletes this local data with the app.</p>
+        <p>
+          If logging is on, status and connection lines are kept in memory for the Logs screen. They are not sent to us and are discarded when the app process ends. You can turn logging off in Settings.
+        </p>
+        <p>The app contacts addresses you enter, or public URLs named in the documentation, not a developer account server:</p>
+        <ul>
+          <li>Subscription: the URL you provide.</li>
+          <li>Domain lists and the IP database: a URL you provide, or a public URL shown in the docs.</li>
+          <li>Latency test: a request through the selected node to the host you set.</li>
+        </ul>
+        <p>
+          Subscription requests send a User-Agent of <code>shadowrocket/*</code> for a Shadowrocket subscription, or <code>prism/</code> plus the app version for a Prism subscription.
+        </p>
+        <p>
+          When you start the local VPN (mobile) or TUN (desktop), device traffic is forwarded by the remote node you selected. In manual mode, only software you point at the local port uses that node. The operator of the node can see traffic that passes through it. We cannot see or store that traffic. Use only nodes you trust.
+        </p>
+        <p>Permissions:</p>
+        <ul>
+          <li>Network: fetch subscriptions and rule files, and forward traffic you choose to proxy.</li>
+          <li>Notifications: on Android, a foreground-service notice while the VPN is running.</li>
+          <li>Camera: only while you scan a subscription QR code. The result is text. Photos and video are not uploaded.</li>
+        </ul>
+        <p>
+          We do not ask you to register, and we do not collect your name, email, phone number, or contacts. We do not sell the local data above. The app is not directed at children, and we do not knowingly collect personal information from children.
+        </p>
+        <p>
+          This page is hosted on GitHub Pages (<code>penndev.github.io</code>). Opening it in a browser may be logged by GitHub under its own policy. That is separate from data stored inside Prism.
+        </p>
+        <p>
+          If these practices change, this page and the effective date will be updated. Questions:
+          <a href="https://github.com/penndev/prism/issues">GitHub Issues</a>.
+        </p>
+      </article>
+    </main>
+
+    <footer>
+      <span>Prism</span>
+      <a href="./">首页</a>
+      <a href="https://github.com/penndev/prism">源代码</a>
+    </footer>
+  </body>
+</html>

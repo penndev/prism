@@ -7,6 +7,7 @@ struct SettingsView: View {
     @State private var latencyDraft = ""
     private let aboutVersion = "0.0.1"
     private let aboutWebsite = "https://penndev.github.io/prism/"
+    private let privacyPolicy = "https://penndev.github.io/prism/privacy.html"
 
     var body: some View {
         ScrollView {
@@ -70,6 +71,10 @@ struct SettingsView: View {
                         value: aboutWebsite,
                     ) {
                         if let url = URL(string: aboutWebsite) { openURL(url) }
+                    }
+                    PreferenceDivider()
+                    PreferenceRow(title: store.t("settings_privacy")) {
+                        if let url = URL(string: privacyPolicy) { openURL(url) }
                     }
                 }
             }

@@ -422,6 +422,12 @@ fun HomeScreen(
                         if (!selecting) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 HeaderIcon(
+                                    painter = painterResource(R.drawable.ic_refresh),
+                                    contentDescription = stringResource(R.string.subscribe_refresh),
+                                    enabled = !state.importing,
+                                    onClick = { viewModel.refreshSubscription() },
+                                )
+                                HeaderIcon(
                                     painter = painterResource(R.drawable.ic_info),
                                     contentDescription = stringResource(R.string.subscribe_edit),
                                     onClick = { onOpenSubscribe(true) },
@@ -434,12 +440,6 @@ fun HomeScreen(
                                         modifier = Modifier.size(26.dp),
                                     )
                                 }
-                                HeaderIcon(
-                                    painter = painterResource(R.drawable.ic_refresh),
-                                    contentDescription = stringResource(R.string.subscribe_refresh),
-                                    enabled = !state.importing,
-                                    onClick = { viewModel.refreshSubscription() },
-                                )
                             }
                         }
                     }

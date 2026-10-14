@@ -174,6 +174,9 @@ struct HomeView: View {
                 }
                 .buttonStyle(.plain)
                 if !selecting {
+                    headerIcon("arrow.clockwise", label: store.t("subscribe_refresh"), enabled: !store.importing) {
+                        store.refreshSubscription()
+                    }
                     headerIcon("info.circle", label: store.t("subscribe_edit")) {
                         path.append(.subscribe(edit: true))
                     }
@@ -181,9 +184,6 @@ struct HomeView: View {
                         pingButton(running: store.pingingGroup == sub.id, compact: true) {
                             store.pingGroup(sub.id)
                         }
-                    }
-                    headerIcon("arrow.clockwise", label: store.t("subscribe_refresh"), enabled: !store.importing) {
-                        store.refreshSubscription()
                     }
                 }
             }

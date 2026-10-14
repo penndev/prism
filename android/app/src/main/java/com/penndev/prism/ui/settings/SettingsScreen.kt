@@ -56,6 +56,7 @@ fun SettingsScreen(
     val context = LocalContext.current
     val aboutVersion = "0.0.1"
     val aboutWebsite = "https://penndev.github.io/prism/"
+    val privacyPolicy = "https://penndev.github.io/prism/privacy.html"
     var dialog by remember { mutableStateOf(SettingsDialog.None) }
     val languageLabel = when (settings.system.language) {
         "zh-CN" -> stringResource(R.string.lang_zh)
@@ -135,6 +136,13 @@ fun SettingsScreen(
                     value = aboutWebsite,
                     onClick = {
                         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(aboutWebsite)))
+                    },
+                )
+                PreferenceDivider()
+                PreferenceRow(
+                    title = stringResource(R.string.settings_privacy),
+                    onClick = {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(privacyPolicy)))
                     },
                 )
             }

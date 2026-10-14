@@ -131,6 +131,9 @@
               <span>{{ t("settings.website") }}</span>
               <span class="about-row-meta">{{ websiteURL }}</span>
             </button>
+            <button type="button" class="about-row about-row-btn" @click="openPrivacy">
+              <span>{{ t("settings.privacy") }}</span>
+            </button>
           </div>
         </section>
       </div>
@@ -152,6 +155,10 @@ const websiteURL = "<website>";
 
 async function openWebsite() {
   await OpenExternalURL(websiteURL);
+}
+
+async function openPrivacy() {
+  await OpenExternalURL("https://penndev.github.io/prism/privacy.html");
 }
 
 defineProps({

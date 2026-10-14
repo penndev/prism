@@ -33,6 +33,7 @@
   "settings.about": "About",
   "settings.version": "Version",
   "settings.website": "Website",
+  "settings.privacy": "Privacy policy",
   "settings.saveSuccess": "Settings saved",
   "settings.saveError": "Save failed",
   "settings.loadError": "Failed to load settings",

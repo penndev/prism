@@ -19,10 +19,10 @@ android {
     buildTypes {
         release {
             // 1. 开启代码混淆与压缩
-            isMinifyEnabled = true
+            isMinifyEnabled = false
 
             // 2. 开启无用资源剔除
-            isShrinkResources = true
+            isShrinkResources = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
