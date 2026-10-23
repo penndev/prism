@@ -8,45 +8,61 @@ Go 把 gVisor 挂到 VPN 的 TUN fd 上，转发 TCP/UDP。UDP/53 一律在本�
 
 ## Engine
 
-| 方法 | 作用 |
-| --- | --- |
-| `start(opt)` | 用 `Options` 拉起隧道。已启动、缺少 `handler`、代理 URL 无法解析时返回错误。`mtu <= 0` 时用 1500。 |
-| `stop()` | 停掉协议栈并关闭 TUN fd。 |
+
+| 方法                            | 作用                                                                               |
+| ----------------------------- | -------------------------------------------------------------------------------- |
+| `start(opt)`                  | 用 `Options` 拉起隧道。已启动、缺少 `handler`、代理 URL 无法解析时返回错误。`mtu <= 0` 时用 1500。           |
+| `stop()`                      | 停掉协议栈并关闭 TUN fd。                                                                 |
 | `ping(proxyURL, latencyHost)` | 经代理测 HTTP 首字节时间，单位毫秒。`latencyHost` 是主机或 `主机:端口`（缺端口当 80）。失败或主机为空返回 `-1`。不经过 TUN。 |
-| `setIpregionDB(path)` | 打开 Java 已经下载或拷好的 `ipregion.db`。换库时会关掉旧句柄。 |
-| `dbStatus()` | 当前库的文件和元数据：是否存在、路径、大小、版本、备注、地域数、IPv4/IPv6 条目数。 |
-| `areaTree()` | 整棵地域树的 JSON，形状与桌面 `/rule/api/areas` 相同。未打开库时返回 `[]`。 |
-| `lookup(address)` | 查 `主机` 或 `主机:端口` 的地域链，叶节点在前、父节点在后。传入的是域名时会先解析成 IP。无库或查不到时返回空列表。 |
+| `setIpregionDB(path)`         | 打开 Java 已经下载或拷好的 `ipregion.db`。换库时会关掉旧句柄。                                        |
+| `dbStatus()`                  | 当前库的文件和元数据：是否存在、路径、大小、版本、备注、地域数、IPv4/IPv6 条目数。                                   |
+| `areaTree()`                  | 整棵地域树的 JSON，形状与桌面 `/rule/api/areas` 相同。未打开库时返回 `[]`。                             |
+| `lookup(address)`             | 查 `主机` 或 `主机:端口` 的地域链，叶节点在前、父节点在后。传入的是域名时会先解析成 IP。无库或查不到时返回空列表。                  |
+
+
+
 
 ## Options
 
-| 字段 | 作用 |
-| --- | --- |
-| `fd` | TUN 的文件描述符。 |
-| `mtu` | 隧道 MTU。 |
-| `proxy` | 上游代理 URL：`socks5`、`socks5s`、`http`、`https`，形如 `socks5://user:pass@host:port`。 |
-| `upstream` | VPN 启动前抓到的系统 DNS（IPv4）。给未 fake 的查询用；空则用 `8.8.8.8:53`。 |
-| `handler` | Java 实现的回调，不能为空。 |
+
+| 字段         | 作用                                                                            |
+| ---------- | ----------------------------------------------------------------------------- |
+| `fd`       | TUN 的文件描述符。                                                                   |
+| `mtu`      | 隧道 MTU。                                                                       |
+| `proxy`    | 上游代理 URL：`socks5`、`socks5s`、`http`、`https`，形如 `socks5://user:pass@host:port`。 |
+| `upstream` | VPN 启动前抓到的系统 DNS（IPv4）。给未 fake 的查询用；空则用 `8.8.8.8:53`。                         |
+| `handler`  | Java 实现的回调，不能为空。                                                              |
+
+
+
 
 ## Handler
 
 Java 实现，Go 在转发时回调。
 
-| 方法 | 作用 |
-| --- | --- |
-| `protect(fd)` | 包一层 `VpnService.protect`，让这条出站 socket 不进隧道。返回 `false` 时这次拨号失败。 |
-| `needFake(name)` | 每个 DNS 名问一次。返回 `true` 则回假 IP，随后该连接按域名走代理，不再问 `useProxy`。返回 `false` 则把查询转到 `upstream`。域名表在 Java。 |
-| `useProxy(network, address)` | 非假 IP 的连接问一次。返回 `true` 走代理，`false` 直连。Java 用 `lookup` 拿地域链（叶 → 父）和已保存的地域 ID 比对，并在这里打连接日志，例如 `proxy tcp 1.2.3.4:443`。 |
-| `onLog(line)` | 假 IP 改写、直连或代理失败、relay panic。 |
-| `onProxyRead(n)` / `onProxyWrite(n)` | 代理路径上的读、写字节增量。直连不计入。 |
+
+| 方法                                   | 作用                                                                                                                   |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `protect(fd)`                        | 包一层 `VpnService.protect`，让这条出站 socket 不进隧道。返回 `false` 时这次拨号失败。                                                       |
+| `needFake(name)`                     | 每个 DNS 名问一次。返回 `true` 则回假 IP，随后该连接按域名走代理，不再问 `useProxy`。返回 `false` 则把查询转到 `upstream`。域名表在 Java。                      |
+| `useProxy(network, address)`         | 非假 IP 的连接问一次。返回 `true` 走代理，`false` 直连。Java 用 `lookup` 拿地域链（叶 → 父）和已保存的地域 ID 比对，并在这里打连接日志，例如 `proxy tcp 1.2.3.4:443`。 |
+| `onLog(line)`                        | 假 IP 改写、直连或代理失败、relay panic。                                                                                         |
+| `onProxyRead(n)` / `onProxyWrite(n)` | 代理路径上的读、写字节增量。直连不计入。                                                                                                 |
+
+
+
 
 ## 返回类型
 
-| 类型 | 作用 |
-| --- | --- |
-| `Area` | 地域节点：`id`、`parentId`（顶级为 0）、`name`。 |
+
+| 类型         | 作用                                            |
+| ---------- | --------------------------------------------- |
+| `Area`     | 地域节点：`id`、`parentId`（顶级为 0）、`name`。           |
 | `AreaList` | `lookup` 的结果。用 `len()` 和 `get(i)` 取，没有直接暴露切片。 |
-| `DbStatus` | `dbStatus` 的结果，字段见上表。 |
+| `DbStatus` | `dbStatus` 的结果，字段见上表。                         |
+
+
+
 
 ## 重编 AAR
 
@@ -78,4 +94,6 @@ $env:CGO_LDFLAGS = "-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384"
 
 go get golang.org/x/mobile/bind
 gomobile bind -target=android -androidapi 26 -javapkg com.penndev.prism -o android/engine/engine.aar github.com/penndev/prism/engine
+go mod tidy
 ```
+
