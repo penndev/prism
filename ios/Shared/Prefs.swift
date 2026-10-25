@@ -1,13 +1,39 @@
 import Foundation
 
 enum AppGroup {
-    // 接 Packet Tunnel 时再改回 App Group：group.com.penndev.prism
     static let id = "group.com.penndev.prism"
 
-    static var defaults: UserDefaults { .standard }
+    static var defaults: UserDefaults {
+        UserDefaults(suiteName: id) ?? .standard
+    }
 
     static var container: URL {
-        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        if let url = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: id) {
+            return url
+        }
+        return FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+    }
+
+    /// 扩展和主 App 不共享沙盒。把以前写在 standard / Documents 里的配置和 IP 库拷进 App Group。
+    static func migrateIfNeeded() {
+        let suite = defaults
+        let standard = UserDefaults.standard
+        let keys = ["servers", "subscription", "selected_id", "settings", "rules"]
+        if suite.object(forKey: "servers") == nil, standard.object(forKey: "servers") != nil {
+            for key in keys {
+                if suite.object(forKey: key) == nil, let value = standard.object(forKey: key) {
+                    suite.set(value, forKey: key)
+                }
+            }
+            suite.synchronize()
+        }
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent(ipregionDB)
+        let dest = container.appendingPathComponent(ipregionDB)
+        if !FileManager.default.fileExists(atPath: dest.path),
+           FileManager.default.fileExists(atPath: docs.path) {
+            try? FileManager.default.copyItem(at: docs, to: dest)
+        }
     }
 }
 
@@ -15,10 +41,12 @@ final class Prefs {
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = AppGroup.defaults) {
+        AppGroup.migrateIfNeeded()
         self.defaults = defaults
     }
 
     func loadSettings() -> AppSettings {
+        defaults.synchronize()
         guard let data = defaults.data(forKey: Key.settings) else { return AppSettings() }
         return (try? JSONDecoder().decode(AppSettings.self, from: data)) ?? AppSettings()
     }
@@ -26,6 +54,7 @@ final class Prefs {
     func saveSettings(_ settings: AppSettings) {
         if let data = try? JSONEncoder().encode(settings) {
             defaults.set(data, forKey: Key.settings)
+            defaults.synchronize()
         }
     }
 
@@ -82,6 +111,7 @@ final class Prefs {
     }
 
     func loadRules() -> RuleDraft {
+        defaults.synchronize()
         guard let raw = defaults.string(forKey: Key.rules),
               let data = raw.data(using: .utf8),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -129,6 +159,7 @@ final class Prefs {
         if let data = try? JSONSerialization.data(withJSONObject: obj),
            let raw = String(data: data, encoding: .utf8) {
             defaults.set(raw, forKey: Key.rules)
+            defaults.synchronize()
         }
     }
 

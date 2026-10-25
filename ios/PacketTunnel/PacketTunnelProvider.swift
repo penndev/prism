@@ -1,68 +1,112 @@
 import Darwin
 import NetworkExtension
 
-// 预留：主 App 暂不嵌入、不申请 VPN 权限。接 TUN 时再编进 Prism。
 class PacketTunnelProvider: NEPacketTunnelProvider {
     private var reading = false
+    private var handler: TunnelHandler?
 
     override func startTunnel(options: [String: NSObject]?, completionHandler: @escaping (Error?) -> Void) {
         let proto = protocolConfiguration as? NETunnelProviderProtocol
         let proxy = proto?.providerConfiguration?["proxy"] as? String ?? ""
         let upstream = proto?.providerConfiguration?["upstream"] as? String ?? ""
+        if proxy.isEmpty {
+            TunnelBridge.setError("vpn_establish_failed")
+            completionHandler(tunnelError("vpn_establish_failed"))
+            return
+        }
 
         let settings = NEPacketTunnelNetworkSettings(tunnelRemoteAddress: "127.0.0.1")
         settings.mtu = 1500
         let ipv4 = NEIPv4Settings(addresses: ["172.19.0.1"], subnetMasks: ["255.255.255.255"])
-        // 模拟阶段不劫持默认路由，避免流量进隧道后被丢掉。
-        ipv4.includedRoutes = []
+        ipv4.includedRoutes = [NEIPv4Route.default()]
         settings.ipv4Settings = ipv4
-        settings.dnsSettings = NEDNSSettings(servers: ["8.8.8.8"])
+        let dns = NEDNSSettings(servers: ["8.8.8.8"])
+        dns.matchDomains = [""]
+        settings.dnsSettings = dns
 
         setTunnelNetworkSettings(settings) { error in
-            if let error {
+            if error != nil {
+                TunnelBridge.setError("vpn_establish_failed")
                 completionHandler(error)
                 return
             }
+            let handler = TunnelHandler(flow: self.packetFlow)
+            handler.ensureDb()
+            self.handler = handler
             let opt = EngineOptions()
             opt.mtu = 1500
             opt.proxy = proxy
             opt.upstream = upstream
-            opt.handler = TunnelHandler(flow: self.packetFlow)
+            opt.handler = handler
             do {
                 try Engine.start(opt)
-                self.reading = true
-                self.readLoop()
-                completionHandler(nil)
             } catch {
+                TunnelBridge.setError("engine start: \(error.localizedDescription)")
                 completionHandler(error)
+                return
             }
+            self.reading = true
+            self.readLoop()
+            completionHandler(nil)
         }
     }
 
     override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
         reading = false
         Engine.stop()
+        handler = nil
         completionHandler()
     }
 
     private func readLoop() {
         packetFlow.readPackets { [weak self] packets, _ in
             guard let self, self.reading else { return }
-            for p in packets { Engine.writePacket(p) }
+            if !packets.isEmpty {
+                Engine.writePacket(packetBlob(packets))
+            }
             self.readLoop()
         }
     }
+
+    private func tunnelError(_ message: String) -> NSError {
+        NSError(domain: "PrismTunnel", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
+    }
+}
+
+private func packetBlob(_ packets: [Data]) -> Data {
+    var blob = Data()
+    var hdr = [UInt8](repeating: 0, count: 4)
+    for pkt in packets where !pkt.isEmpty {
+        let n = pkt.count
+        hdr[0] = UInt8((n >> 24) & 0xff)
+        hdr[1] = UInt8((n >> 16) & 0xff)
+        hdr[2] = UInt8((n >> 8) & 0xff)
+        hdr[3] = UInt8(n & 0xff)
+        blob.append(contentsOf: hdr)
+        blob.append(pkt)
+    }
+    return blob
 }
 
 private final class TunnelHandler: NSObject, EngineHandlerProtocol {
     private let flow: NEPacketTunnelFlow
+    private var dbStamp: Date? = .distantPast
 
     init(flow: NEPacketTunnelFlow) {
         self.flow = flow
     }
 
+    func ensureDb() {
+        let file = ipregionFile()
+        let attrs = try? FileManager.default.attributesOfItem(atPath: file.path)
+        let stamp = attrs?[.modificationDate] as? Date
+        if stamp == dbStamp { return }
+        dbStamp = stamp
+        if stamp != nil { openIpregionDb() }
+    }
+
     func onLog(_ line: String?) {
-        if let line { NSLog("%@", line) }
+        if let line, !line.isEmpty { TunnelBridge.appendConnection(line) }
     }
 
     func needFake(_ name: String?) -> Bool {
@@ -80,24 +124,55 @@ private final class TunnelHandler: NSObject, EngineHandlerProtocol {
     }
 
     func useProxy(_ network: String?, address: String?) -> Bool {
-        _ = network
-        let rules = Prefs().loadRules()
+        ensureDb()
         let address = address ?? ""
+        let network = network ?? ""
+        let use = shouldProxy(address)
+        let tag = use ? "proxy" : "direct"
+        let line = network.isEmpty ? "\(tag) \(address)" : "\(tag) \(network) \(address)"
+        if !address.isEmpty { TunnelBridge.appendConnection(line) }
+        return use
+    }
+
+    func onProxyRead(_ n: Int64) {
+        TunnelBridge.addUpload(n)
+    }
+
+    func onProxyWrite(_ n: Int64) {
+        TunnelBridge.addDownload(n)
+    }
+
+    func writePacket(_ blob: Data?) {
+        guard let blob, blob.count >= 4 else { return }
+        var packets: [Data] = []
+        var protocols: [NSNumber] = []
+        blob.withUnsafeBytes { raw in
+            let bytes = raw.bindMemory(to: UInt8.self)
+            var i = 0
+            while i + 4 <= bytes.count {
+                let n = (Int(bytes[i]) << 24) | (Int(bytes[i + 1]) << 16) | (Int(bytes[i + 2]) << 8) | Int(bytes[i + 3])
+                i += 4
+                guard n > 0, i + n <= bytes.count else { return }
+                let pkt = Data(bytes[i..<(i + n)])
+                let version = bytes[i] >> 4
+                packets.append(pkt)
+                protocols.append(version == 6 ? NSNumber(value: AF_INET6) : NSNumber(value: AF_INET))
+                i += n
+            }
+        }
+        if !packets.isEmpty {
+            flow.writePackets(packets, withProtocols: protocols)
+        }
+    }
+
+    private func shouldProxy(_ address: String) -> Bool {
+        let rules = Prefs().loadRules()
         switch rules.geoMode {
         case .global: return true
         case .none: return false
         case .proxy: return inSelectedAreas(address, rules.selectedAreaIds)
         case .bypass: return !inSelectedAreas(address, rules.selectedAreaIds)
         }
-    }
-
-    func onProxyRead(_ n: Int64) {}
-    func onProxyWrite(_ n: Int64) {}
-
-    func writePacket(_ pkt: Data?) {
-        guard let pkt, !pkt.isEmpty else { return }
-        let af: NSNumber = (pkt[0] >> 4) == 6 ? NSNumber(value: AF_INET6) : NSNumber(value: AF_INET)
-        flow.writePackets([pkt], withProtocols: [af])
     }
 
     private func inSelectedAreas(_ address: String, _ ids: Set<Int64>) -> Bool {

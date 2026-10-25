@@ -25,6 +25,7 @@ final class Store: ObservableObject {
     @Published var dbReady = false
     @Published var dbBusy = false
     @Published var snackbar: String?
+    private var pingSinks: [PingSink] = []
 
     var selectedServer: ServerItem? {
         servers.first { $0.id == selectedId }
@@ -67,13 +68,15 @@ final class Store: ObservableObject {
     }
 
     func selectServer(_ server: ServerItem?) {
+        let previous = selectedId
         selectedId = server?.id
         prefs.saveSelectedId(server?.id)
-        if server == nil {
+        if let server {
+            appendStatus(str("status_node_selected", args: [server.displayName]))
+            if server.id != previous && running { start() }
+        } else {
             if running { stop() }
             appendStatus(str("status_node_cleared"))
-        } else {
-            appendStatus(str("status_node_selected", args: [server!.displayName]))
         }
     }
 
@@ -118,36 +121,36 @@ final class Store: ObservableObject {
         if targets.isEmpty || pingingGroup != nil { return }
         pingingGroup = key
         let sort = settings.latencyTest.sortAfterPing
-        Task.detached { [targets, host] in
-            await withTaskGroup(of: (String, Int).self) { group in
-                for server in targets {
-                    group.addTask {
-                        let ms = Engine.ping(server.toProxyURL(), host)
-                        return (server.id, Int(ms))
-                    }
+        let total = targets.count
+        var finished = 0
+        pingSinks = targets.map { server in
+            let sink = PingSink { ms in
+                if let i = self.servers.firstIndex(where: { $0.id == server.id }) {
+                    self.servers[i].latencyMs = Int(ms)
                 }
-                for await (id, latency) in group {
-                    await MainActor.run {
-                        if let i = self.servers.firstIndex(where: { $0.id == id }) {
-                            self.servers[i].latencyMs = latency
-                        }
-                    }
+                finished += 1
+                if finished == total {
+                    self.finishPing(sort: sort, subscriptionId: subscriptionId)
                 }
             }
-            await MainActor.run {
-                var next = self.servers
-                if sort {
-                    let manual = next.filter { $0.subscriptionId == nil }
-                    let subNodes = next.filter { $0.subscriptionId != nil }
-                    next = subscriptionId == nil
-                        ? manual.sorted(by: latencyLess) + subNodes
-                        : manual + subNodes.sorted(by: latencyLess)
-                }
-                self.prefs.saveServers(next)
-                self.servers = next
-                self.pingingGroup = nil
-            }
+            Engine.pingAsync(server.toProxyURL(), host, sink)
+            return sink
         }
+    }
+
+    private func finishPing(sort: Bool, subscriptionId: String?) {
+        var next = servers
+        if sort {
+            let manual = next.filter { $0.subscriptionId == nil }
+            let subNodes = next.filter { $0.subscriptionId != nil }
+            next = subscriptionId == nil
+                ? manual.sorted(by: latencyLess) + subNodes
+                : manual + subNodes.sorted(by: latencyLess)
+        }
+        prefs.saveServers(next)
+        servers = next
+        pingingGroup = nil
+        pingSinks = []
     }
 
     func parseSubscription(type: String, source: String) {
@@ -423,7 +426,10 @@ final class Store: ObservableObject {
     }
 
     func clearStatusLogs() { statusLogs = [] }
-    func clearConnectionLogs() { connectionLogs = [] }
+    func clearConnectionLogs() {
+        connectionLogs = []
+        TunnelBridge.clearConnections()
+    }
 
     func updateRules(_ transform: (RuleDraft) -> RuleDraft) {
         rules = transform(rules)
@@ -471,20 +477,30 @@ final class Store: ObservableObject {
         }
         tunnel.onStatus { [weak self] line in
             Task { @MainActor in
-                self?.appendStatus(line)
-            }
-        }
-        tunnel.onConnection { [weak self] line in
-            Task { @MainActor in
-                guard let self, self.settings.system.enableLogRecording else { return }
-                self.connectionLogs = Array((self.connectionLogs + [line]).suffix(logLimit))
+                guard let self else { return }
+                self.appendStatus(self.statusLine(line))
             }
         }
         trafficTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor in
-                guard let self, self.running else { return }
-                self.traffic = TunnelController.shared.trafficUi()
+                guard let self else { return }
+                if self.running {
+                    self.traffic = TunnelController.shared.trafficUi()
+                }
+                if self.settings.system.enableLogRecording {
+                    let lines = TunnelBridge.connections()
+                    if lines != self.connectionLogs { self.connectionLogs = lines }
+                }
             }
+        }
+    }
+
+    private func statusLine(_ line: String) -> String {
+        switch line {
+        case "vpn_started", "status_stopped", "vpn_permission_denied", "vpn_establish_failed", "vpn_unavailable":
+            return str(line)
+        default:
+            return line
         }
     }
 
@@ -630,6 +646,21 @@ private func httpGet(_ url: String, userAgent: String?) throws -> String {
 }
 
 let pingManual = "manual"
+
+private final class PingSink: NSObject, EnginePingCallbackProtocol {
+    private let done: (Int64) -> Void
+
+    init(done: @escaping (Int64) -> Void) {
+        self.done = done
+    }
+
+    func onResult(_ ms: Int64) {
+        let done = done
+        DispatchQueue.main.async {
+            done(ms)
+        }
+    }
+}
 
 private func latencyLess(_ a: ServerItem, _ b: ServerItem) -> Bool {
     func rank(_ item: ServerItem) -> (Int, Int) {

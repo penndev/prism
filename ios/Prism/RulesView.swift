@@ -383,7 +383,7 @@ struct GeoRulesView: View {
             dbUrlDraft = store.rules.dbUrl
             expandedIds = topLevelIdsWithSelected(store.geoAreas, selected: store.rules.selectedAreaIds)
         }
-        .onChange(of: store.dbBusy) { busy in
+        .onChange(of: store.dbBusy) { _, busy in
             if !busy && store.dbReady { editingDb = false }
         }
     }

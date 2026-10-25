@@ -26,15 +26,14 @@ import com.penndev.prism.data.installIpregionDb
 import com.penndev.prism.data.ipregionFile
 import com.penndev.prism.data.loadAreaTree
 import com.penndev.prism.engine.Engine
+import com.penndev.prism.engine.PingCallback
 import com.penndev.prism.vpn.VpnController
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URI
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -170,37 +169,33 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         if (targets.isEmpty() || _state.value.pingingGroup != null) return
-        viewModelScope.launch {
-            _state.update { it.copy(pingingGroup = key) }
-            coroutineScope {
-                targets.map { server ->
-                    async {
-                        val latency = withContext(Dispatchers.IO) {
-                            runCatching {
-                                Engine.ping(server.toProxyURL(), host).toInt()
-                            }.getOrDefault(-1)
-                        }
-                        _state.update { state ->
-                            state.copy(
-                                servers = state.servers.map {
-                                    if (it.id == server.id) it.copy(latencyMs = latency) else it
-                                },
-                            )
-                        }
+        val sortAfter = _state.value.settings.latencyTest.sortAfterPing
+        _state.update { it.copy(pingingGroup = key) }
+        val finished = AtomicInteger(0)
+        val total = targets.size
+        for (server in targets) {
+            Engine.pingAsync(server.toProxyURL(), host, PingCallback { ms ->
+                _state.update { state ->
+                    state.copy(
+                        servers = state.servers.map {
+                            if (it.id == server.id) it.copy(latencyMs = ms.toInt()) else it
+                        },
+                    )
+                }
+                if (finished.incrementAndGet() == total) {
+                    val latest = _state.value.servers
+                    val next = if (sortAfter) {
+                        val cmp = latencyComparator()
+                        val manual = latest.filter { it.subscriptionId == null }
+                        val subNodes = latest.filter { it.subscriptionId != null }
+                        if (subscriptionId == null) manual.sortedWith(cmp) + subNodes else manual + subNodes.sortedWith(cmp)
+                    } else {
+                        latest
                     }
-                }.awaitAll()
-            }
-            val latest = _state.value.servers
-            val next = if (_state.value.settings.latencyTest.sortAfterPing) {
-                val cmp = latencyComparator()
-                val manual = latest.filter { it.subscriptionId == null }
-                val subNodes = latest.filter { it.subscriptionId != null }
-                if (subscriptionId == null) manual.sortedWith(cmp) + subNodes else manual + subNodes.sortedWith(cmp)
-            } else {
-                latest
-            }
-            prefs.saveServers(next)
-            _state.update { it.copy(servers = next, pingingGroup = null) }
+                    prefs.saveServers(next)
+                    _state.update { it.copy(servers = next, pingingGroup = null) }
+                }
+            })
         }
     }
 

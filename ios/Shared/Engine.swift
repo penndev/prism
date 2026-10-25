@@ -30,6 +30,10 @@ enum Engine {
         EnginePing(proxy, latencyHost)
     }
 
+    static func pingAsync(_ proxy: String, _ latencyHost: String, _ cb: (any EnginePingCallbackProtocol)?) {
+        EnginePingAsync(proxy, latencyHost, cb)
+    }
+
     static func setIpregionDB(_ path: String) throws {
         var err: NSError?
         if !EngineSetIpregionDB(path, &err) {

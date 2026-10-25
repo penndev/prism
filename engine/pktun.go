@@ -3,8 +3,11 @@
 package engine
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"sync"
+	"time"
 
 	"gvisor.dev/gvisor/pkg/buffer"
 	"gvisor.dev/gvisor/pkg/tcpip/header"
@@ -24,7 +27,7 @@ type pktun struct {
 
 func newPktun(mtu uint32, write func([]byte)) *pktun {
 	return &pktun{
-		Endpoint: channel.New(1024, mtu, ""),
+		Endpoint: channel.New(4096, mtu, ""),
 		write:    write,
 	}
 }
@@ -68,16 +71,53 @@ func (t *pktun) input(payload []byte) {
 
 func (t *pktun) outbound(ctx context.Context) {
 	defer t.pumps.Done()
+	var pkts [][]byte
+	flush := func() {
+		if len(pkts) == 0 || t.write == nil {
+			pkts = pkts[:0]
+			return
+		}
+		var buf bytes.Buffer
+		var hdr [4]byte
+		for _, p := range pkts {
+			binary.BigEndian.PutUint32(hdr[:], uint32(len(p)))
+			buf.Write(hdr[:])
+			buf.Write(p)
+		}
+		t.write(buf.Bytes())
+		pkts = pkts[:0]
+	}
 	for {
 		pkt := t.ReadContext(ctx)
 		if pkt == nil {
-			break
+			flush()
+			return
 		}
-		buf := pkt.ToBuffer()
-		if t.write != nil {
-			t.write(buf.Flatten())
+		pkts = append(pkts, copyPacket(pkt))
+		if len(pkts) >= 32 {
+			flush()
+			continue
 		}
-		buf.Release()
-		pkt.DecRef()
+		child, cancel := context.WithTimeout(ctx, 200*time.Microsecond)
+		for len(pkts) < 32 {
+			nxt := t.ReadContext(child)
+			if nxt == nil {
+				break
+			}
+			pkts = append(pkts, copyPacket(nxt))
+		}
+		cancel()
+		flush()
+		if ctx.Err() != nil {
+			return
+		}
 	}
+}
+
+func copyPacket(pkt *stack.PacketBuffer) []byte {
+	buf := pkt.ToBuffer()
+	b := append([]byte(nil), buf.Flatten()...)
+	buf.Release()
+	pkt.DecRef()
+	return b
 }

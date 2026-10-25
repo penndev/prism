@@ -2,9 +2,7 @@
 
 SwiftUI 客户端，页面和能力对齐 `android/`：节点、订阅导入、规则、日志、设置。
 
-核心代理在 `engine/`，主 App 通过 `Engine.xcframework` 调用 Go。`Ping`、IP 库和 `Start`/`Stop`（gVisor 协议栈）是真实现；主 App **不申请系统 VPN 权限**，进程内没有 `packetFlow`。
-
-`PacketTunnel/` 和 entitlements 先留着，主 App 暂不嵌入扩展。接 TUN 时再打开 Network Extension / App Groups。
+核心代理在 `engine/`。主 App 负责节点、规则和 `Ping`。系统流量走嵌入的 `PacketTunnel`：`NETunnelProviderManager` 拉起扩展，扩展里 `Start` 挂 gVisor，包经 `writePacket` / `handler.writePacket` 进出。配置、规则和 IP 库在 App Group `group.com.penndev.prism`。
 
 ## 打开工程
 
@@ -12,7 +10,7 @@ SwiftUI 客户端，页面和能力对齐 `android/`：节点、订阅导入、�
 open ios/Prism.xcodeproj
 ```
 
-只编 **Prism** target。真机跑需要在 Signing 里给 Prism 选一个 Team（个人免费账号即可，不必开 Network Extension）。
+编 **Prism** 会带上 PacketTunnel。真机需要在 Signing 里给 Prism 和 PacketTunnel 选同一个 Team，并打开 Network Extension（packet-tunnel-provider）和 App Group `group.com.penndev.prism`。个人免费账号没有 Network Extension，装不上扩展。
 
 ## 编 engine
 

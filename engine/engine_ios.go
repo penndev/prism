@@ -3,6 +3,7 @@
 package engine
 
 import (
+	"encoding/binary"
 	"errors"
 	"net/url"
 	"strings"
@@ -20,15 +21,15 @@ import (
 // (e.g. "proxy tcp 1.2.3.4:443"). Swift looks up the IP (leaf → parent)
 // and matches saved area IDs.
 // OnProxyRead / OnProxyWrite report proxy-path Read/Write byte counts.
-// WritePacket delivers an outbound IP packet to packetFlow (empty in the
-// in-process mock handler).
+// WritePacket delivers outbound packets to packetFlow.
+// The bytes are a batch: repeated uint32-be length + packet bytes.
 type Handler interface {
 	OnLog(line string)
 	NeedFake(name string) bool
 	UseProxy(network, address string) bool
 	OnProxyRead(n int64)
 	OnProxyWrite(n int64)
-	WritePacket(pkt []byte)
+	WritePacket(blob []byte)
 }
 
 // Options is passed to Start. Proxy is a URL:
@@ -50,15 +51,23 @@ var (
 	localH     = transport.Local()
 )
 
-// WritePacket 把 packetFlow 读到的 IP 包注入协议栈。未 Start 时丢掉。
-func WritePacket(pkt []byte) {
+// WritePacket 把一批包注入协议栈。blob 是重复的 uint32 大端长度 + 包内容。未 Start 时丢掉。
+func WritePacket(blob []byte) {
 	mu.Lock()
 	t := ep
 	mu.Unlock()
 	if t == nil {
 		return
 	}
-	t.input(pkt)
+	for len(blob) >= 4 {
+		n := int(binary.BigEndian.Uint32(blob[:4]))
+		blob = blob[4:]
+		if n <= 0 || n > len(blob) {
+			return
+		}
+		t.input(blob[:n])
+		blob = blob[n:]
+	}
 }
 
 // Start 挂 gVisor channel 端点和协议栈。包由 WritePacket / Handler.WritePacket 进出。

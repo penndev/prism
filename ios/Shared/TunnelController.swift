@@ -1,15 +1,13 @@
 import Foundation
+import NetworkExtension
 
 final class TunnelController {
     static let shared = TunnelController()
-
-    // 接 Network Extension 时再用：com.penndev.prism.PacketTunnel
     static let providerBundleId = "com.penndev.prism.PacketTunnel"
 
     private let lock = NSLock()
     private var runningListeners: [(Bool) -> Void] = []
     private var statusListeners: [(String) -> Void] = []
-    private var connectionListeners: [(String) -> Void] = []
 
     private(set) var running = false
     var session: ServerItem?
@@ -20,12 +18,22 @@ final class TunnelController {
         }
     }
 
-    private var uploadBytes: Int64 = 0
-    private var downloadBytes: Int64 = 0
+    private var manager: NETunnelProviderManager?
+    private var wantRunning = false
+    private var sawActive = false
+    private var suppressStopStatus = false
     private var lastUp: Int64 = 0
     private var lastDown: Int64 = 0
 
-    private init() {}
+    private init() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(vpnStatusChanged(_:)),
+            name: .NEVPNStatusDidChange,
+            object: nil,
+        )
+        Task { await reload() }
+    }
 
     func onRunning(_ block: @escaping (Bool) -> Void) {
         lock.lock()
@@ -41,21 +49,68 @@ final class TunnelController {
         lock.unlock()
     }
 
-    func onConnection(_ block: @escaping (String) -> Void) {
-        lock.lock()
-        connectionListeners.append(block)
-        lock.unlock()
-    }
-
     func start(server: ServerItem) {
         session = server
-        startInProcess(server: server)
+        wantRunning = true
+        #if targetEnvironment(simulator)
+        wantRunning = false
+        markRunning(false)
+        emitStatus("vpn_unavailable")
+        #else
+        let proxy = server.toProxyURL()
+        let upstream = systemDnsIpv4()
+        let address = server.host.isEmpty ? "Prism" : server.host
+        Task { @MainActor in
+            do {
+                let manager = try await existingManager() ?? NETunnelProviderManager()
+                let proto = (manager.protocolConfiguration as? NETunnelProviderProtocol) ?? NETunnelProviderProtocol()
+                proto.providerBundleIdentifier = Self.providerBundleId
+                proto.serverAddress = address
+                proto.providerConfiguration = [
+                    "proxy": proxy,
+                    "upstream": upstream,
+                ]
+                proto.disconnectOnSleep = false
+                manager.protocolConfiguration = proto
+                manager.localizedDescription = "Prism"
+                manager.isEnabled = true
+                try await manager.saveToPreferences()
+                try await manager.loadFromPreferences()
+                self.manager = manager
+                let status = manager.connection.status
+                if status == .connected || status == .connecting || status == .reasserting {
+                    manager.connection.stopVPNTunnel()
+                    await waitUntilStopped(manager)
+                }
+                TunnelBridge.resetTraffic()
+                try manager.connection.startVPNTunnel()
+            } catch {
+                wantRunning = false
+                suppressStopStatus = true
+                sawActive = false
+                markRunning(false)
+                emitStatus(message(for: error))
+            }
+        }
+        #endif
     }
 
     func stop() {
-        Engine.stop()
-        markRunning(false)
-        emitStatus(L10n.raw("status_stopped"))
+        wantRunning = false
+        Task {
+            guard let manager = try? await existingManager() else {
+                markRunning(false)
+                emitStatus("status_stopped")
+                return
+            }
+            self.manager = manager
+            if manager.connection.status == .disconnected || manager.connection.status == .invalid {
+                markRunning(false)
+                emitStatus("status_stopped")
+                return
+            }
+            manager.connection.stopVPNTunnel()
+        }
     }
 
     func markRunning(_ value: Bool) {
@@ -64,8 +119,6 @@ final class TunnelController {
         if !value {
             lastUp = 0
             lastDown = 0
-            uploadBytes = 0
-            downloadBytes = 0
         }
         let listeners = runningListeners
         lock.unlock()
@@ -83,121 +136,109 @@ final class TunnelController {
         }
     }
 
-    func emitConnection(_ line: String) {
-        lock.lock()
-        let listeners = connectionListeners
-        lock.unlock()
-        DispatchQueue.main.async {
-            listeners.forEach { $0(line) }
-        }
-    }
-
     func trafficUi() -> TrafficUi {
+        let counts = TunnelBridge.counters()
         lock.lock()
-        let up = uploadBytes
-        let down = downloadBytes
-        let upSpeed = max(up - lastUp, 0)
-        let downSpeed = max(down - lastDown, 0)
-        lastUp = up
-        lastDown = down
+        let upSpeed = max(counts.up - lastUp, 0)
+        let downSpeed = max(counts.down - lastDown, 0)
+        lastUp = counts.up
+        lastDown = counts.down
         lock.unlock()
         return TrafficUi(
             downSpeed: "\(formatBytes(downSpeed))/s",
             upSpeed: "\(formatBytes(upSpeed))/s",
-            downTotal: formatBytes(down),
-            upTotal: formatBytes(up),
+            downTotal: formatBytes(counts.down),
+            upTotal: formatBytes(counts.up),
         )
     }
 
-    func addUpload(_ n: Int64) {
-        if n > 0 {
-            lock.lock()
-            uploadBytes += n
-            lock.unlock()
+    @objc private func vpnStatusChanged(_ note: Notification) {
+        guard let conn = note.object as? NEVPNConnection else { return }
+        if let manager, conn !== manager.connection { return }
+        if manager == nil { return }
+        apply(conn.status, announce: true)
+    }
+
+    private func reload() async {
+        manager = try? await existingManager()
+        let status = manager?.connection.status ?? .disconnected
+        if status == .connected || status == .connecting || status == .reasserting {
+            sawActive = true
+            wantRunning = status == .connected
+            if status == .connected { markRunning(true) }
         }
     }
 
-    func addDownload(_ n: Int64) {
-        if n > 0 {
-            lock.lock()
-            downloadBytes += n
-            lock.unlock()
+    private func existingManager() async throws -> NETunnelProviderManager? {
+        let managers = try await NETunnelProviderManager.loadAllFromPreferences()
+        return managers.first(where: isOurs)
+    }
+
+    private func isOurs(_ manager: NETunnelProviderManager) -> Bool {
+        (manager.protocolConfiguration as? NETunnelProviderProtocol)?.providerBundleIdentifier == Self.providerBundleId
+    }
+
+    private func waitUntilStopped(_ manager: NETunnelProviderManager) async {
+        for _ in 0..<50 {
+            let status = manager.connection.status
+            if status == .disconnected || status == .invalid { return }
+            try? await Task.sleep(nanoseconds: 100_000_000)
         }
     }
 
-    /// 暂不申请系统 VPN 权限，只在进程内模拟 engine 会话。
-    private func startInProcess(server: ServerItem) {
-        let opt = EngineOptions()
-        opt.mtu = 1500
-        opt.proxy = server.toProxyURL()
-        opt.upstream = ""
-        opt.handler = InProcessHandler()
-        lock.lock()
-        uploadBytes = 0
-        downloadBytes = 0
-        lock.unlock()
-        do {
-            try Engine.start(opt)
+    private func apply(_ status: NEVPNStatus, announce: Bool) {
+        switch status {
+        case .connected:
+            sawActive = true
+            wantRunning = true
             markRunning(true)
-            emitStatus(L10n.raw("vpn_started"))
-        } catch {
+            if announce { emitStatus("vpn_started") }
+        case .connecting, .reasserting, .disconnecting:
+            sawActive = true
+        case .disconnected, .invalid:
+            if suppressStopStatus {
+                suppressStopStatus = false
+                sawActive = false
+                markRunning(false)
+                return
+            }
+            if let err = TunnelBridge.takeError() {
+                wantRunning = false
+                sawActive = false
+                markRunning(false)
+                if announce { emitStatus(err) }
+                return
+            }
+            if wantRunning { return }
+            let notify = announce && sawActive
+            sawActive = false
             markRunning(false)
-            emitStatus("engine start: \(error.localizedDescription)")
+            if notify { emitStatus("status_stopped") }
+        default:
+            break
         }
+    }
+
+    private func message(for error: Error) -> String {
+        let ns = error as NSError
+        if ns.domain == NEVPNErrorDomain && ns.code == NEVPNError.Code.configurationDisabled.rawValue {
+            return "vpn_permission_denied"
+        }
+        if ns.domain == "NEConfigurationErrorDomain" && ns.code == 11 {
+            return "vpn_unavailable"
+        }
+        if ns.domain == "NEConfigurationErrorDomain" {
+            return "vpn_permission_denied"
+        }
+        let text = ns.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.isEmpty { return "vpn_establish_failed" }
+        return text
     }
 }
 
-private final class InProcessHandler: NSObject, EngineHandlerProtocol {
-    func onLog(_ line: String?) {
-        if let line, !line.isEmpty { TunnelController.shared.emitConnection(line) }
-    }
+@_silgen_name("prism_system_dns_ipv4")
+private func prismSystemDnsIpv4() -> UnsafePointer<CChar>
 
-    func needFake(_ name: String?) -> Bool {
-        var host = (name ?? "").trimmingCharacters(in: CharacterSet(charactersIn: ".")).lowercased()
-        if host.isEmpty { return false }
-        let domains = TunnelController.shared.fakeDomains
-        if domains.isEmpty { return false }
-        while !host.isEmpty {
-            if domains.contains(host) { return true }
-            guard let i = host.firstIndex(of: ".") else { return false }
-            host = String(host[host.index(after: i)...])
-        }
-        return false
-    }
-
-    func useProxy(_ network: String?, address: String?) -> Bool {
-        let address = address ?? ""
-        let network = network ?? ""
-        let use = shouldProxy(address)
-        let tag = use ? "proxy" : "direct"
-        let line = network.isEmpty ? "\(tag) \(address)" : "\(tag) \(network) \(address)"
-        if !address.isEmpty { TunnelController.shared.emitConnection(line) }
-        return use
-    }
-
-    func onProxyRead(_ n: Int64) {
-        TunnelController.shared.addUpload(n)
-    }
-
-    func onProxyWrite(_ n: Int64) {
-        TunnelController.shared.addDownload(n)
-    }
-
-    func writePacket(_ pkt: Data?) {}
-
-    private func shouldProxy(_ address: String) -> Bool {
-        let rules = TunnelController.shared.rules
-        switch rules.geoMode {
-        case .global: return true
-        case .none: return false
-        case .proxy: return inSelectedAreas(address, rules.selectedAreaIds)
-        case .bypass: return !inSelectedAreas(address, rules.selectedAreaIds)
-        }
-    }
-
-    private func inSelectedAreas(_ address: String, _ ids: Set<Int64>) -> Bool {
-        if ids.isEmpty { return false }
-        let list = Engine.lookup(address)
-        return list.contains { ids.contains($0.id_) }
-    }
+private func systemDnsIpv4() -> String {
+    String(cString: prismSystemDnsIpv4())
 }

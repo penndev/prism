@@ -2,7 +2,7 @@
 
 本目录放预编译 `Engine.xcframework`。Go 源码在仓库根目录的 `engine/`，说明见 `engine/README.md`。`engine_ios.go` 与 `pktun.go` 带 `//go:build ios`。Xcode 里 Prism target 链接并 embed 该 framework，不在 Xcode 里编 Go。
 
-`Ping` / `SetIpregionDB` / `AreaTree` / `Lookup` 和 Android 一样是真实现。`Start` / `Stop` 挂 gVisor channel 端点；iOS 没有 TUN fd，包经 `Engine.writePacket` / `handler.writePacket` 进出。主 App 暂不嵌入 PacketTunnel，进程内 Start 时 handler 的 `writePacket` 是空实现。
+`Ping` / `SetIpregionDB` / `AreaTree` / `Lookup` 和 Android 一样是真实现。`Start` / `Stop` 挂 gVisor channel 端点；iOS 没有 TUN fd，包经 `Engine.writePacket` / `handler.writePacket` 进出。系统流量在 `PacketTunnel` 扩展里跑，主 App 用 `NETunnelProviderManager` 启动它。
 
 Swift 经 `Shared/Engine.swift` 调用 gomobile 符号（`EnginePing`、`EngineStart` 等）。
 
@@ -25,7 +25,7 @@ Engine.areaTree()                  // JSON，形状同桌面 /rule/api/areas
 Engine.lookup(address)             // 该 IP 的地域链（叶 → 父）
 ```
 
-下载 IP 库、选模式和勾选地域都在 Swift 完成。域名列表也在 Swift：`needFake` 判断是否 fake。`Engine.writePacket` 是 Swift 写入栈；`handler.writePacket` 把出站包写回 `packetFlow`。主 App 进程内 Start 给空实现即可。
+下载 IP 库、选模式和勾选地域都在 Swift 完成。域名列表也在 Swift：`needFake` 判断是否 fake。`Engine.writePacket` 是扩展把 `packetFlow` 读到的包写入栈；`handler.writePacket` 把出站包写回 `packetFlow`。
 
 改过 `Start` / `WritePacket` 之后要重编 xcframework，否则 Xcode 对不上新符号。
 

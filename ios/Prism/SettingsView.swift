@@ -115,7 +115,7 @@ struct SettingsView: View {
             }
             Button(store.t("server_list_delete_cancel"), role: .cancel) { dialog = .none }
         }
-        .onChange(of: dialog) { value in
+        .onChange(of: dialog) { _, value in
             if value == .latencyHost {
                 latencyDraft = store.settings.latencyTest.host
             }

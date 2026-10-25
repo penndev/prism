@@ -14,19 +14,21 @@ struct ServerEditView: View {
     @State private var importing = false
 
     var body: some View {
-        Form {
-            TextField(store.t("server_list_host"), text: $host)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-            TextField(store.t("server_list_remark"), text: $remark)
-            Picker(store.t("server_list_protocol"), selection: $protocolName) {
-                ForEach(proxySchemes, id: \.self) { Text($0).tag($0) }
+        VStack(spacing: 0) {
+            Form {
+                TextField(store.t("server_list_host"), text: $host)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                TextField(store.t("server_list_remark"), text: $remark)
+                Picker(store.t("server_list_protocol"), selection: $protocolName) {
+                    ForEach(proxySchemes, id: \.self) { Text($0).tag($0) }
+                }
+                TextField(store.t("settings_username"), text: $username)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                SecureField(store.t("settings_password"), text: $password)
             }
-            TextField(store.t("settings_username"), text: $username)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-            SecureField(store.t("settings_password"), text: $password)
-            Button(store.t("server_list_save")) {
+            Button {
                 let ok = store.addOrUpdateServer(
                     editingId: server?.id,
                     host: host,
@@ -36,8 +38,16 @@ struct ServerEditView: View {
                     password: password,
                 )
                 if ok { dismiss() }
+            } label: {
+                Text(store.t("server_list_save"))
+                    .frame(maxWidth: .infinity)
             }
+            .buttonStyle(.borderedProminent)
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .padding(.bottom, 12)
         }
+        .background(Color(.systemGroupedBackground))
         .navigationTitle(server == nil ? store.t("server_list_add_title") : store.t("server_list_edit_title"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
