@@ -372,8 +372,8 @@ private struct ServerRow: View {
                 .simultaneousGesture(LongPressGesture().onEnded { _ in onLongClick() })
                 if !checking {
                     Menu {
+                        Button(store.t("server_list_edit"), action: onEdit)
                         Button(store.t("server_list_ping"), action: onPing)
-                        Button(store.t("server_list_edit_title"), action: onEdit)
                         Button(store.t("server_list_delete_ok"), role: .destructive, action: onDelete)
                     } label: {
                         Image(systemName: "ellipsis")

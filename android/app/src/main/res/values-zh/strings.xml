@@ -48,6 +48,7 @@
     <string name="server_list_selected_count">已选 %1$d</string>
     <string name="server_list_batch_delete_content">确定删除选中的 %1$d 个节点吗？</string>
     <string name="server_list_edit_title">编辑节点</string>
+    <string name="server_list_edit">编辑</string>
     <string name="server_list_add_title">添加节点</string>
     <string name="server_list_host">地址</string>
     <string name="server_list_host_placeholder">127.0.0.1:1080</string>

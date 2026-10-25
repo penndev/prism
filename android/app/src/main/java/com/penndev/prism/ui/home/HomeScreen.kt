@@ -612,17 +612,17 @@ private fun ServerRow(
                     }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         DropdownMenuItem(
+                            text = { Text(stringResource(R.string.server_list_edit)) },
+                            onClick = {
+                                menu = false
+                                onEdit()
+                            },
+                        )
+                        DropdownMenuItem(
                             text = { Text(stringResource(R.string.server_list_ping)) },
                             onClick = {
                                 menu = false
                                 onPing()
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.server_list_edit_title)) },
-                            onClick = {
-                                menu = false
-                                onEdit()
                             },
                         )
                         DropdownMenuItem(

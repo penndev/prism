@@ -1,11 +1,15 @@
 package com.penndev.prism.ui.logs
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -24,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.penndev.prism.R
 import com.penndev.prism.ui.PrismUiState
@@ -109,29 +114,59 @@ fun LogsScreen(
             } else {
                 stringResource(R.string.log_connection_empty)
             }
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.surface)
-                    .padding(14.dp),
-            ) {
-                if (lines.isEmpty()) {
-                    item {
-                        Text(
-                            empty,
-                            fontFamily = FontFamily.Monospace,
-                            style = MaterialTheme.typography.bodySmall,
-                        )
+            val logModifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surface)
+            if (tab == 1) {
+                val vertical = rememberScrollState()
+                val horizontal = rememberScrollState()
+                Box(modifier = logModifier) {
+                    Column(
+                        modifier = Modifier
+                            .horizontalScroll(horizontal)
+                            .verticalScroll(vertical)
+                            .padding(14.dp),
+                    ) {
+                        if (lines.isEmpty()) {
+                            Text(
+                                empty,
+                                fontFamily = FontFamily.Monospace,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        } else {
+                            lines.forEach { line ->
+                                Text(
+                                    line,
+                                    fontFamily = FontFamily.Monospace,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    softWrap = false,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Visible,
+                                )
+                            }
+                        }
                     }
-                } else {
-                    items(lines.size) { i ->
-                        Text(
-                            lines[i],
-                            fontFamily = FontFamily.Monospace,
-                            style = MaterialTheme.typography.bodySmall,
-                        )
+                }
+            } else {
+                LazyColumn(modifier = logModifier.padding(14.dp)) {
+                    if (lines.isEmpty()) {
+                        item {
+                            Text(
+                                empty,
+                                fontFamily = FontFamily.Monospace,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    } else {
+                        items(lines.size) { i ->
+                            Text(
+                                lines[i],
+                                fontFamily = FontFamily.Monospace,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
                     }
                 }
             }

@@ -48,6 +48,7 @@
     <string name="server_list_selected_count">%1$d selected</string>
     <string name="server_list_batch_delete_content">Delete %1$d selected nodes?</string>
     <string name="server_list_edit_title">Edit Node</string>
+    <string name="server_list_edit">Edit</string>
     <string name="server_list_add_title">Add Node</string>
     <string name="server_list_host">Address</string>
     <string name="server_list_host_placeholder">127.0.0.1:1080</string>

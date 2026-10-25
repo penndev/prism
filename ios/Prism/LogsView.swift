@@ -37,20 +37,41 @@ struct LogsView: View {
 
                 let lines = tab == 0 ? store.statusLogs : store.connectionLogs
                 let empty = tab == 0 ? store.t("log_status_empty") : store.t("log_connection_empty")
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 2) {
-                        if lines.isEmpty {
-                            Text(empty)
-                                .font(.system(.caption, design: .monospaced))
-                        } else {
-                            ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
-                                Text(line)
-                                    .font(.system(.caption, design: .monospaced))
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                Group {
+                    if tab == 1 {
+                        ScrollView([.vertical, .horizontal]) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                if lines.isEmpty {
+                                    Text(empty)
+                                        .font(.system(.caption, design: .monospaced))
+                                } else {
+                                    ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                                        Text(line)
+                                            .font(.system(.caption, design: .monospaced))
+                                            .lineLimit(1)
+                                            .fixedSize(horizontal: true, vertical: false)
+                                    }
+                                }
                             }
+                            .padding(14)
+                        }
+                    } else {
+                        ScrollView {
+                            LazyVStack(alignment: .leading, spacing: 2) {
+                                if lines.isEmpty {
+                                    Text(empty)
+                                        .font(.system(.caption, design: .monospaced))
+                                } else {
+                                    ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                                        Text(line)
+                                            .font(.system(.caption, design: .monospaced))
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                }
+                            }
+                            .padding(14)
                         }
                     }
-                    .padding(14)
                 }
                 .background(Color(.secondarySystemGroupedBackground))
                 .clipShape(RoundedRectangle(cornerRadius: 12))
