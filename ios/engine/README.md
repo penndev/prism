@@ -1,6 +1,6 @@
 # engine（iOS）
 
-本目录放预编译 `Engine.xcframework`。Go 源码在仓库根目录的 `engine/`，说明见 `engine/README.md`。`engine_ios.go` 与 `pktun.go` 带 `//go:build ios`。Xcode 里 Prism target 链接并 embed 该 framework，不在 Xcode 里编 Go。
+本目录放预编译 `Engine.xcframework`。Go 源码在仓库根目录的 `engine/`，说明见 `engine/README.md`。`engine_ios.go` 与 `pktun.go` 带 `//go:build ios`。Xcode 里 Prism 和 PacketTunnel 只链接该 framework，不把它拷进 App。它是静态库，拷进去后上传会要求一份不存在的 dSYM。不在 Xcode 里编 Go。
 
 `Ping` / `SetIpregionDB` / `AreaTree` / `Lookup` 和 Android 一样是真实现。`Start` / `Stop` 挂 gVisor channel 端点；iOS 没有 TUN fd，包经 `Engine.writePacket` / `handler.writePacket` 进出。系统流量在 `PacketTunnel` 扩展里跑，主 App 用 `NETunnelProviderManager` 启动它。
 
