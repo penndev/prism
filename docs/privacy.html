@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" class="i18n-pending">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -11,6 +11,14 @@
     <link rel="canonical" href="https://penndev.github.io/prism/privacy.html" />
     <link rel="icon" href="./logo.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./styles.css" />
+    <noscript>
+      <style>
+        html.i18n-pending main,
+        html.i18n-pending footer {
+          visibility: visible;
+        }
+      </style>
+    </noscript>
   </head>
   <body>
     <header class="top">
@@ -19,13 +27,17 @@
         <span>Prism</span>
       </a>
       <nav>
-        <a href="./">首页</a>
+        <a href="./" data-zh="首页" data-en="Home">首页</a>
         <a href="https://github.com/penndev/prism" target="_blank" rel="noopener">GitHub</a>
       </nav>
+      <div class="lang" role="group" aria-label="Language">
+        <button type="button" data-lang="zh-CN">中文</button>
+        <button type="button" data-lang="en">English</button>
+      </div>
     </header>
 
     <main>
-      <article class="block privacy">
+      <article class="block privacy" data-lang-panel="zh-CN">
         <h1>Prism 隐私权政策</h1>
         <p class="muted">生效日期：2026 年 10 月 14 日</p>
         <p>
@@ -101,8 +113,10 @@
           <a href="https://github.com/penndev/prism/issues">GitHub Issues</a>
           联系。
         </p>
+      </article>
 
-        <h2>Privacy policy (English)</h2>
+      <article class="block privacy" data-lang-panel="en" hidden>
+        <h1>Prism Privacy Policy</h1>
         <p class="muted">Effective date: 14 October 2026</p>
         <p>
           This policy covers the Prism client on Android and iOS (application id
@@ -155,8 +169,53 @@
 
     <footer>
       <span>Prism</span>
-      <a href="./">首页</a>
-      <a href="https://github.com/penndev/prism">源代码</a>
+      <a href="./" data-zh="首页" data-en="Home">首页</a>
+      <a href="https://github.com/penndev/prism" data-zh="源代码" data-en="Source">源代码</a>
     </footer>
+
+    <script src="./i18n.js"></script>
+    <script>
+      const privacyCopy = {
+        "zh-CN": {
+          title: "Prism 隐私权政策",
+          description:
+            "Prism 客户端隐私权政策：说明应用是否收集数据、收集哪些数据，以及这些数据用来做什么。",
+        },
+        en: {
+          title: "Prism Privacy Policy",
+          description:
+            "Prism privacy policy: what stays on your device, what the app contacts, and what it does not collect.",
+        },
+      };
+
+      function applyPrivacy(next) {
+        const locale = next === "en" ? "en" : "zh-CN";
+        const copy = privacyCopy[locale];
+        document.documentElement.lang = locale;
+        document.title = copy.title;
+        document.querySelector('meta[name="description"]')?.setAttribute("content", copy.description);
+        document.querySelectorAll("[data-lang-panel]").forEach((el) => {
+          el.hidden = el.dataset.langPanel !== locale;
+        });
+        document.querySelectorAll(".lang [data-lang]").forEach((btn) => {
+          const on = btn.dataset.lang === locale;
+          btn.classList.toggle("is-active", on);
+          btn.setAttribute("aria-pressed", String(on));
+        });
+        document.querySelectorAll("[data-zh]").forEach((el) => {
+          el.textContent = locale === "en" ? el.dataset.en : el.dataset.zh;
+        });
+        document.documentElement.classList.remove("i18n-pending");
+      }
+
+      applyPrivacy(preferredLocale());
+
+      document.querySelector(".lang")?.addEventListener("click", (e) => {
+        const next = e.target.closest("[data-lang]")?.dataset.lang;
+        if (next !== "zh-CN" && next !== "en") return;
+        saveLocale(next);
+        applyPrivacy(next);
+      });
+    </script>
   </body>
 </html>

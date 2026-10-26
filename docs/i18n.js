@@ -133,6 +133,7 @@ const messages = {
       "设置里的测速域名要能从该节点访问，例如 <code>google.com</code> 或 <code>host:port</code>。",
     footerSource: "源代码",
     footerReleases: "全部版本",
+    footerPrivacy: "隐私权政策",
   },
   en: {
     title: "Prism · Download & Guide",
@@ -274,5 +275,29 @@ const messages = {
       "The latency test host must be reachable through that node, e.g. <code>google.com</code> or <code>host:port</code>.",
     footerSource: "Source",
     footerReleases: "All releases",
+    footerPrivacy: "Privacy policy",
   },
 };
+
+function preferredLocale() {
+  try {
+    const saved = localStorage.getItem("prism-lang");
+    if (saved === "zh-CN" || saved === "en") return saved;
+  } catch {
+    /* ignore */
+  }
+  const list =
+    navigator.languages && navigator.languages.length
+      ? navigator.languages
+      : [navigator.language || ""];
+  const first = String(list[0] || "").toLowerCase();
+  return first.startsWith("zh") ? "zh-CN" : "en";
+}
+
+function saveLocale(next) {
+  try {
+    localStorage.setItem("prism-lang", next);
+  } catch {
+    /* ignore */
+  }
+}

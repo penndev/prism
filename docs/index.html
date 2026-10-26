@@ -34,15 +34,15 @@
         <a href="#rules" data-i18n="navRules"></a>
         <a href="https://github.com/penndev/prism" target="_blank" rel="noopener">GitHub</a>
       </nav>
-      <div class="lang">
-        <button type="button" data-lang="zh-CN" aria-pressed="true">简体中文</button>
-        <button type="button" data-lang="en" aria-pressed="false">English</button>
+      <div class="lang" role="group" aria-label="Language">
+        <button type="button" data-lang="zh-CN">中文</button>
+        <button type="button" data-lang="en">English</button>
       </div>
     </header>
 
     <main>
       <section id="download" class="hero">
-        <img class="hero-logo" src="./logo.svg" width="132" height="132" alt="" />
+        <img class="hero-logo" src="./logo.svg" width="96" height="96" alt="" />
         <h1>Prism</h1>
         <p class="lead" data-i18n="lead"></p>
         <div class="os-row">
@@ -117,36 +117,100 @@
         </div>
       </section>
 
-      <section class="asset">
-        <div>
-          <h2 data-i18n="assetDomainTitle"></h2>
-          <p data-i18n="assetDomainBody"></p>
-        </div>
-        <div class="asset-side">
-          <a class="asset-dl" href="https://penndev.github.io/prism/domain.txt">
-            <strong>domain.txt</strong>
-            <small data-i18n="assetDownload"></small>
-          </a>
-          <button type="button" class="copy-url" data-i18n="assetCopy"></button>
-        </div>
-      </section>
+      <div class="assets">
+        <section class="asset">
+          <div>
+            <h2 data-i18n="assetDomainTitle"></h2>
+            <p data-i18n="assetDomainBody"></p>
+          </div>
+          <div class="asset-side">
+            <a class="asset-dl" href="https://penndev.github.io/prism/domain.txt">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M12 4v10m0 0 4-4m-4 4-4-4M5 19h14"
+                />
+              </svg>
+              domain.txt
+            </a>
+            <button type="button" class="copy-url">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect
+                  x="8"
+                  y="8"
+                  width="12"
+                  height="12"
+                  rx="2"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                />
+                <path
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"
+                />
+              </svg>
+              <span data-i18n="assetCopy">复制网址</span>
+            </button>
+          </div>
+        </section>
 
-      <section class="asset">
-        <div>
-          <h2 data-i18n="assetGeoTitle"></h2>
-          <p data-i18n="assetGeoBody"></p>
-        </div>
-        <div class="asset-side">
-          <a
-            class="asset-dl"
-            href="https://github.com/penndev/gopkg/releases/download/ipregion-db/ipregion.db"
-          >
-            <strong>ipregion.db</strong>
-            <small data-i18n="assetDownload"></small>
-          </a>
-          <button type="button" class="copy-url" data-i18n="assetCopy"></button>
-        </div>
-      </section>
+        <section class="asset">
+          <div>
+            <h2 data-i18n="assetGeoTitle"></h2>
+            <p data-i18n="assetGeoBody"></p>
+          </div>
+          <div class="asset-side">
+            <a
+              class="asset-dl"
+              href="https://github.com/penndev/gopkg/releases/download/ipregion-db/ipregion.db"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M12 4v10m0 0 4-4m-4 4-4-4M5 19h14"
+                />
+              </svg>
+              ipregion.db
+            </a>
+            <button type="button" class="copy-url">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect
+                  x="8"
+                  y="8"
+                  width="12"
+                  height="12"
+                  rx="2"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                />
+                <path
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"
+                />
+              </svg>
+              <span data-i18n="assetCopy">复制网址</span>
+            </button>
+          </div>
+        </section>
+      </div>
 
       <section id="proxy" class="block">
         <h2 data-i18n="proxyTitle"></h2>
@@ -220,7 +284,7 @@
       <span>Prism</span>
       <a href="https://github.com/penndev/prism" data-i18n="footerSource"></a>
       <a href="https://github.com/penndev/prism/releases" data-i18n="footerReleases"></a>
-      <a href="./privacy.html">隐私权政策</a>
+      <a href="./privacy.html" data-i18n="footerPrivacy">隐私权政策</a>
     </footer>
 
     <script src="./i18n.js"></script>

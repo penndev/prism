@@ -47,7 +47,7 @@ body {
   min-height: 100vh;
   font-family: var(--font);
   font-size: 15px;
-  line-height: 1.58;
+  line-height: 1.7;
   color: var(--text);
   background: var(--bg);
 }
@@ -117,33 +117,49 @@ nav a {
 .lang {
   display: inline-flex;
   flex-shrink: 0;
-  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 5%, var(--bg));
 }
 
 .lang button {
-  padding: 4px 8px;
+  min-width: 52px;
+  padding: 4px 10px;
   border: 0;
+  border-radius: 999px;
   background: transparent;
   color: var(--muted);
   font: inherit;
   font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
   cursor: pointer;
 }
 
+.lang button:hover {
+  color: var(--text);
+}
+
 .lang button.is-active {
-  color: var(--accent);
-  font-weight: 700;
+  background: var(--accent);
+  color: #fff;
+}
+
+.lang button.is-active:hover {
+  color: #fff;
 }
 
 main {
-  max-width: 880px;
+  max-width: 800px;
   margin: 0 auto;
-  padding: 0 24px 72px;
+  padding: 0 24px 8px;
 }
 
 .hero {
-  margin-top: 36px;
-  padding: 52px 36px 40px;
+  margin-top: 28px;
+  padding: 36px 28px 28px;
   text-align: center;
   background: color-mix(in srgb, var(--accent) 7%, var(--bg));
   border: 1px solid var(--line);
@@ -152,42 +168,43 @@ main {
 
 .hero-logo {
   display: block;
-  width: 132px;
-  height: 132px;
+  width: 96px;
+  height: 96px;
   margin: 0 auto;
 }
 
 .hero h1 {
-  margin: 18px 0 0;
+  margin: 12px 0 0;
   color: var(--title);
-  font-size: 76px;
-  font-weight: 400;
+  font-size: 56px;
+  font-weight: 500;
   letter-spacing: -0.03em;
   line-height: 1;
 }
 
 .lead {
-  margin: 16px auto 0;
-  max-width: 34em;
+  margin: 10px auto 0;
+  max-width: 28em;
   color: var(--muted);
-  font-size: 22px;
-  font-weight: 300;
-  line-height: 1.45;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.5;
 }
 
 .os-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin: 36px auto 0;
+  gap: 12px;
+  margin: 28px auto 0;
   text-align: left;
 }
 
 .os-link {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 22px 20px;
+  gap: 14px;
+  min-height: 76px;
+  padding: 14px 16px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--bg);
@@ -229,23 +246,31 @@ a.os-link:not([href]):hover {
   font-size: 14px;
 }
 
-.asset {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 28px;
-  align-items: center;
+.assets {
   margin-top: 16px;
-  padding: 28px 32px;
-  background: color-mix(in srgb, var(--accent) 7%, var(--bg));
+  background: var(--bg);
   border: 1px solid var(--line);
   border-radius: 16px;
 }
 
+.asset {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 24px;
+  align-items: center;
+  margin: 0;
+  padding: 22px 24px;
+}
+
+.asset + .asset {
+  border-top: 1px solid var(--line);
+}
+
 .asset h2 {
-  margin: 0 0 8px;
+  margin: 0 0 6px;
   color: var(--accent);
-  font-size: 22px;
-  font-weight: 500;
+  font-size: 18px;
+  font-weight: 600;
   letter-spacing: -0.02em;
 }
 
@@ -256,54 +281,48 @@ a.os-link:not([href]):hover {
 .asset-side {
   display: flex;
   flex-direction: column;
+  align-items: stretch;
   gap: 8px;
-  min-width: 168px;
 }
 
-.asset-dl {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding: 18px 20px;
+.asset-dl,
+.copy-url {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  height: 36px;
+  padding: 0 12px 0 10px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.asset-dl svg,
+.copy-url svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: var(--accent);
+}
+
+.asset-dl:hover,
+.copy-url:hover {
+  border-color: var(--accent);
   color: var(--text);
   text-decoration: none;
 }
 
-.asset-dl:hover {
-  border-color: var(--accent);
-  text-decoration: none;
-}
-
-.asset-dl strong,
-.asset-dl small {
-  display: block;
-}
-
-.asset-dl small {
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.copy-url {
-  padding: 8px 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--bg);
-  color: var(--accent);
-  font: inherit;
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.copy-url:hover {
-  border-color: var(--accent);
-}
-
 .install {
-  margin-top: 8px;
+  margin: 6px 2px 0;
   font-size: 13px;
 }
 
@@ -335,21 +354,35 @@ a.os-link:not([href]):hover {
 }
 
 .block {
-  margin-top: 64px;
+  margin-top: 36px;
+  padding-top: 28px;
+  border-top: 1px solid var(--line);
 }
 
 .block h2 {
-  margin: 0 0 12px;
+  margin: 0 0 10px;
   color: var(--accent);
-  font-size: 23px;
-  font-weight: 500;
+  font-size: 22px;
+  font-weight: 600;
   letter-spacing: -0.02em;
+}
+
+.block p {
+  margin: 0 0 12px;
+}
+
+.privacy {
+  border-top: 0;
+  margin-top: 32px;
+  padding-top: 0;
 }
 
 .privacy h1 {
   margin: 0 0 8px;
+  color: var(--title);
   font-size: 28px;
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }
 
 .privacy h2 {
@@ -357,9 +390,10 @@ a.os-link:not([href]):hover {
 }
 
 .block h3 {
-  margin: 28px 0 8px;
+  margin: 22px 0 8px;
+  color: var(--title);
   font-size: 16px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .muted {
@@ -369,11 +403,12 @@ a.os-link:not([href]):hover {
 
 ul,
 ol {
-  padding-left: 1.2em;
+  margin: 8px 0 14px;
+  padding-left: 1.25em;
 }
 
 li + li {
-  margin-top: 6px;
+  margin-top: 8px;
 }
 
 code {
@@ -385,9 +420,12 @@ code {
 
 footer {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
-  gap: 18px;
-  padding: 8px 16px 40px;
+  gap: 8px 18px;
+  margin-top: 36px;
+  padding: 18px 24px 32px;
+  border-top: 1px solid var(--line);
   color: var(--muted);
   font-size: 13px;
 }
@@ -404,24 +442,29 @@ footer {
   }
 
   .hero {
-    padding: 36px 18px 28px;
+    padding: 28px 16px 20px;
   }
 
   .hero-logo {
-    width: 104px;
-    height: 104px;
+    width: 80px;
+    height: 80px;
   }
 
   .hero h1 {
-    font-size: 48px;
-  }
-
-  .lead {
-    font-size: 18px;
+    font-size: 40px;
   }
 
   .os-row,
   .asset {
     grid-template-columns: 1fr;
+  }
+
+  .asset {
+    padding: 18px 16px;
+  }
+
+  .asset-side {
+    flex-direction: row;
+    flex-wrap: wrap;
   }
 }

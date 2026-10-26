@@ -1,4 +1,4 @@
-let locale = "zh-CN";
+let locale = preferredLocale();
 
 function text(key) {
   const pack = messages[locale] || messages["zh-CN"];
@@ -31,22 +31,12 @@ function applyLocale(next) {
   document.documentElement.classList.remove("i18n-pending");
 }
 
-try {
-  const saved = localStorage.getItem("prism-lang");
-  if (saved && messages[saved]) locale = saved;
-} catch {
-  /* ignore */
-}
 applyLocale(locale);
 
 document.querySelector(".lang")?.addEventListener("click", (e) => {
   const next = e.target.closest("[data-lang]")?.dataset.lang;
-  if (!next) return;
-  try {
-    localStorage.setItem("prism-lang", next);
-  } catch {
-    /* ignore */
-  }
+  if (next !== "zh-CN" && next !== "en") return;
+  saveLocale(next);
   applyLocale(next);
 });
 
@@ -64,9 +54,10 @@ document.querySelectorAll(".copy-url").forEach((btn) => {
       document.execCommand("copy");
       input.remove();
     }
-    btn.textContent = text("assetCopied");
+    const label = btn.querySelector("span");
+    label.textContent = text("assetCopied");
     window.setTimeout(() => {
-      btn.textContent = text("assetCopy");
+      label.textContent = text("assetCopy");
     }, 1200);
   });
 });
