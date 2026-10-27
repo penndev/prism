@@ -2,6 +2,7 @@ package rule
 
 import (
 	"desktop/internal"
+	"desktop/internal/lang"
 	"desktop/internal/storage"
 	"encoding/json"
 	"net/http"
@@ -27,13 +28,13 @@ func HandleRuleAreas(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := internal.EnsureSearcher(path); err != nil {
-		http.Error(w, "未找到 ipregion.db，请先下载或上传", http.StatusBadRequest)
+		http.Error(w, lang.DefaultLang.T("rules.db.missing"), http.StatusBadRequest)
 		return
 	}
 	searcher := internal.AcquireSearcher()
 	defer internal.ReleaseSearcher()
 	if searcher == nil {
-		http.Error(w, "未找到 ipregion.db，请先下载或上传", http.StatusBadRequest)
+		http.Error(w, lang.DefaultLang.T("rules.db.missing"), http.StatusBadRequest)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")

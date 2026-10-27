@@ -10,8 +10,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         let proxy = proto?.providerConfiguration?["proxy"] as? String ?? ""
         let upstream = proto?.providerConfiguration?["upstream"] as? String ?? ""
         if proxy.isEmpty {
-            TunnelBridge.setError("vpn_establish_failed")
-            completionHandler(tunnelError("vpn_establish_failed"))
+            TunnelBridge.setError("Could not create the VPN interface")
+            completionHandler(tunnelError("Could not create the VPN interface"))
             return
         }
 
@@ -26,7 +26,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
         setTunnelNetworkSettings(settings) { error in
             if error != nil {
-                TunnelBridge.setError("vpn_establish_failed")
+                TunnelBridge.setError("Could not create the VPN interface")
                 completionHandler(error)
                 return
             }

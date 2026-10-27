@@ -93,6 +93,14 @@
   "proxy.tun.noNode": "未设置代理节点，无法开启 TUN 模式",
   "proxy.tun.startFailed": "无法启动 TUN 设备，请检查权限或驱动",
   "proxy.stopped": "已停止",
+  "rules.db.urlRequired": "请填写下载地址",
+  "rules.db.badURL": "下载地址必须是 http 或 https",
+  "rules.db.downloadFailed": "下载失败",
+  "rules.db.tooLarge": "文件过大",
+  "rules.db.missingFile": "缺少 file 字段",
+  "rules.db.invalid": "无效的 ipregion.db",
+  "rules.db.missing": "未找到 ipregion.db，请先下载或上传",
+  "storage.emptyKey": "key不能为空",
 
   "systray.showMainWindow": "显示主窗口",
   "systray.quit": "退出"

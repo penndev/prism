@@ -194,16 +194,16 @@
     <string name="subscribe_error_file">无法读取文件</string>
     <string name="subscribe_error_export_empty">没有可导出的节点</string>
 
-    <string name="status_ready">已加载 %1$d 个节点</string>
-    <string name="status_node_cleared">已取消当前节点</string>
-    <string name="status_node_selected">已选择 %1$s</string>
-    <string name="status_vpn_starting">正在启动 VPN（%1$s）</string>
-    <string name="status_started">已启动 %1$s</string>
-    <string name="status_stopped">已停止</string>
-    <string name="vpn_started">本地 VPN 已连接</string>
-    <string name="vpn_establish_failed">无法创建 VPN 接口</string>
+    <string name="status_ready">Loaded %1$d nodes</string>
+    <string name="status_node_cleared">Current node cleared</string>
+    <string name="status_node_selected">Selected %1$s</string>
+    <string name="status_vpn_starting">Starting VPN (%1$s)</string>
+    <string name="status_started">Started %1$s</string>
+    <string name="status_stopped">Stopped</string>
+    <string name="vpn_started">Local VPN connected</string>
+    <string name="vpn_establish_failed">Could not create the VPN interface</string>
     <string name="vpn_permission_denied">未授予 VPN 权限</string>
     <string name="vpn_channel_name">VPN</string>
     <string name="vpn_notification_text">本地 VPN 运行中</string>
-    <string name="status_imported">已导入 %1$d 个节点</string>
+    <string name="status_imported">Imported %1$d nodes</string>
 </resources>

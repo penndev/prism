@@ -2,8 +2,10 @@ package rule
 
 import (
 	"desktop/internal"
+	"desktop/internal/lang"
 	"desktop/internal/storage"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -41,7 +43,7 @@ func HandleRuleDBDownload(w http.ResponseWriter, r *http.Request) {
 	}
 	addr := strings.TrimSpace(payload.URL)
 	if addr == "" {
-		http.Error(w, "请填写下载地址", http.StatusBadRequest)
+		http.Error(w, lang.DefaultLang.T("rules.db.urlRequired"), http.StatusBadRequest)
 		return
 	}
 	if err := downloadDBFile(addr); err != nil {
@@ -68,7 +70,7 @@ func HandleRuleDBUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	file, _, err := r.FormFile("file")
 	if err != nil {
-		http.Error(w, "缺少 file 字段", http.StatusBadRequest)
+		http.Error(w, lang.DefaultLang.T("rules.db.missingFile"), http.StatusBadRequest)
 		return
 	}
 	defer file.Close()
@@ -112,11 +114,11 @@ func dbStatusJSON() map[string]any {
 func downloadDBFile(rawURL string) error {
 	addr := strings.TrimSpace(rawURL)
 	if addr == "" {
-		return fmt.Errorf("请填写下载地址")
+		return errors.New(lang.DefaultLang.T("rules.db.urlRequired"))
 	}
 	parsed, err := url.Parse(addr)
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-		return fmt.Errorf("下载地址必须是 http 或 https")
+		return errors.New(lang.DefaultLang.T("rules.db.badURL"))
 	}
 	path, err := storage.IpregionDBPath()
 	if err != nil {
@@ -128,11 +130,11 @@ func downloadDBFile(rawURL string) error {
 	client := &http.Client{Timeout: 5 * time.Minute}
 	resp, err := client.Get(addr)
 	if err != nil {
-		return fmt.Errorf("下载失败: %w", err)
+		return fmt.Errorf("%s: %w", lang.DefaultLang.T("rules.db.downloadFailed"), err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("下载失败: HTTP %d", resp.StatusCode)
+		return fmt.Errorf("%s: HTTP %d", lang.DefaultLang.T("rules.db.downloadFailed"), resp.StatusCode)
 	}
 
 	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
@@ -151,7 +153,7 @@ func downloadDBFile(rawURL string) error {
 	}
 	if n > maxDBBytes {
 		_ = os.Remove(tmp)
-		return fmt.Errorf("文件过大")
+		return errors.New(lang.DefaultLang.T("rules.db.tooLarge"))
 	}
 	return swapDBFile(tmp, path)
 }
@@ -179,7 +181,7 @@ func saveUploadedDBFile(r io.Reader) error {
 	}
 	if n > maxDBBytes {
 		_ = os.Remove(tmp)
-		return fmt.Errorf("文件过大")
+		return errors.New(lang.DefaultLang.T("rules.db.tooLarge"))
 	}
 	return swapDBFile(tmp, path)
 }
@@ -208,7 +210,7 @@ func swapDBFile(tmp, path string) error {
 func validateDBFile(path string) error {
 	s, err := ipregion.Open(path)
 	if err != nil {
-		return fmt.Errorf("无效的 ipregion.db: %w", err)
+		return fmt.Errorf("%s: %w", lang.DefaultLang.T("rules.db.invalid"), err)
 	}
 	_ = s.Close()
 	return nil

@@ -92,7 +92,7 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
         // Service 读的是 VpnController.rules，只在 updateRules 里写。
         // 冷启动后不进规则页就直接连，保存过的地域规则和 fakeip 域名会静默失效。
         VpnController.rules = rules
-        appendStatus(str(R.string.status_ready, servers.size))
+        appendStatus("Loaded ${servers.size} nodes")
         observeVpn()
         viewModelScope.launch(Dispatchers.IO) { refreshEngineUi() }
     }
@@ -115,13 +115,13 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
         prefs.saveSelectedId(server?.id)
         if (server == null) {
             if (_state.value.running) stop()
-            appendStatus(str(R.string.status_node_cleared))
+            appendStatus("Current node cleared")
             return
         }
-        appendStatus(str(R.string.status_node_selected, server.displayName))
+        appendStatus("Selected ${server.displayName}")
         if (server.id != previous && _state.value.running) {
             VpnController.start(app, server)
-            appendStatus(str(R.string.status_vpn_starting, server.displayName))
+            appendStatus("Starting VPN (${server.displayName})")
         }
     }
 
@@ -134,7 +134,7 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
         }
         _state.update { it.copy(vpnBusy = true, vpnDesired = true) }
         VpnController.start(app, server)
-        appendStatus(str(R.string.status_vpn_starting, server.displayName))
+        appendStatus("Starting VPN (${server.displayName})")
     }
 
     fun stop() {
@@ -313,7 +313,7 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
                 snackbar = str(R.string.subscribe_imported, preview.size),
             )
         }
-        appendStatus(str(R.string.status_imported, preview.size))
+        appendStatus("Imported ${preview.size} nodes")
     }
 
     fun importManualNodes(raw: String, onAdded: () -> Unit) {

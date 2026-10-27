@@ -43,7 +43,7 @@ final class Store: ObservableObject {
         selectedId = prefs.loadSelectedId()
         rules = prefs.loadRules()
         TunnelController.shared.rules = rules
-        appendStatus(str("status_ready", servers.count))
+        appendStatus("Loaded \(servers.count) nodes")
         observeVpn()
         DispatchQueue.global(qos: .utility).async { [weak self] in
             openIpregionDb()
@@ -72,11 +72,11 @@ final class Store: ObservableObject {
         selectedId = server?.id
         prefs.saveSelectedId(server?.id)
         if let server {
-            appendStatus(str("status_node_selected", args: [server.displayName]))
+            appendStatus("Selected \(server.displayName)")
             if server.id != previous && running { start() }
         } else {
             if running { stop() }
-            appendStatus(str("status_node_cleared"))
+            appendStatus("Current node cleared")
         }
     }
 
@@ -89,7 +89,7 @@ final class Store: ObservableObject {
         vpnBusy = true
         vpnDesired = true
         TunnelController.shared.start(server: server)
-        appendStatus(str("status_vpn_starting", args: [server.displayName]))
+        appendStatus("Starting VPN (\(server.displayName))")
     }
 
     func stop() {
@@ -271,7 +271,7 @@ final class Store: ObservableObject {
         importPreview = []
         importSource = nil
         snack("subscribe_imported", preview.count)
-        appendStatus(str("status_imported", preview.count))
+        appendStatus("Imported \(preview.count) nodes")
     }
 
     func importManualNodes(_ raw: String, onAdded: @escaping () -> Void) {
@@ -478,7 +478,7 @@ final class Store: ObservableObject {
         tunnel.onStatus { [weak self] line in
             Task { @MainActor in
                 guard let self else { return }
-                self.appendStatus(self.statusLine(line))
+                self.appendStatus(line)
             }
         }
         trafficTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
@@ -492,15 +492,6 @@ final class Store: ObservableObject {
                     if lines != self.connectionLogs { self.connectionLogs = lines }
                 }
             }
-        }
-    }
-
-    private func statusLine(_ line: String) -> String {
-        switch line {
-        case "vpn_started", "status_stopped", "vpn_permission_denied", "vpn_establish_failed", "vpn_unavailable":
-            return str(line)
-        default:
-            return line
         }
     }
 
@@ -562,10 +553,6 @@ final class Store: ObservableObject {
     }
 
     private func str(_ key: String, _ args: CVarArg...) -> String {
-        L10n.t(key, language: language, args: args)
-    }
-
-    private func str(_ key: String, args: [CVarArg]) -> String {
         L10n.t(key, language: language, args: args)
     }
 

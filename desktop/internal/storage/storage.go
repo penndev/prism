@@ -2,6 +2,7 @@
 package storage
 
 import (
+	"desktop/internal/lang"
 	"encoding/json"
 	"errors"
 	"os"
@@ -154,7 +155,7 @@ func (s *Storage) GetSelectedServer() (*ServerEntry, error) {
 
 func (s *Storage) putJSON(key string, v any) error {
 	if key == "" {
-		return errors.New("key不能为空")
+		return errors.New(lang.DefaultLang.T("storage.emptyKey"))
 	}
 	data, err := json.Marshal(v)
 	if err != nil {
@@ -168,7 +169,7 @@ func (s *Storage) putJSON(key string, v any) error {
 
 func (s *Storage) getJSON(key string, dest any) (found bool, err error) {
 	if key == "" {
-		return false, errors.New("key不能为空")
+		return false, errors.New(lang.DefaultLang.T("storage.emptyKey"))
 	}
 	err = s.db.View(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte(bucketName))

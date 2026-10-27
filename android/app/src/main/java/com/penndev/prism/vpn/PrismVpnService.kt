@@ -62,7 +62,7 @@ class PrismVpnService : VpnService() {
 
         val server = VpnController.session
         if (server == null) {
-            VpnController.emitStatus(getString(R.string.proxy_need_node))
+            VpnController.emitStatus("Select a node before starting")
             VpnController.markRunning(false)
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
@@ -83,7 +83,7 @@ class PrismVpnService : VpnService() {
         }
         val pfd = builder.establish()
         if (pfd == null) {
-            VpnController.emitStatus(getString(R.string.vpn_establish_failed))
+            VpnController.emitStatus("Could not create the VPN interface")
             VpnController.markRunning(false)
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
@@ -114,7 +114,7 @@ class PrismVpnService : VpnService() {
 
         running.set(true)
         VpnController.markRunning(true)
-        VpnController.emitStatus(getString(R.string.vpn_started))
+        VpnController.emitStatus("Local VPN connected")
     }
 
     private fun stopTunnel() {
@@ -126,7 +126,7 @@ class PrismVpnService : VpnService() {
         }
         runCatching { Engine.stop() }
         VpnController.markRunning(false)
-        VpnController.emitStatus(getString(R.string.status_stopped))
+        VpnController.emitStatus("Stopped")
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }

@@ -93,6 +93,14 @@
   "proxy.tun.noNode": "No proxy node configured. Cannot enable TUN mode.",
   "proxy.tun.startFailed": "Failed to start the TUN device. Check permissions or drivers.",
   "proxy.stopped": "Stopped",
+  "rules.db.urlRequired": "Download URL is required",
+  "rules.db.badURL": "Download URL must be http or https",
+  "rules.db.downloadFailed": "Download failed",
+  "rules.db.tooLarge": "File is too large",
+  "rules.db.missingFile": "Missing file field",
+  "rules.db.invalid": "Invalid ipregion.db",
+  "rules.db.missing": "ipregion.db not found. Download or upload it first",
+  "storage.emptyKey": "key is empty",
 
   "systray.showMainWindow": "Show main window",
   "systray.quit": "Quit"

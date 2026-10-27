@@ -20,6 +20,7 @@ final class TunnelController {
 
     private var manager: NETunnelProviderManager?
     private var wantRunning = false
+    private var starting = false
     private var sawActive = false
     private var suppressStopStatus = false
     private var lastUp: Int64 = 0
@@ -55,12 +56,14 @@ final class TunnelController {
         #if targetEnvironment(simulator)
         wantRunning = false
         markRunning(false)
-        emitStatus("vpn_unavailable")
+        emitStatus("System VPN is unavailable here. Run Prism on a physical iPhone.")
         #else
         let proxy = server.toProxyURL()
         let upstream = systemDnsIpv4()
         let address = server.host.isEmpty ? "Prism" : server.host
         Task { @MainActor in
+            starting = true
+            defer { starting = false }
             do {
                 let manager = try await existingManager() ?? NETunnelProviderManager()
                 let proto = (manager.protocolConfiguration as? NETunnelProviderProtocol) ?? NETunnelProviderProtocol()
@@ -74,6 +77,10 @@ final class TunnelController {
                 manager.protocolConfiguration = proto
                 manager.localizedDescription = "Prism"
                 manager.isEnabled = true
+                let connect = NEOnDemandRuleConnect()
+                connect.interfaceTypeMatch = .any
+                manager.onDemandRules = [connect]
+                manager.isOnDemandEnabled = false
                 try await manager.saveToPreferences()
                 try await manager.loadFromPreferences()
                 self.manager = manager
@@ -82,12 +89,20 @@ final class TunnelController {
                     manager.connection.stopVPNTunnel()
                     await waitUntilStopped(manager)
                 }
+                manager.isOnDemandEnabled = true
+                try await manager.saveToPreferences()
+                try await manager.loadFromPreferences()
+                self.manager = manager
                 TunnelBridge.resetTraffic()
                 try manager.connection.startVPNTunnel()
             } catch {
                 wantRunning = false
                 suppressStopStatus = true
                 sawActive = false
+                if let manager = self.manager, manager.isOnDemandEnabled {
+                    manager.isOnDemandEnabled = false
+                    try? await manager.saveToPreferences()
+                }
                 markRunning(false)
                 emitStatus(message(for: error))
             }
@@ -97,19 +112,45 @@ final class TunnelController {
 
     func stop() {
         wantRunning = false
-        Task {
+        Task { @MainActor in
             guard let manager = try? await existingManager() else {
                 markRunning(false)
-                emitStatus("status_stopped")
+                emitStatus("Stopped")
                 return
             }
             self.manager = manager
+            if manager.isOnDemandEnabled {
+                manager.isOnDemandEnabled = false
+                try? await manager.saveToPreferences()
+                try? await manager.loadFromPreferences()
+            }
             if manager.connection.status == .disconnected || manager.connection.status == .invalid {
                 markRunning(false)
-                emitStatus("status_stopped")
+                emitStatus("Stopped")
                 return
             }
             manager.connection.stopVPNTunnel()
+        }
+    }
+
+    func refresh() {
+        Task { @MainActor in
+            if starting { return }
+            let manager = try? await existingManager()
+            if starting { return }
+            self.manager = manager
+            let status = manager?.connection.status ?? .disconnected
+            switch status {
+            case .connected:
+                if running { return }
+            case .connecting, .reasserting, .disconnecting:
+                return
+            case .disconnected, .invalid:
+                if !running && !wantRunning { return }
+            default:
+                break
+            }
+            apply(status, announce: true)
         }
     }
 
@@ -192,10 +233,11 @@ final class TunnelController {
             sawActive = true
             wantRunning = true
             markRunning(true)
-            if announce { emitStatus("vpn_started") }
+            if announce { emitStatus("Local VPN connected") }
         case .connecting, .reasserting, .disconnecting:
             sawActive = true
         case .disconnected, .invalid:
+            if starting { return }
             if suppressStopStatus {
                 suppressStopStatus = false
                 sawActive = false
@@ -209,11 +251,11 @@ final class TunnelController {
                 if announce { emitStatus(err) }
                 return
             }
-            if wantRunning { return }
             let notify = announce && sawActive
+            wantRunning = false
             sawActive = false
             markRunning(false)
-            if notify { emitStatus("status_stopped") }
+            if notify { emitStatus("Stopped") }
         default:
             break
         }
@@ -222,17 +264,15 @@ final class TunnelController {
     private func message(for error: Error) -> String {
         let ns = error as NSError
         if ns.domain == NEVPNErrorDomain && ns.code == NEVPNError.Code.configurationDisabled.rawValue {
-            return "vpn_permission_denied"
+            return "VPN permission denied"
         }
         if ns.domain == "NEConfigurationErrorDomain" && ns.code == 11 {
-            return "vpn_unavailable"
+            return "System VPN is unavailable here. Run Prism on a physical iPhone."
         }
         if ns.domain == "NEConfigurationErrorDomain" {
-            return "vpn_permission_denied"
+            return "VPN permission denied"
         }
-        let text = ns.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
-        if text.isEmpty { return "vpn_establish_failed" }
-        return text
+        return "Could not create the VPN interface"
     }
 }
 

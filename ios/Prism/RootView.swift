@@ -12,6 +12,7 @@ enum AppRoute: Hashable {
 }
 
 struct RootView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var store: Store
     @State private var tab: AppTab = .home
     @State private var homePath: [AppRoute] = []
@@ -75,6 +76,11 @@ struct RootView: View {
                         }
                     }
                     .id(snackbar)
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                TunnelController.shared.refresh()
             }
         }
     }
