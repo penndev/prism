@@ -226,6 +226,8 @@ struct HomeView: View {
                     } else {
                         checkedIds.insert(server.id)
                     }
+                } else if server.id == store.selectedId {
+                    store.selectServer(nil)
                 } else {
                     store.selectServer(server)
                 }

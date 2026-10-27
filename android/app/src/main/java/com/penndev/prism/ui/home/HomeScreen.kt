@@ -346,6 +346,8 @@ fun HomeScreen(
                                 } else {
                                     checkedIds + server.id
                                 }
+                            } else if (server.id == state.selectedId) {
+                                viewModel.selectServer(null)
                             } else {
                                 viewModel.selectServer(server)
                             }
@@ -464,6 +466,8 @@ fun HomeScreen(
                                     } else {
                                         checkedIds + server.id
                                     }
+                                } else if (server.id == state.selectedId) {
+                                    viewModel.selectServer(null)
                                 } else {
                                     viewModel.selectServer(server)
                                 }
