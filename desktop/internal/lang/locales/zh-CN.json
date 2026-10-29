@@ -80,6 +80,8 @@
   "log.clear": "清空",
   "log.connectionTitle": "连接日志",
   "log.connectionEmpty": "暂无连接日志",
+  "log.dnsTitle": "DNS日志",
+  "log.dnsEmpty": "暂无 DNS 日志",
   "log.trafficTotalDown": "下载总流量",
   "log.trafficTotalUp": "上传总流量",
   "proxy.title": "代理面板",

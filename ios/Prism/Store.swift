@@ -2,6 +2,12 @@ import Foundation
 import Combine
 
 private let logLimit = 1000
+private let logClock: DateFormatter = {
+    let f = DateFormatter()
+    f.locale = Locale(identifier: "en_US_POSIX")
+    f.dateFormat = "HH:mm:ss.SSS"
+    return f
+}()
 
 @MainActor
 final class Store: ObservableObject {
@@ -18,6 +24,7 @@ final class Store: ObservableObject {
     @Published var importSource: String?
     @Published var statusLogs: [String] = []
     @Published var connectionLogs: [String] = []
+    @Published var dnsLogs: [String] = []
     @Published var traffic = TrafficUi()
     @Published var rules = RuleDraft()
     @Published var geoAreas: [AreaUi] = []
@@ -26,6 +33,7 @@ final class Store: ObservableObject {
     @Published var dbBusy = false
     @Published var snackbar: String?
     private var pingSinks: [PingSink] = []
+    private var engineStatus: [String] = []
 
     var selectedServer: ServerItem? {
         servers.first { $0.id == selectedId }
@@ -43,6 +51,10 @@ final class Store: ObservableObject {
         selectedId = prefs.loadSelectedId()
         rules = prefs.loadRules()
         TunnelController.shared.rules = rules
+        // 日志文件只给扩展和主 App 传记录。划掉进程再打开时不带上一次的内容。
+        TunnelBridge.clearConnections()
+        TunnelBridge.clearDns()
+        TunnelBridge.clearStatus()
         appendStatus("Loaded \(servers.count) nodes")
         observeVpn()
         DispatchQueue.global(qos: .utility).async { [weak self] in
@@ -425,10 +437,19 @@ final class Store: ObservableObject {
         }
     }
 
-    func clearStatusLogs() { statusLogs = [] }
+    func clearStatusLogs() {
+        statusLogs = []
+        engineStatus = []
+        TunnelBridge.clearStatus()
+    }
     func clearConnectionLogs() {
         connectionLogs = []
         TunnelBridge.clearConnections()
+    }
+
+    func clearDnsLogs() {
+        dnsLogs = []
+        TunnelBridge.clearDns()
     }
 
     func updateRules(_ transform: (RuleDraft) -> RuleDraft) {
@@ -490,6 +511,22 @@ final class Store: ObservableObject {
                 if self.settings.system.enableLogRecording {
                     let lines = TunnelBridge.connections()
                     if lines != self.connectionLogs { self.connectionLogs = lines }
+                    let dns = TunnelBridge.dnsLogs()
+                    if dns != self.dnsLogs { self.dnsLogs = dns }
+                    let status = TunnelBridge.statusLogs()
+                    if status != self.engineStatus {
+                        var added = status
+                        if let first = status.first, let k = self.engineStatus.firstIndex(of: first) {
+                            let tail = self.engineStatus.count - k
+                            if tail <= status.count && Array(self.engineStatus[k...]) == Array(status[..<tail]) {
+                                added = Array(status[tail...])
+                            }
+                        }
+                        self.engineStatus = status
+                        if !added.isEmpty {
+                            self.statusLogs = Array((self.statusLogs + added).suffix(logLimit))
+                        }
+                    }
                 }
             }
         }
@@ -537,17 +574,17 @@ final class Store: ObservableObject {
     }
 
     private func appendStatus(_ line: String) {
-        statusLogs = Array((statusLogs + [line]).suffix(logLimit))
+        statusLogs = Array((statusLogs + ["\(logClock.string(from: Date())) \(line)"]).suffix(logLimit))
     }
 
     private func refreshEngineUi() {
-        let st = Engine.dbStatus()
+        let st = ipregionStatus()
         dbReady = st.exists
         if !dbReady {
             dbStatus = str("rules_db_missing")
         } else {
             let ver = st.version.isEmpty ? "-" : st.version
-            dbStatus = str("rules_db_status", ver, formatBytes(st.size), Int(st.areas))
+            dbStatus = str("rules_db_status", ver, formatBytes(st.size), st.areas)
         }
         geoAreas = dbReady ? loadAreaTree() : []
     }

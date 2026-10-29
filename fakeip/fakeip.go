@@ -84,27 +84,8 @@ func Lookup(fakeIP string) (string, bool) {
 	return s, s != ""
 }
 
-func Handle(conn net.Conn, network, address string) error {
-	defer conn.Close()
-	buf := make([]byte, 4096)
-	_ = conn.SetDeadline(time.Now().Add(udpTimeout))
-	for {
-		n, err := conn.Read(buf)
-		if err != nil {
-			return err
-		}
-		out, err := answer(buf[:n])
-		if err != nil || len(out) == 0 {
-			continue
-		}
-		if _, err := conn.Write(out); err != nil {
-			return err
-		}
-		_ = conn.SetDeadline(time.Now().Add(udpTimeout))
-	}
-}
-
-func answer(query []byte) ([]byte, error) {
+// Answer 回答一条 DNS 查询。命中 fake 名单的 A/AAAA 在本地生成，其余原样转给上游。
+func Answer(query []byte) ([]byte, error) {
 	req := new(dns.Msg)
 	if err := req.Unpack(query); err != nil {
 		return nil, err

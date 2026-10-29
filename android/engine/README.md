@@ -1,8 +1,8 @@
 # engine（Android）
 
-本目录放预编译 `engine.aar`。Go 源码在仓库根目录的 `engine/`，说明见 `engine/README.md`。`engine_android.go` 与 `fdtun.go` 带 `//go:build android`。Android 工程直接依赖 AAR，不在 Gradle 里编 Go。包名是 `com.penndev.prism.engine`。
+本目录放预编译 `engine.aar`。Go 源码在仓库根目录的 `engine/`，说明见 `engine/README.md`。`engine_android.go` 带 `//go:build android`。Android 工程直接依赖 AAR，不在 Gradle 里编 Go。包名是 `com.penndev.prism.engine`。
 
-Go 把 gVisor 挂到 VPN 的 TUN fd 上，转发 TCP/UDP。UDP/53 一律在本地交给 fakeip：`needFake` 为真时回假 IP（`198.18.0.0/15`），之后连到这个假 IP 会换回域名再走代理；为假时把查询转到 `upstream`。其余连接由 `useProxy` 决定走代理还是直连。地域库、模式和域名表都在 Java，Go 不保存这些配置。
+Go 把 gVisor 挂到 VPN 的 TUN fd 上，转发 TCP/UDP。UDP/53 一律在本地交给 fakeip：`needFake` 为真时回假 IP（`198.18.0.0/15`），之后连到这个假 IP 会换回域名再走代理；为假时把查询转到 `upstream`。其余连接由 `useProxy` 决定走代理还是直连。`ipregion.db` 由 Go 打开和查询，Kotlin 在 `useProxy` 里拿查到的地域链和已勾选的地域比对。模式、勾选的地域和域名表都在应用侧，Go 不保存这些配置。
 
 `start` 成功后 fd 归 Go；失败时 Java 用 `ParcelFileDescriptor.adoptFd(fd).close()`。`stop` 会关掉 fd，并且会阻塞到 gVisor 的收包协程退出，不要放在主线程。出站 socket 必须 `protect`，否则会绕回隧道。未 fake 的 DNS 直连 `upstream`，不要对 fakeip 调用 `SetHandleConnect`。
 
@@ -14,10 +14,10 @@ Go 把 gVisor 挂到 VPN 的 TUN fd 上，转发 TCP/UDP。UDP/53 一律在本�
 | `start(opt)`                  | 用 `Options` 拉起隧道。已启动、缺少 `handler`、代理 URL 无法解析时返回错误。`mtu <= 0` 时用 1500。           |
 | `stop()`                      | 停掉协议栈并关闭 TUN fd。                                                                 |
 | `ping(proxyURL, latencyHost)` | 经代理测 HTTP 首字节时间，单位毫秒。`latencyHost` 是主机或 `主机:端口`（缺端口当 80）。失败或主机为空返回 `-1`。不经过 TUN。 |
-| `setIpregionDB(path)`         | 打开 Java 已经下载或拷好的 `ipregion.db`。换库时会关掉旧句柄。                                        |
-| `dbStatus()`                  | 当前库的文件和元数据：是否存在、路径、大小、版本、备注、地域数、IPv4/IPv6 条目数。                                   |
-| `areaTree()`                  | 整棵地域树的 JSON，形状与桌面 `/rule/api/areas` 相同。未打开库时返回 `[]`。                             |
-| `lookup(address)`             | 查 `主机` 或 `主机:端口` 的地域链，叶节点在前、父节点在后。传入的是域名时会先解析成 IP。无库或查不到时返回空列表。                  |
+| `setIpregionDB(path, tmpDir)` | 以文件模式打开 `ipregion.db`，换库时关掉旧句柄。段表解压到 `tmpDir` 下的 `ipregion-*` 目录（约 30MB），内存只留索引。`tmpDir` 传应用的 cacheDir；本进程第一次打开时只清掉 `tmpDir` 里残留的 `ipregion-*` 目录，不删同前缀的普通文件。 |
+| `ipregionStatus()`            | 当前库的版本和地域数。没打开库时返回 `null`。文件是否存在、大小由 Kotlin 自己看。                              |
+| `areaTree()`                  | 整棵地域树的 JSON，形状与桌面 `/rule/api/areas` 相同。没打开库时返回 `[]`。                             |
+| `lookup(address)`             | 查 `主机` 或 `主机:端口` 的地域链，叶节点在前、父节点在后。传入域名时先解析成 IP（2 秒超时）。没打开库或查不到时返回空列表。 |
 
 
 
@@ -45,21 +45,20 @@ Java 实现，Go 在转发时回调。
 | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
 | `protect(fd)`                        | 包一层 `VpnService.protect`，让这条出站 socket 不进隧道。返回 `false` 时这次拨号失败。                                                       |
 | `needFake(name)`                     | 每个 DNS 名问一次。返回 `true` 则回假 IP，随后该连接按域名走代理，不再问 `useProxy`。返回 `false` 则把查询转到 `upstream`。域名表在 Java。                      |
-| `useProxy(network, address)`         | 非假 IP 的连接问一次。返回 `true` 走代理，`false` 直连。Java 用 `lookup` 拿地域链（叶 → 父）和已保存的地域 ID 比对，并在这里打连接日志，例如 `proxy tcp 1.2.3.4:443`。 |
-| `onLog(line)`                        | 假 IP 改写、直连或代理失败、relay panic。                                                                                         |
+| `useProxy(network, address)`         | 非假 IP 的连接问一次。返回 `true` 走代理，`false` 直连。应用用 `Engine.lookup` 查 `ipregion.db` 拿地域链（叶 → 父）和已保存的地域 ID 比对，并在这里打连接日志，例如 `proxy tcp 1.2.3.4:443`。 |
+| `onStatus(line)`                     | relay panic 等状态。                                                                                                   |
+| `onConnection(network, address, err)` | 假 IP 改写后的连接，以及直连或代理失败。`err` 为空是记下这次连接，非空是失败原因。                                                               |
+| `onDNS(name, qtype, result)`         | 一条 DNS 查询的名字、类型和结果。                                                                                                |
 | `onProxyRead(n)` / `onProxyWrite(n)` | 代理路径上的读、写字节增量。直连不计入。                                                                                                 |
-
 
 
 
 ## 返回类型
 
-
-| 类型         | 作用                                            |
-| ---------- | --------------------------------------------- |
-| `Area`     | 地域节点：`id`、`parentId`（顶级为 0）、`name`。           |
-| `AreaList` | `lookup` 的结果。用 `len()` 和 `get(i)` 取，没有直接暴露切片。 |
-| `DbStatus` | `dbStatus` 的结果，字段见上表。                         |
+| 类型         | 作用                                              |
+| ---------- | ----------------------------------------------- |
+| `DBStatus` | `ipregionStatus` 的结果：`version`、`areas`。         |
+| `AreaList` | `lookup` 的结果，地域 ID 列表。用 `len()` 和 `get(i)` 取，没有直接暴露切片。 |
 
 
 

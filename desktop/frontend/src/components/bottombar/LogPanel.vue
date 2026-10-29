@@ -6,7 +6,7 @@
       @mousedown="startResize($event)"
     />
     <div class="panel-header">
-      <span>{{ t('log.connectionTitle') }}</span>
+      <span>{{ t(titleKey) }}</span>
       <div class="panel-actions">
         <a-button type="text" size="small" @click="clearLogs">
           {{ t("log.clear") }}
@@ -32,16 +32,24 @@ const { token } = theme.useToken();
 
 const MAX_LOG_LINES = 1000;
 
-defineProps({
+const lines = ref([]);
+
+const props = defineProps({
   panelHeightPx: String,
   onClose: Function,
   startResize: Function,
+  kind: { type: String, default: "connection" },
 });
 
-const lines = ref([]);
+const titleKey = computed(() =>
+  props.kind === "dns" ? "log.dnsTitle" : "log.connectionTitle",
+);
+const emptyKey = computed(() =>
+  props.kind === "dns" ? "log.dnsEmpty" : "log.connectionEmpty",
+);
 
 const displayText = computed(
-  () => lines.value.join("\n") || t("log.connectionEmpty"),
+  () => lines.value.join("\n") || t(emptyKey.value),
 );
 
 function clearLogs() {
@@ -52,8 +60,10 @@ let connectionEventOff = null;
 onMounted(async () => {
   try {
     const appConst = await AppConfig();
-    connectionEventOff = Events.On( 
-      appConst.LogTypeName_LOG,
+    const eventName =
+      props.kind === "dns" ? appConst.LogTypeName_DNS : appConst.LogTypeName_LOG;
+    connectionEventOff = Events.On(
+      eventName,
       // 整个 BottomBar 挂在 enableLogRecording 的 v-if 下，这里不用再判一次
       (eventPayload) => {
         lines.value.push(String(eventPayload.data));
@@ -131,8 +141,8 @@ onBeforeUnmount(() => {
       "Courier New", monospace;
     font-size: 12px;
     line-height: 1.5;
-    white-space: pre-wrap;
-    word-break: break-all;
+    white-space: pre;
+    word-break: normal;
     color: v-bind("token.colorText");
     background: v-bind("token.colorFillAlter");
   }

@@ -199,7 +199,7 @@ func swapDBFile(tmp, path string) error {
 		_ = os.Remove(tmp)
 		return err
 	}
-	s, err := ipregion.Open(path)
+	s, err := ipregion.Open(path, ipregion.ModeMemory)
 	if err != nil {
 		return err
 	}
@@ -208,7 +208,7 @@ func swapDBFile(tmp, path string) error {
 }
 
 func validateDBFile(path string) error {
-	s, err := ipregion.Open(path)
+	s, err := ipregion.Open(path, ipregion.ModeMemory)
 	if err != nil {
 		return fmt.Errorf("%s: %w", lang.DefaultLang.T("rules.db.invalid"), err)
 	}

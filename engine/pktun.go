@@ -39,10 +39,6 @@ func (t *pktun) Close() {
 	t.Endpoint.Close()
 }
 
-func (t *pktun) Wait() {
-	t.pumps.Wait()
-}
-
 func (t *pktun) Attach(dispatcher stack.NetworkDispatcher) {
 	t.Endpoint.Attach(dispatcher)
 	t.startOnce.Do(func() {
@@ -73,8 +69,7 @@ func (t *pktun) outbound(ctx context.Context) {
 	defer t.pumps.Done()
 	var pkts [][]byte
 	flush := func() {
-		if len(pkts) == 0 || t.write == nil {
-			pkts = pkts[:0]
+		if len(pkts) == 0 {
 			return
 		}
 		var buf bytes.Buffer

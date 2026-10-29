@@ -13,6 +13,8 @@ type appConst struct {
 	LogTypeName_STATUS string
 	// 连接日志列表的消息名称
 	LogTypeName_LOG string
+	// DNS 日志列表的消息名称
+	LogTypeName_DNS string
 	// 语言切换事件（payload 为语言标识字符串）
 	EventNameLocaleChanged string
 	// 节点列表变更事件（payload 为更新时间戳）
@@ -24,6 +26,7 @@ type appConst struct {
 var AppConfig = appConst{
 	LogTypeName_STATUS:      "logServerStatus",
 	LogTypeName_LOG:         "logProxyList",
+	LogTypeName_DNS:         "logDnsList",
 	EventNameLocaleChanged:  "localeChanged",
 	EventNameServersChanged: "serversChanged",
 	EventNameServiceAppQuit: "serviceAppQuit",

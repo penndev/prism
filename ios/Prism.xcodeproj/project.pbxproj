@@ -400,6 +400,7 @@
 					"$(inherited)",
 					"-ObjC",
 					"-lresolv",
+					"-lz",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.penndev.prism;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -438,6 +439,7 @@
 					"$(inherited)",
 					"-ObjC",
 					"-lresolv",
+					"-lz",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.penndev.prism;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -470,6 +472,7 @@
 					"$(inherited)",
 					"-ObjC",
 					"-lresolv",
+					"-lz",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.penndev.prism.PacketTunnel;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -503,6 +506,7 @@
 					"$(inherited)",
 					"-ObjC",
 					"-lresolv",
+					"-lz",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.penndev.prism.PacketTunnel;
 				PRODUCT_NAME = "$(TARGET_NAME)";

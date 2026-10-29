@@ -117,7 +117,7 @@ final class Prefs {
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { return RuleDraft() }
         let mode = GeoMode(rawValue: obj["geoMode"] as? String ?? "Global") ?? .global
-        let areasSrc = obj["selectedAreaIds"] as? [Any] ?? obj["selectedAreas"] as? [Any] ?? []
+        let areasSrc = obj["selectedAreaIds"] as? [Any] ?? []
         var areaIds = Set<Int64>()
         for item in areasSrc {
             let id: Int64
@@ -136,10 +136,6 @@ final class Prefs {
                 .lowercased()
             if !d.isEmpty { domains.append(d) }
         }
-        let seeded = obj["domainsSeeded"] as? Bool ?? false
-        if !seeded && !domains.contains("google.com") {
-            domains.insert("google.com", at: 0)
-        }
         return RuleDraft(
             geoMode: mode,
             selectedAreaIds: areaIds,
@@ -154,7 +150,6 @@ final class Prefs {
             "selectedAreaIds": draft.selectedAreaIds.sorted().map { NSNumber(value: $0) },
             "dbUrl": draft.dbUrl,
             "domains": draft.domains,
-            "domainsSeeded": true,
         ]
         if let data = try? JSONSerialization.data(withJSONObject: obj),
            let raw = String(data: data, encoding: .utf8) {

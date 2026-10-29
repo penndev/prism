@@ -80,6 +80,8 @@
   "log.clear": "Clear",
   "log.connectionTitle": "Connection Logs",
   "log.connectionEmpty": "No connection logs",
+  "log.dnsTitle": "DNS Logs",
+  "log.dnsEmpty": "No DNS logs",
   "log.trafficTotalDown": "Download total",
   "log.trafficTotalUp": "Upload total",
   "proxy.title": "Proxy Panel",

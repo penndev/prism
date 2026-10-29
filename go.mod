@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/miekg/dns v1.1.73
-	github.com/penndev/gopkg v0.5.1
+	github.com/penndev/gopkg v0.6.0
 	golang.org/x/sys v0.49.0
 	gvisor.dev/gvisor v0.0.0-20250503011706-39ed1f5ac29c
 )

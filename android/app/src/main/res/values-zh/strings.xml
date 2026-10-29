@@ -83,6 +83,8 @@
     <string name="log_clear">清空</string>
     <string name="log_connection_title">连接日志</string>
     <string name="log_connection_empty">暂无连接日志</string>
+    <string name="log_dns_title">DNS日志</string>
+    <string name="log_dns_empty">暂无 DNS 日志</string>
     <string name="log_traffic_title">流量</string>
     <string name="log_traffic_down">下载</string>
     <string name="log_traffic_up">上传</string>

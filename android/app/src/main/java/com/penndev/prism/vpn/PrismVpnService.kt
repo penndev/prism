@@ -14,6 +14,7 @@ import androidx.core.app.NotificationCompat
 import com.penndev.prism.MainActivity
 import com.penndev.prism.R
 import com.penndev.prism.data.GeoMode
+import com.penndev.prism.data.ipregionLookupIds
 import com.penndev.prism.engine.Engine
 import com.penndev.prism.engine.Handler
 import com.penndev.prism.engine.Options
@@ -115,6 +116,7 @@ class PrismVpnService : VpnService() {
         running.set(true)
         VpnController.markRunning(true)
         VpnController.emitStatus("Local VPN connected")
+        VpnController.emitDns("Upstream DNS ${upstream.ifBlank { "8.8.8.8" }}")
     }
 
     private fun stopTunnel() {
@@ -183,11 +185,8 @@ class PrismVpnService : VpnService() {
 
     private fun inSelectedAreas(address: String, ids: Set<Long>): Boolean {
         if (ids.isEmpty()) return false
-        val list = runCatching { Engine.lookup(address) }.getOrNull() ?: return false
-        val n = list.len()
-        for (i in 0 until n) {
-            val area = list.get(i) ?: continue
-            if (area.id in ids) return true
+        for (id in ipregionLookupIds(address)) {
+            if (id in ids) return true
         }
         return false
     }
@@ -207,9 +206,33 @@ class PrismVpnService : VpnService() {
     private inner class VpnHandler : Handler {
         override fun protect(fd: Int): Boolean = this@PrismVpnService.protect(fd)
 
-        override fun onLog(line: String?) {
+        override fun onStatus(line: String?) {
             val text = line.orEmpty()
-            if (text.isNotEmpty()) VpnController.emitConnection(text)
+            if (text.isNotEmpty()) VpnController.emitStatus(text)
+        }
+
+        override fun onConnection(network: String?, address: String?, err: String?) {
+            val dest = address.orEmpty()
+            if (dest.isEmpty()) return
+            val net = network.orEmpty()
+            val reason = err.orEmpty()
+            val line = if (reason.isNotEmpty()) {
+                if (net.isEmpty()) "$dest: $reason" else "$net $dest: $reason"
+            } else if (net.isEmpty()) {
+                "proxy $dest"
+            } else {
+                "proxy $net $dest"
+            }
+            VpnController.emitConnection(line)
+        }
+
+        override fun onDNS(name: String?, qtype: String?, result: String?) {
+            val host = name.orEmpty()
+            val kind = qtype.orEmpty()
+            if (host.isEmpty() && kind.isEmpty()) return
+            val answer = result.orEmpty()
+            val line = if (answer.isEmpty()) "$host $kind" else "$host $kind $answer"
+            VpnController.emitDns(line)
         }
 
         override fun needFake(name: String?): Boolean {

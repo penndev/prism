@@ -20,8 +20,14 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         let ipv4 = NEIPv4Settings(addresses: ["172.19.0.1"], subnetMasks: ["255.255.255.255"])
         ipv4.includedRoutes = [NEIPv4Route.default()]
         settings.ipv4Settings = ipv4
-        let dns = NEDNSSettings(servers: ["8.8.8.8"])
+        // 把 IPv6 默认路由也收进隧道，否则系统会继续用局域网的 IPv6 DNS，查询进不了引擎。
+        let ipv6 = NEIPv6Settings(addresses: ["fdfe:dcba:9876::1"], networkPrefixLengths: [NSNumber(value: 128)])
+        ipv6.includedRoutes = [NEIPv6Route.default()]
+        settings.ipv6Settings = ipv6
+        // 8.8.8.8 会被系统升级成加密 DNS，不走 UDP/53。这里用只在隧道里可达的地址，并强制明文。
+        let dns = NEDNSSettings(servers: ["172.19.0.2", "fdfe:dcba:9876::2"])
         dns.matchDomains = [""]
+        dns.matchDomainsNoSearch = true
         settings.dnsSettings = dns
 
         setTunnelNetworkSettings(settings) { error in
@@ -31,7 +37,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 return
             }
             let handler = TunnelHandler(flow: self.packetFlow)
-            handler.ensureDb()
             self.handler = handler
             let opt = EngineOptions()
             opt.mtu = 1500
@@ -45,6 +50,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 completionHandler(error)
                 return
             }
+            handler.ensureDb()
+            let shown = upstream.trimmingCharacters(in: .whitespacesAndNewlines)
+            TunnelBridge.appendDns("Upstream DNS \(shown.isEmpty ? "8.8.8.8" : shown)")
             self.reading = true
             self.readLoop()
             completionHandler(nil)
@@ -53,7 +61,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
         reading = false
+        TunnelBridge.setStopReason("\(stopReasonText(reason))(\(reason.rawValue))")
         Engine.stop()
+        TunnelBridge.flushTraffic()
+        TunnelBridge.flushConnections()
+        TunnelBridge.flushDns()
+        TunnelBridge.flushStatus()
         handler = nil
         completionHandler()
     }
@@ -70,6 +83,29 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     private func tunnelError(_ message: String) -> NSError {
         NSError(domain: "PrismTunnel", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
+    }
+}
+
+private func stopReasonText(_ reason: NEProviderStopReason) -> String {
+    switch reason {
+    case .none: return "none"
+    case .userInitiated: return "userInitiated"
+    case .providerFailed: return "providerFailed"
+    case .noNetworkAvailable: return "noNetworkAvailable"
+    case .unrecoverableNetworkChange: return "unrecoverableNetworkChange"
+    case .providerDisabled: return "providerDisabled"
+    case .authenticationCanceled: return "authenticationCanceled"
+    case .configurationFailed: return "configurationFailed"
+    case .idleTimeout: return "idleTimeout"
+    case .configurationDisabled: return "configurationDisabled"
+    case .configurationRemoved: return "configurationRemoved"
+    case .superceded: return "superceded"
+    case .userLogout: return "userLogout"
+    case .userSwitch: return "userSwitch"
+    case .connectionFailed: return "connectionFailed"
+    case .sleep: return "sleep"
+    case .appUpdate: return "appUpdate"
+    @unknown default: return "unknown"
     }
 }
 
@@ -90,23 +126,59 @@ private func packetBlob(_ packets: [Data]) -> Data {
 
 private final class TunnelHandler: NSObject, EngineHandlerProtocol {
     private let flow: NEPacketTunnelFlow
+    private let dbLock = NSLock()
     private var dbStamp: Date? = .distantPast
 
     init(flow: NEPacketTunnelFlow) {
         self.flow = flow
     }
 
+    /// 库文件修改时间变了就重新打开。useProxy 会在多个 Go 线程上并发调用，只让一个去打开。
+    /// 打开失败把标记退回，下次连接再试。
     func ensureDb() {
-        let file = ipregionFile()
-        let attrs = try? FileManager.default.attributesOfItem(atPath: file.path)
+        let attrs = try? FileManager.default.attributesOfItem(atPath: ipregionFile().path)
         let stamp = attrs?[.modificationDate] as? Date
-        if stamp == dbStamp { return }
+        dbLock.lock()
+        guard let stamp, stamp != dbStamp else {
+            dbLock.unlock()
+            return
+        }
+        let previous = dbStamp
         dbStamp = stamp
-        if stamp != nil { openIpregionDb() }
+        dbLock.unlock()
+        if openIpregionDb() { return }
+        dbLock.lock()
+        if dbStamp == stamp { dbStamp = previous }
+        dbLock.unlock()
     }
 
-    func onLog(_ line: String?) {
-        if let line, !line.isEmpty { TunnelBridge.appendConnection(line) }
+    func onStatus(_ line: String?) {
+        let line = line ?? ""
+        if !line.isEmpty { TunnelBridge.appendStatus(line) }
+    }
+
+    func onConnection(_ network: String?, address: String?, err: String?) {
+        let address = address ?? ""
+        let network = network ?? ""
+        let err = err ?? ""
+        if address.isEmpty { return }
+        if !err.isEmpty {
+            let head = network.isEmpty ? address : "\(network) \(address)"
+            TunnelBridge.appendConnection("\(head): \(err)")
+            return
+        }
+        let line = network.isEmpty ? "proxy \(address)" : "proxy \(network) \(address)"
+        TunnelBridge.appendConnection(line)
+    }
+
+    func onDNS(_ name: String?, qtype: String?, result: String?) {
+        let name = name ?? ""
+        let qtype = qtype ?? ""
+        let result = result ?? ""
+        if name.isEmpty && qtype.isEmpty { return }
+        var line = "\(name) \(qtype)"
+        if !result.isEmpty { line += " \(result)" }
+        TunnelBridge.appendDns(line)
     }
 
     func needFake(_ name: String?) -> Bool {
@@ -124,13 +196,24 @@ private final class TunnelHandler: NSObject, EngineHandlerProtocol {
     }
 
     func useProxy(_ network: String?, address: String?) -> Bool {
-        ensureDb()
         let address = address ?? ""
         let network = network ?? ""
-        let use = shouldProxy(address)
-        let tag = use ? "proxy" : "direct"
-        let line = network.isEmpty ? "\(tag) \(address)" : "\(tag) \(network) \(address)"
-        if !address.isEmpty { TunnelBridge.appendConnection(line) }
+        let rules = Prefs().loadRules()
+        // 本地模式和全局模式结论是固定的，查 IP 库只是拖慢每一条新连接。
+        let matched: Bool
+        switch rules.geoMode {
+        case .global, .none:
+            matched = false
+        case .proxy, .bypass:
+            ensureDb()
+            matched = inSelectedAreas(ipregionLookupIds(address), rules.selectedAreaIds)
+        }
+        let use = shouldProxy(rules.geoMode, matched)
+        if !address.isEmpty {
+            let tag = use ? "proxy" : "direct"
+            let line = network.isEmpty ? "\(tag) \(address)" : "\(tag) \(network) \(address)"
+            TunnelBridge.appendConnection(line)
+        }
         return use
     }
 
@@ -165,18 +248,17 @@ private final class TunnelHandler: NSObject, EngineHandlerProtocol {
         }
     }
 
-    private func shouldProxy(_ address: String) -> Bool {
-        let rules = Prefs().loadRules()
-        switch rules.geoMode {
+    private func shouldProxy(_ mode: GeoMode, _ matched: Bool) -> Bool {
+        switch mode {
         case .global: return true
         case .none: return false
-        case .proxy: return inSelectedAreas(address, rules.selectedAreaIds)
-        case .bypass: return !inSelectedAreas(address, rules.selectedAreaIds)
+        case .proxy: return matched
+        case .bypass: return !matched
         }
     }
 
-    private func inSelectedAreas(_ address: String, _ ids: Set<Int64>) -> Bool {
+    private func inSelectedAreas(_ lookedUp: [Int64], _ ids: Set<Int64>) -> Bool {
         if ids.isEmpty { return false }
-        return Engine.lookup(address).contains { ids.contains($0.id_) }
+        return lookedUp.contains { ids.contains($0) }
     }
 }

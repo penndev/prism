@@ -73,13 +73,10 @@ final class TunnelController {
                     "proxy": proxy,
                     "upstream": upstream,
                 ]
-                proto.disconnectOnSleep = false
                 manager.protocolConfiguration = proto
                 manager.localizedDescription = "Prism"
                 manager.isEnabled = true
-                let connect = NEOnDemandRuleConnect()
-                connect.interfaceTypeMatch = .any
-                manager.onDemandRules = [connect]
+                manager.onDemandRules = []
                 manager.isOnDemandEnabled = false
                 try await manager.saveToPreferences()
                 try await manager.loadFromPreferences()
@@ -89,20 +86,13 @@ final class TunnelController {
                     manager.connection.stopVPNTunnel()
                     await waitUntilStopped(manager)
                 }
-                manager.isOnDemandEnabled = true
-                try await manager.saveToPreferences()
-                try await manager.loadFromPreferences()
-                self.manager = manager
                 TunnelBridge.resetTraffic()
+                _ = TunnelBridge.takeStopReason()
                 try manager.connection.startVPNTunnel()
             } catch {
                 wantRunning = false
                 suppressStopStatus = true
                 sawActive = false
-                if let manager = self.manager, manager.isOnDemandEnabled {
-                    manager.isOnDemandEnabled = false
-                    try? await manager.saveToPreferences()
-                }
                 markRunning(false)
                 emitStatus(message(for: error))
             }
@@ -119,8 +109,9 @@ final class TunnelController {
                 return
             }
             self.manager = manager
-            if manager.isOnDemandEnabled {
+            if manager.isOnDemandEnabled || !(manager.onDemandRules ?? []).isEmpty {
                 manager.isOnDemandEnabled = false
+                manager.onDemandRules = []
                 try? await manager.saveToPreferences()
                 try? await manager.loadFromPreferences()
             }
@@ -201,12 +192,20 @@ final class TunnelController {
     }
 
     private func reload() async {
-        manager = try? await existingManager()
-        let status = manager?.connection.status ?? .disconnected
-        if status == .connected || status == .connecting || status == .reasserting {
+        guard let manager = try? await existingManager() else { return }
+        self.manager = manager
+        if manager.isOnDemandEnabled || !(manager.onDemandRules ?? []).isEmpty {
+            manager.isOnDemandEnabled = false
+            manager.onDemandRules = []
+            try? await manager.saveToPreferences()
+            try? await manager.loadFromPreferences()
+            self.manager = manager
+        }
+        let status = self.manager?.connection.status ?? .disconnected
+        if status == .connected {
             sawActive = true
-            wantRunning = status == .connected
-            if status == .connected { markRunning(true) }
+            wantRunning = true
+            markRunning(true)
         }
     }
 
@@ -248,16 +247,32 @@ final class TunnelController {
                 wantRunning = false
                 sawActive = false
                 markRunning(false)
-                if announce { emitStatus(err) }
+                if announce {
+                    emitStatus(err)
+                    emitStopReason()
+                }
                 return
             }
             let notify = announce && sawActive
             wantRunning = false
             sawActive = false
             markRunning(false)
-            if notify { emitStatus("Stopped") }
+            if notify { emitStopReason() }
         default:
             break
+        }
+    }
+
+    private func emitStopReason() {
+        if let reason = TunnelBridge.takeStopReason() {
+            emitStatus("Stopped (\(reason))")
+            return
+        }
+        emitStatus("Stopped")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            if let reason = TunnelBridge.takeStopReason() {
+                self.emitStatus("Stopped (\(reason))")
+            }
         }
     }
 

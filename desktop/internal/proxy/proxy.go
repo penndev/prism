@@ -31,9 +31,7 @@ var localHandle = transport.Local()
 
 func (p *Proxy) SetStart(host, user, pass string) error {
 	if p.HandleConnect == nil {
-		p.HandleConnect = p.handleConnectHook(localHandle, func(line string) {
-			internal.App.Event.Emit(internal.AppConfig.LogTypeName_LOG, line)
-		})
+		p.HandleConnect = p.handleConnectHook(localHandle)
 	}
 
 	go p.updateDialer()
@@ -70,9 +68,7 @@ func (p *Proxy) SetRemote(remote string) error {
 	remote = strings.TrimSpace(remote)
 	if remote == "" {
 		p.remoteURL.Store(nil)
-		p.HandleConnect = p.handleConnectHook(localHandle, func(line string) {
-			internal.App.Event.Emit(internal.AppConfig.LogTypeName_LOG, line)
-		})
+		p.HandleConnect = p.handleConnectHook(localHandle)
 		internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "SetRemote-> local")
 		return nil
 	}
@@ -88,13 +84,11 @@ func (p *Proxy) SetRemote(remote string) error {
 		)
 		handle, err := transport.FromURL(remoteURL)
 		if err != nil {
-			internal.App.Event.Emit(internal.AppConfig.LogTypeName_LOG, "SetRemote error: "+err.Error())
+			internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "SetRemote error: "+err.Error())
 			return err
 		}
 		p.remoteURL.Store(remoteURL)
-		p.HandleConnect = p.handleConnectHook(handle, func(line string) {
-			internal.App.Event.Emit(internal.AppConfig.LogTypeName_LOG, line)
-		})
+		p.HandleConnect = p.handleConnectHook(handle)
 		return nil
 	}
 	return nil

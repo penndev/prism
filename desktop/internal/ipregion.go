@@ -42,7 +42,7 @@ func EnsureSearcher(path string) error {
 	if searcher != nil {
 		return nil
 	}
-	s, err := ipregion.Open(path)
+	s, err := ipregion.Open(path, ipregion.ModeMemory)
 	if err != nil {
 		return err
 	}

@@ -6,30 +6,66 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URI
 import org.json.JSONArray
-import org.json.JSONObject
 
 const val IPREGION_DB = "ipregion.db"
+
+@Volatile
+private var ipregionPath = ""
+
+data class IpregionStatus(
+    val exists: Boolean = false,
+    val size: Long = 0,
+    val version: String = "",
+    val areas: Int = 0,
+)
 
 fun ipregionFile(context: Context): File =
     File(context.applicationContext.filesDir, IPREGION_DB)
 
+// engine 以文件模式打开：段表解压到临时目录（约 30MB 磁盘），内存只留索引。
+// java.io.tmpdir 由系统设成应用的 cacheDir；Go 默认的 /data/local/tmp 应用没有写权限。
 fun openIpregionDb(file: File) {
-    if (file.exists()) {
-        runCatching { Engine.setIpregionDB(file.absolutePath) }
-    }
+    if (!file.exists()) return
+    runCatching { Engine.setIpregionDB(file.absolutePath, System.getProperty("java.io.tmpdir")) }
+        .onSuccess { ipregionPath = file.absolutePath }
+}
+
+fun ipregionStatus(): IpregionStatus {
+    val st = Engine.ipregionStatus() ?: return IpregionStatus()
+    val file = File(ipregionPath)
+    val exists = file.exists()
+    return IpregionStatus(
+        exists = exists,
+        size = if (exists) file.length() else 0,
+        version = st.version,
+        areas = st.areas.toInt(),
+    )
 }
 
 fun loadAreaTree(): List<AreaUi> {
-    val raw = runCatching { Engine.areaTree() }.getOrNull().orEmpty()
-    if (raw.isBlank() || raw == "[]") return emptyList()
-    return runCatching { parseAreaTree(JSONArray(raw)) }.getOrDefault(emptyList())
+    fun build(arr: JSONArray): List<AreaUi> = List(arr.length()) { i ->
+        val obj = arr.getJSONObject(i)
+        AreaUi(
+            id = obj.optLong("id"),
+            parentId = obj.optLong("parent_id"),
+            name = obj.optString("name"),
+            children = build(obj.optJSONArray("children") ?: JSONArray()),
+        )
+    }
+    return runCatching { build(JSONArray(Engine.areaTree())) }.getOrDefault(emptyList())
+}
+
+fun ipregionLookupIds(address: String): List<Long> {
+    val list = Engine.lookup(address) ?: return emptyList()
+    return List(list.len().toInt()) { list.get(it.toLong()) }
 }
 
 fun installIpregionDb(src: File, dest: File) {
     if (src.canonicalPath != dest.canonicalPath) {
         src.copyTo(dest, overwrite = true)
     }
-    Engine.setIpregionDB(dest.absolutePath)
+    Engine.setIpregionDB(dest.absolutePath, System.getProperty("java.io.tmpdir"))
+    ipregionPath = dest.absolutePath
 }
 
 fun downloadIpregionDb(url: String, dest: File, tmp: File) {
@@ -37,24 +73,6 @@ fun downloadIpregionDb(url: String, dest: File, tmp: File) {
     httpDownload(url, tmp)
     installIpregionDb(tmp, dest)
     tmp.delete()
-}
-
-private fun parseAreaTree(arr: JSONArray): List<AreaUi> = buildList {
-    for (i in 0 until arr.length()) {
-        val obj = arr.optJSONObject(i) ?: continue
-        add(parseArea(obj))
-    }
-}
-
-private fun parseArea(obj: JSONObject): AreaUi {
-    val kids = obj.optJSONArray("children")
-    val children = if (kids == null) emptyList() else parseAreaTree(kids)
-    return AreaUi(
-        id = obj.optLong("id"),
-        parentId = obj.optLong("parent_id"),
-        name = obj.optString("name"),
-        children = children,
-    )
 }
 
 private fun httpDownload(url: String, dest: File) {

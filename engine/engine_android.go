@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/penndev/prism/fakeip"
 	"github.com/penndev/prism/stack"
@@ -16,6 +17,7 @@ import (
 	"github.com/penndev/prism/transport/dialer"
 	"golang.org/x/sys/unix"
 	"gvisor.dev/gvisor/pkg/tcpip"
+	"gvisor.dev/gvisor/pkg/tcpip/link/fdbased"
 	gvisorstack "gvisor.dev/gvisor/pkg/tcpip/stack"
 	"gvisor.dev/gvisor/pkg/tcpip/transport/tcp"
 )
@@ -25,10 +27,8 @@ var (
 	ep       gvisorstack.LinkEndpoint
 	netstack *gvisorstack.Stack
 	tunFD    = -1
-	started  bool
 	origTCP  dialer.Dialer
 	origUDP  dialer.Dialer
-	handler  Handler
 
 	errProtect = errors.New("protect failed")
 	errStarted = errors.New("already started")
@@ -38,13 +38,16 @@ var (
 // Handler is implemented on the Android side.
 // Protect must wrap VpnService.protect.
 // NeedFake is called from fakeip for each DNS name; Java owns the domain list.
-// UseProxy decides direct vs proxy and should emit the connection log
-// (e.g. "proxy tcp 1.2.3.4:443"). Java looks up the IP (leaf → parent)
-// and matches saved area IDs.
+// UseProxy decides direct vs proxy. Kotlin writes the connection log there
+// from network and address. OnConnection is the fake-IP path, which does not
+// call UseProxy. OnStatus and OnDNS carry the other two logs. The app calls Lookup for the area chain
+// (leaf → parent) and matches saved area IDs.
 // OnProxyRead / OnProxyWrite report proxy-path Read/Write byte counts.
 type Handler interface {
 	Protect(fd int32) bool
-	OnLog(line string)
+	OnStatus(line string)
+	OnConnection(network, address, err string)
+	OnDNS(name, qtype, result string)
 	NeedFake(name string) bool
 	UseProxy(network, address string) bool
 	OnProxyRead(n int64)
@@ -67,7 +70,7 @@ type Options struct {
 func Start(opt *Options) error {
 	mu.Lock()
 	defer mu.Unlock()
-	if started {
+	if netstack != nil {
 		return errStarted
 	}
 	if opt == nil {
@@ -91,12 +94,28 @@ func Start(opt *Options) error {
 		return err
 	}
 
-	endpoint, err := createTUN(int(opt.FD), uint32(mtu))
+	endpoint, err := fdbased.New(&fdbased.Options{
+		FDs: []int{int(opt.FD)},
+		MTU: uint32(mtu),
+	})
 	if err != nil {
 		return err
 	}
 
-	installProtect(h)
+	origTCP, origUDP = dialer.TCPDialer, dialer.UDPDialer
+	d := &net.Dialer{Control: func(network, address string, c syscall.RawConn) error {
+		var fail error
+		if err := c.Control(func(fd uintptr) {
+			if !h.Protect(int32(fd)) {
+				fail = errProtect
+			}
+		}); err != nil {
+			return err
+		}
+		return fail
+	}}
+	dialer.TCPDialer, dialer.UDPDialer = d, d
+
 	// upstream 为空（比如 IPv6-only 网络下取不到 IPv4 DNS）时 SetUpstream 会早退，
 	// 沿用上一次连接留下的值，所以这里显式回落到默认值。
 	upstream := opt.Upstream
@@ -116,21 +135,22 @@ func Start(opt *Options) error {
 		},
 	})
 	if err != nil {
+		// stack.New 可能已经挂上 NIC 起了读循环，失败后 fd 会被 Kotlin 关掉，先停读循环。
+		endpoint.Attach(nil)
 		fakeip.SetNeedFake(nil)
-		restoreProtect()
+		dialer.TCPDialer, dialer.UDPDialer = origTCP, origUDP
 		return err
 	}
-	// 默认 FIN_WAIT_2 / TIME_WAIT 各 60 秒，Stop 里的 stack.Wait 会跟着等。
-	linger := tcpip.TCPLingerTimeoutOption(0)
-	tw := tcpip.TCPTimeWaitTimeoutOption(0)
+	// FIN_WAIT_2 留 5 秒，让对端把最后一段读走。设成 0 会马上拆连接，网页尾部会卡住重试。
+	// TIME_WAIT 只留 1 秒。默认各 60 秒时，Stop 里的 stack.Wait 会跟着等。
+	linger := tcpip.TCPLingerTimeoutOption(5 * time.Second)
+	tw := tcpip.TCPTimeWaitTimeoutOption(time.Second)
 	_ = s.SetTransportProtocolOption(tcp.ProtocolNumber, &linger)
 	_ = s.SetTransportProtocolOption(tcp.ProtocolNumber, &tw)
 
 	ep = endpoint
 	netstack = s
 	tunFD = int(opt.FD)
-	handler = h
-	started = true
 	return nil
 }
 
@@ -139,67 +159,19 @@ func Start(opt *Options) error {
 func Stop() {
 	mu.Lock()
 	defer mu.Unlock()
-	if !started {
+	if netstack == nil {
 		return
 	}
-	fd := tunFD
-	endpoint := ep
-	s := netstack
-	started = false
-	tunFD = -1
-	ep = nil
-	netstack = nil
-	handler = nil
 	fakeip.SetNeedFake(nil)
 
 	// Close 会 Abort 当前所有传输端点。读循环靠 eventfd 停，不能只关 tun fd。
-	if s != nil {
-		s.Close()
-	}
-	if endpoint != nil {
-		endpoint.Attach(nil)
-	}
-	if fd >= 0 {
-		_ = unix.Close(fd)
-	}
-	if s != nil {
-		s.Wait()
-	}
-	restoreProtect()
-}
+	netstack.Close()
+	ep.Attach(nil)
+	_ = unix.Close(tunFD)
+	netstack.Wait()
+	dialer.TCPDialer, dialer.UDPDialer = origTCP, origUDP
 
-func installProtect(h Handler) {
-	origTCP = dialer.TCPDialer
-	origUDP = dialer.UDPDialer
-	if h == nil {
-		return
-	}
-	d := &net.Dialer{Control: protectControl(h)}
-	dialer.TCPDialer = d
-	dialer.UDPDialer = d
-}
-
-func restoreProtect() {
-	if origTCP != nil {
-		dialer.TCPDialer = origTCP
-		origTCP = nil
-	}
-	if origUDP != nil {
-		dialer.UDPDialer = origUDP
-		origUDP = nil
-	}
-}
-
-func protectControl(h Handler) func(network, address string, c syscall.RawConn) error {
-	return func(network, address string, c syscall.RawConn) error {
-		var fail error
-		if err := c.Control(func(fd uintptr) {
-			if h == nil || !h.Protect(int32(fd)) {
-				fail = errProtect
-			}
-		}); err != nil {
-			return err
-		}
-		return fail
-	}
+	ep = nil
+	netstack = nil
+	tunFD = -1
 }

@@ -24,6 +24,7 @@ import com.penndev.prism.data.downloadIpregionDb
 import com.penndev.prism.data.formatBytes
 import com.penndev.prism.data.installIpregionDb
 import com.penndev.prism.data.ipregionFile
+import com.penndev.prism.data.ipregionStatus
 import com.penndev.prism.data.loadAreaTree
 import com.penndev.prism.engine.Engine
 import com.penndev.prism.engine.PingCallback
@@ -43,6 +44,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private const val LOG_LIMIT = 1000
+private val logClock = java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss.SSS")
 internal const val PING_MANUAL = "manual"
 
 data class PrismUiState(
@@ -59,6 +61,7 @@ data class PrismUiState(
     val importSource: String? = null,
     val statusLogs: List<String> = emptyList(),
     val connectionLogs: List<String> = emptyList(),
+    val dnsLogs: List<String> = emptyList(),
     val traffic: TrafficUi = TrafficUi(),
     val rules: RuleDraft = RuleDraft(),
     val geoAreas: List<AreaUi> = emptyList(),
@@ -449,6 +452,10 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
         _state.update { it.copy(connectionLogs = emptyList()) }
     }
 
+    fun clearDnsLogs() {
+        _state.update { it.copy(dnsLogs = emptyList()) }
+    }
+
     fun updateRules(transform: (RuleDraft) -> RuleDraft) {
         _state.update { it.copy(rules = transform(it.rules)) }
         val rules = _state.value.rules
@@ -494,7 +501,14 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             VpnController.connections.collect { line ->
                 if (_state.value.settings.system.enableLogRecording) {
-                    _state.update { it.copy(connectionLogs = (it.connectionLogs + line).takeLast(LOG_LIMIT)) }
+                    _state.update { it.copy(connectionLogs = (it.connectionLogs + stamp(line)).takeLast(LOG_LIMIT)) }
+                }
+            }
+        }
+        viewModelScope.launch {
+            VpnController.dns.collect { line ->
+                if (_state.value.settings.system.enableLogRecording) {
+                    _state.update { it.copy(dnsLogs = (it.dnsLogs + stamp(line)).takeLast(LOG_LIMIT)) }
                 }
             }
         }
@@ -535,16 +549,21 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun appendStatus(line: String) {
-        _state.update { it.copy(statusLogs = (it.statusLogs + line).takeLast(LOG_LIMIT)) }
+        _state.update { it.copy(statusLogs = (it.statusLogs + stamp(line)).takeLast(LOG_LIMIT)) }
+    }
+
+    private fun stamp(line: String): String {
+        val time = java.time.LocalTime.now().format(logClock)
+        return "$time $line"
     }
 
     private fun refreshEngineUi() {
-        val st = runCatching { Engine.dbStatus() }.getOrNull()
-        val ready = st != null && st.exists
+        val st = ipregionStatus()
+        val ready = st.exists
         val text = if (!ready) {
             str(R.string.rules_db_missing)
         } else {
-            val ver = st.version.orEmpty().ifBlank { "-" }
+            val ver = st.version.ifBlank { "-" }
             str(R.string.rules_db_status, ver, formatBytes(st.size), st.areas)
         }
         val areas = if (ready) loadAreaTree() else emptyList()

@@ -149,7 +149,7 @@ class Prefs(context: Context) {
         val raw = prefs.getString(KEY_RULES, null) ?: return RuleDraft()
         return runCatching {
             val obj = JSONObject(raw)
-            val areas = obj.optJSONArray("selectedAreaIds") ?: obj.optJSONArray("selectedAreas")
+            val areas = obj.optJSONArray("selectedAreaIds")
             val domainsArr = obj.optJSONArray("domains")
             RuleDraft(
                 geoMode = runCatching {
@@ -171,9 +171,6 @@ class Prefs(context: Context) {
                             if (d.isNotEmpty()) add(d)
                         }
                     }
-                    if (!obj.optBoolean("domainsSeeded", false) && "google.com" !in this) {
-                        add(0, "google.com")
-                    }
                 },
             )
         }.getOrDefault(RuleDraft())
@@ -192,7 +189,6 @@ class Prefs(context: Context) {
                     .put("selectedAreaIds", areas)
                     .put("dbUrl", draft.dbUrl)
                     .put("domains", domains)
-                    .put("domainsSeeded", true)
                     .toString(),
             )
             .apply()

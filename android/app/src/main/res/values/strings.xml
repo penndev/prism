@@ -83,6 +83,8 @@
     <string name="log_clear">Clear</string>
     <string name="log_connection_title">Connection Logs</string>
     <string name="log_connection_empty">No connection logs</string>
+    <string name="log_dns_title">DNS Logs</string>
+    <string name="log_dns_empty">No DNS logs</string>
     <string name="log_traffic_title">Traffic</string>
     <string name="log_traffic_down">Download</string>
     <string name="log_traffic_up">Upload</string>

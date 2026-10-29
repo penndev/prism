@@ -33,6 +33,9 @@ object VpnController {
     private val _connections = MutableSharedFlow<String>(extraBufferCapacity = 256)
     val connections: SharedFlow<String> = _connections.asSharedFlow()
 
+    private val _dns = MutableSharedFlow<String>(extraBufferCapacity = 256)
+    val dns: SharedFlow<String> = _dns.asSharedFlow()
+
     val uploadBytes = AtomicLong(0)
     val downloadBytes = AtomicLong(0)
 
@@ -83,6 +86,10 @@ object VpnController {
 
     fun emitConnection(line: String) {
         _connections.tryEmit(line)
+    }
+
+    fun emitDns(line: String) {
+        _dns.tryEmit(line)
     }
 
     fun trafficUi(): TrafficUi {

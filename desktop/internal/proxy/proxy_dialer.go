@@ -97,7 +97,10 @@ func probe(cands []net.IP, target string) net.IP {
 	return nil
 }
 
-var dialerStarted atomic.Bool
+var (
+	dialerStarted  atomic.Bool
+	loggedUpstream string
+)
 
 func remoteTarget(u *url.URL) string {
 	if u == nil || u.Host == "" {
@@ -168,8 +171,16 @@ func (p *Proxy) updateDialer() {
 		}
 		d := &dialer.BoundDialer{LocalIPv4: v4, LocalIPv6: v6}
 		dialer.TCPDialer, dialer.UDPDialer = d, d
-		if dns := route.CurrentDNS(TUN_NAME); len(dns) > 0 {
-			fakeip.SetUpstream(dns[0])
+		dns := ""
+		if servers := route.CurrentDNS(TUN_NAME); len(servers) > 0 {
+			dns = servers[0]
+			fakeip.SetUpstream(dns)
+		} else if loggedUpstream == "" {
+			dns = "8.8.8.8"
+		}
+		if internal.App != nil && dns != "" && dns != loggedUpstream {
+			loggedUpstream = dns
+			internal.App.Event.Emit(internal.AppConfig.LogTypeName_DNS, "Upstream DNS "+dns)
 		}
 		fakeip.SetHandleConnect(localHandle)
 		time.Sleep(time.Second)

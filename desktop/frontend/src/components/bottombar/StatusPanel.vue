@@ -126,8 +126,8 @@ onBeforeUnmount(() => {
       "Courier New", monospace;
     font-size: 12px;
     line-height: 1.5;
-    white-space: pre-wrap;
-    word-break: break-all;
+    white-space: pre;
+    word-break: normal;
     color: v-bind("token.colorText");
     background: v-bind("token.colorFillAlter");
   }

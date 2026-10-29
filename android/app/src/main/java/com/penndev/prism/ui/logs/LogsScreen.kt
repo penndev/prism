@@ -7,10 +7,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Tab
@@ -21,6 +21,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -58,7 +59,11 @@ fun LogsScreen(
                 if (enabled) {
                     TextButton(
                         onClick = {
-                            if (tab == 0) viewModel.clearStatusLogs() else viewModel.clearConnectionLogs()
+                            when (tab) {
+                                0 -> viewModel.clearStatusLogs()
+                                1 -> viewModel.clearConnectionLogs()
+                                else -> viewModel.clearDnsLogs()
+                            }
                         },
                     ) {
                         Text(stringResource(R.string.log_clear))
@@ -106,20 +111,29 @@ fun LogsScreen(
                     onClick = { tab = 1 },
                     text = { Text(stringResource(R.string.log_connection_title)) },
                 )
+                Tab(
+                    selected = tab == 2,
+                    onClick = { tab = 2 },
+                    text = { Text(stringResource(R.string.log_dns_title)) },
+                )
             }
 
-            val lines = if (tab == 0) state.statusLogs else state.connectionLogs
-            val empty = if (tab == 0) {
-                stringResource(R.string.log_status_empty)
-            } else {
-                stringResource(R.string.log_connection_empty)
+            val lines = when (tab) {
+                0 -> state.statusLogs
+                1 -> state.connectionLogs
+                else -> state.dnsLogs
+            }
+            val empty = when (tab) {
+                0 -> stringResource(R.string.log_status_empty)
+                1 -> stringResource(R.string.log_connection_empty)
+                else -> stringResource(R.string.log_dns_empty)
             }
             val logModifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(MaterialTheme.colorScheme.surface)
-            if (tab == 1) {
+            key(tab) {
                 val vertical = rememberScrollState()
                 val horizontal = rememberScrollState()
                 Box(modifier = logModifier) {
@@ -137,35 +151,17 @@ fun LogsScreen(
                             )
                         } else {
                             lines.forEach { line ->
-                                Text(
-                                    line,
-                                    fontFamily = FontFamily.Monospace,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    softWrap = false,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Visible,
-                                )
+                                SelectionContainer {
+                                    Text(
+                                        line,
+                                        fontFamily = FontFamily.Monospace,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        softWrap = false,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Visible,
+                                    )
+                                }
                             }
-                        }
-                    }
-                }
-            } else {
-                LazyColumn(modifier = logModifier.padding(14.dp)) {
-                    if (lines.isEmpty()) {
-                        item {
-                            Text(
-                                empty,
-                                fontFamily = FontFamily.Monospace,
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
-                    } else {
-                        items(lines.size) { i ->
-                            Text(
-                                lines[i],
-                                fontFamily = FontFamily.Monospace,
-                                style = MaterialTheme.typography.bodySmall,
-                            )
                         }
                     }
                 }

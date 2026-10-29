@@ -6,20 +6,48 @@ func ipregionFile() -> URL {
     AppGroup.container.appendingPathComponent(ipregionDB)
 }
 
-func openIpregionDb() {
+struct IpregionStatus {
+    var exists = false
+    var size: Int64 = 0
+    var version = ""
+    var areas = 0
+}
+
+/// 文件模式打开：段表解压到本进程临时目录。主 App 和扩展各打开一份。打开失败返回 false。
+func openIpregionDb() -> Bool {
     let file = ipregionFile()
-    if FileManager.default.fileExists(atPath: file.path) {
-        _ = try? Engine.setIpregionDB(file.path)
-    }
+    guard FileManager.default.fileExists(atPath: file.path) else { return false }
+    var err: NSError?
+    return EngineSetIpregionDB(file.path, NSTemporaryDirectory(), &err)
+}
+
+func ipregionStatus() -> IpregionStatus {
+    guard let st = EngineIpregionStatus() else { return IpregionStatus() }
+    let attrs = try? FileManager.default.attributesOfItem(atPath: ipregionFile().path)
+    let size = (attrs?[.size] as? NSNumber)?.int64Value
+    return IpregionStatus(exists: size != nil, size: size ?? 0, version: st.version, areas: Int(st.areas))
 }
 
 func loadAreaTree() -> [AreaUi] {
-    let raw = Engine.areaTree()
-    if raw.isEmpty || raw == "[]" { return [] }
-    guard let data = raw.data(using: .utf8),
+    guard let data = EngineAreaTree().data(using: .utf8),
           let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
     else { return [] }
-    return parseAreaTree(arr)
+    func build(_ arr: [[String: Any]]) -> [AreaUi] {
+        arr.map { obj in
+            AreaUi(
+                id: (obj["id"] as? NSNumber)?.int64Value ?? 0,
+                parentId: (obj["parent_id"] as? NSNumber)?.int64Value ?? 0,
+                name: obj["name"] as? String ?? "",
+                children: build(obj["children"] as? [[String: Any]] ?? []),
+            )
+        }
+    }
+    return build(arr)
+}
+
+func ipregionLookupIds(_ address: String) -> [Int64] {
+    guard let list = EngineLookup(address) else { return [] }
+    return (0..<list.len()).map { list.get($0) }
 }
 
 func installIpregionDb(src: URL, dest: URL) throws {
@@ -29,7 +57,10 @@ func installIpregionDb(src: URL, dest: URL) throws {
         }
         try FileManager.default.copyItem(at: src, to: dest)
     }
-    try Engine.setIpregionDB(dest.path)
+    var err: NSError?
+    if !EngineSetIpregionDB(dest.path, NSTemporaryDirectory(), &err) {
+        throw err ?? EngineError("open ipregion.db failed")
+    }
 }
 
 func downloadIpregionDb(url: String, dest: URL, tmp: URL) throws {
@@ -37,30 +68,6 @@ func downloadIpregionDb(url: String, dest: URL, tmp: URL) throws {
     try httpDownload(url, dest: tmp)
     try installIpregionDb(src: tmp, dest: dest)
     try? FileManager.default.removeItem(at: tmp)
-}
-
-private func parseAreaTree(_ arr: [[String: Any]]) -> [AreaUi] {
-    arr.compactMap { parseArea($0) }
-}
-
-private func parseArea(_ obj: [String: Any]) -> AreaUi? {
-    let kids = obj["children"] as? [[String: Any]] ?? []
-    let id: Int64
-    if let n = obj["id"] as? Int64 { id = n }
-    else if let n = obj["id"] as? Int { id = Int64(n) }
-    else if let n = obj["id"] as? NSNumber { id = n.int64Value }
-    else { return nil }
-    let parent: Int64
-    if let n = obj["parent_id"] as? Int64 { parent = n }
-    else if let n = obj["parent_id"] as? Int { parent = Int64(n) }
-    else if let n = obj["parent_id"] as? NSNumber { parent = n.int64Value }
-    else { parent = 0 }
-    return AreaUi(
-        id: id,
-        parentId: parent,
-        name: obj["name"] as? String ?? "",
-        children: parseAreaTree(kids),
-    )
 }
 
 private func httpDownload(_ url: String, dest: URL) throws {

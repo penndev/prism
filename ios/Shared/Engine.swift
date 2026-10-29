@@ -33,33 +33,4 @@ enum Engine {
     static func pingAsync(_ proxy: String, _ latencyHost: String, _ cb: (any EnginePingCallbackProtocol)?) {
         EnginePingAsync(proxy, latencyHost, cb)
     }
-
-    static func setIpregionDB(_ path: String) throws {
-        var err: NSError?
-        if !EngineSetIpregionDB(path, &err) {
-            throw err ?? EngineError("ipregion.db not found")
-        }
-    }
-
-    static func dbStatus() -> EngineDbStatus {
-        EngineDBStatus() ?? EngineDbStatus()
-    }
-
-    static func areaTree() -> String {
-        EngineAreaTree()
-    }
-
-    static func lookup(_ address: String) -> [EngineArea] {
-        guard let list = EngineLookup(address) else { return [] }
-        var out: [EngineArea] = []
-        let n = list.len()
-        var i: Int64 = 0
-        while i < n {
-            if let item = list.get(i) {
-                out.append(item)
-            }
-            i += 1
-        }
-        return out
-    }
 }

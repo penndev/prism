@@ -8,11 +8,19 @@
     />
     <LogPanel
       v-show="activePanel === PANEL_NAMES.LOG"
+      kind="connection"
       :panelHeightPx="panelHeightPx"
       :onClose="closePanel"
       :startResize="startResize"
     />
-    <!-- 底部状态栏：状态日志 | 连接日志 -->
+    <LogPanel
+      v-show="activePanel === PANEL_NAMES.DNS"
+      kind="dns"
+      :panelHeightPx="panelHeightPx"
+      :onClose="closePanel"
+      :startResize="startResize"
+    />
+    <!-- 底部状态栏：状态日志 | 连接日志 | DNS 日志 -->
     <div class="status-bar">
       <span
         class="status-item"
@@ -27,6 +35,13 @@
         @click="togglePanel(PANEL_NAMES.LOG)"
       >
         {{ t("log.connectionTitle") }}
+      </span>
+      <span
+        class="status-item"
+        :class="{ active: activePanel === PANEL_NAMES.DNS }"
+        @click="togglePanel(PANEL_NAMES.DNS)"
+      >
+        {{ t("log.dnsTitle") }}
       </span>
       <span class="status-spacer" />
       <span
@@ -62,6 +77,7 @@ const PANEL_HEIGHT_MAX = 480;
 const PANEL_NAMES = {
   STATUS: "status",
   LOG: "log",
+  DNS: "dns",
 };
 
 const activePanel = ref(null);
