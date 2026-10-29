@@ -2,6 +2,21 @@
   <a-card class="server-panel" :title="t('serverList.title')">
     <template #extra>
       <div class="card-extra-actions">
+        <a-tooltip :title="t('serverList.openSubscribeEditor')">
+          <a-button
+            type="text"
+            size="small"
+            class="card-extra-btn"
+            @click="openSubscribeEditor"
+          >
+            <svg class="head-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M3,17.25V21h3.75L17.81,9.94l-3.75-3.75L3,17.25zM20.71,7.04c0.39-0.39,0.39-1.02,0-1.41l-2.34-2.34c-0.39-0.39-1.02-0.39-1.41,0l-1.83,1.83l3.75,3.75L20.71,7.04z"
+              />
+            </svg>
+          </a-button>
+        </a-tooltip>
         <a-tooltip :title="t('serverList.pingAll')">
           <a-button
             type="text"
@@ -10,17 +25,17 @@
             :disabled="pingingAll || servers.length === 0"
             @click="pingAllServers"
           >
-            <SignalFilled :style="{ opacity: pingingAll ? 0.35 : 1 }" />
-          </a-button>
-        </a-tooltip>
-        <a-tooltip :title="t('serverList.openSubscribeEditor')">
-          <a-button
-            type="text"
-            size="small"
-            class="card-extra-btn"
-            @click="openSubscribeEditor"
-          >
-            <EditFilled />
+            <svg
+              class="head-icon"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              :style="{ opacity: pingingAll ? 0.35 : 1 }"
+            >
+              <path
+                fill="currentColor"
+                d="M20.38,8.57l-1.23,1.85a8,8 0,0 1,-0.22 7.58H5.07A8,8 0,0 1,15.58 6.85l1.85,-1.23A10,10 0,0 0,3.35 19a2,2 0,0 0,1.72 1h13.86a2,2 0,0 0,1.74 -1,10 10,0 0,0 -0.29,-10.43zM10.59,15.41a2,2 0,0 0,2.83 0l5.66,-8.49 -8.49,5.66a2,2 0,0 0,0 2.83z"
+              />
+            </svg>
           </a-button>
         </a-tooltip>
       </div>
@@ -167,10 +182,8 @@ import { ref, reactive, onMounted, onBeforeUnmount } from "vue";
 import {
   CheckCircleFilled,
   DeleteOutlined,
-  EditFilled,
   EditOutlined,
   PlusOutlined,
-  SignalFilled,
 } from "@ant-design/icons-vue";
 import { theme, Modal, message } from "ant-design-vue";
 import { Storage } from "@bindings/desktop/internal/storage";
@@ -498,8 +511,8 @@ onBeforeUnmount(() => {
     gap: 4px;
 
     .card-extra-btn {
-      width: 24px;
-      height: 24px;
+      width: 28px;
+      height: 28px;
       padding: 0;
       display: inline-flex;
       align-items: center;
@@ -507,6 +520,12 @@ onBeforeUnmount(() => {
 
       .anticon {
         font-size: 14px;
+      }
+
+      .head-icon {
+        width: 18px;
+        height: 18px;
+        display: block;
       }
     }
   }

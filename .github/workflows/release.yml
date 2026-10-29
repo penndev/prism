@@ -1,0 +1,265 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  WAILS3_VERSION: v3.0.0-alpha.82
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: desktop
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows amd64
+            os: windows-latest
+            goos: windows
+            artifact: Prism-desktop-windows-amd64
+          - name: macOS arm64
+            os: macos-latest
+            goos: darwin
+            artifact: Prism-desktop-darwin-arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: desktop/go.mod
+          cache-dependency-path: |
+            go.sum
+            desktop/go.sum
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: desktop/frontend/package-lock.json
+
+      - name: Install NSIS
+        if: matrix.goos == 'windows'
+        shell: pwsh
+        run: |
+          choco install nsis -y --no-progress
+          echo "C:\Program Files (x86)\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Install Task
+        uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Wails3 CLI
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@${{ env.WAILS3_VERSION }}
+
+      - name: Fill about placeholders
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="$(git tag -l 'v*' --sort=-v:refname | head -n1)"
+          fi
+          if [[ -z "${TAG}" ]]; then
+            echo "no v* tag" >&2
+            exit 1
+          fi
+          WEBSITE="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/"
+          FILE="frontend/src/components/SettingPanel.vue"
+          sed -i.bak "s|<version>|${TAG}|g" "$FILE"
+          sed -i.bak "s|<website>|${WEBSITE}|g" "$FILE"
+          rm -f "${FILE}.bak"
+
+      - name: Package
+        run: wails3 package
+
+      - name: Collect artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          case "${{ matrix.goos }}" in
+            windows)
+              installer="$(ls bin/*-installer.exe | head -n 1)"
+              cp "$installer" "dist/${{ matrix.artifact }}-installer.exe"
+              ;;
+            darwin)
+              STAGE="$(mktemp -d)"
+              SCRIPTS="$(mktemp -d)"
+              export COPYFILE_DISABLE=1
+              ditto "bin/Prism.app" "$STAGE/Prism.app"
+              cp build/darwin/pkg/preinstall "$SCRIPTS/preinstall"
+              chmod 755 "$SCRIPTS/preinstall"
+              IDENTIFIER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' bin/Prism.app/Contents/Info.plist)"
+              VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' bin/Prism.app/Contents/Info.plist)"
+              pkgbuild \
+                --root "$STAGE" \
+                --identifier "$IDENTIFIER" \
+                --version "$VERSION" \
+                --install-location /Applications \
+                --component-plist build/darwin/pkg/components.plist \
+                --scripts "$SCRIPTS" \
+                "dist/${{ matrix.artifact }}.pkg"
+              rm -rf "$STAGE" "$SCRIPTS"
+              ;;
+          esac
+          ls -la dist
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: desktop/dist/*
+          if-no-files-found: error
+          retention-days: 14
+
+  android:
+    name: Android
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager --install "ndk;27.2.12479018"
+
+      - name: Build engine AAR
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.2.12479018
+          CGO_LDFLAGS: -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384
+        run: |
+          set -euo pipefail
+          go install golang.org/x/mobile/cmd/gomobile golang.org/x/mobile/cmd/gobind
+          gomobile init
+          gomobile bind -target=android -androidapi 26 -javapkg com.penndev.prism -o android/engine/engine.aar github.com/penndev/prism/engine
+
+      - name: Set version
+        working-directory: android
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="$(git tag -l 'v*' --sort=-v:refname | head -n1)"
+          fi
+          if [[ -z "${TAG}" ]]; then
+            echo "no v* tag" >&2
+            exit 1
+          fi
+          CODE="$(git rev-list --count HEAD)"
+          sed -i "s/versionCode = .*/versionCode = ${CODE}/" app/build.gradle.kts
+          sed -i "s/versionName = \".*\"/versionName = \"${TAG#v}\"/" app/build.gradle.kts
+
+      - name: Point Gradle wrapper at the official distribution
+        working-directory: android
+        run: sed -i 's|mirrors.cloud.tencent.com/gradle/|services.gradle.org/distributions/|' gradle/wrapper/gradle-wrapper.properties
+
+      - name: Build release APK
+        working-directory: android
+        run: java -classpath gradle/wrapper/gradle-wrapper.jar org.gradle.wrapper.GradleWrapperMain assembleRelease --no-daemon
+
+      - name: Sign APK
+        working-directory: android
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          store="$RUNNER_TEMP/release.keystore"
+          if [[ -n "${ANDROID_KEYSTORE_BASE64}" ]]; then
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$store"
+            ks_pass="$ANDROID_KEYSTORE_PASSWORD"
+            key_alias="$ANDROID_KEY_ALIAS"
+            key_pass="$ANDROID_KEY_PASSWORD"
+          else
+            ks_pass=prism
+            key_alias=prism
+            key_pass=prism
+            keytool -genkeypair -keystore "$store" -alias "$key_alias" -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass "$ks_pass" -keypass "$key_pass" -dname "CN=Prism"
+            echo "::warning::未配置 Android 签名 secret，本次 APK 使用临时密钥，不能覆盖安装上一版。"
+          fi
+          unsigned="$(find app/build/outputs/apk/release -name '*.apk' | head -n 1)"
+          bt="$(find "${ANDROID_HOME}/build-tools" -mindepth 1 -maxdepth 1 -type d | sort | tail -n 1)"
+          "$bt/zipalign" -f -p 4 "$unsigned" "$RUNNER_TEMP/aligned.apk"
+          "$bt/apksigner" sign \
+            --ks "$store" \
+            --ks-pass "pass:${ks_pass}" \
+            --ks-key-alias "$key_alias" \
+            --key-pass "pass:${key_pass}" \
+            --out dist/Prism-android.apk \
+            "$RUNNER_TEMP/aligned.apk"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Prism-android
+          path: android/dist/*
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: GitHub Release
+    needs: [build, android]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

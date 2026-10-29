@@ -23,18 +23,21 @@ const messages = {
     platformIos: "iOS",
     winDesc: "64 位安装包",
     macDesc: "Apple 芯片（arm64）安装包",
-    androidDesc: "暂未提供",
+    androidDesc: "安装包",
     iosDesc: "暂未提供",
     installWinToggle: "Windows 安装说明",
     installWinSteps:
-      "<li>点上方 Windows 下载 <code>Prism-windows-amd64-installer.exe</code>。</li><li>运行安装向导，装完后从开始菜单打开 Prism。</li>",
+      "<li>点上方 Windows 下载 <code>Prism-desktop-windows-amd64-installer.exe</code>。</li><li>运行安装向导，装完后从开始菜单打开 Prism。</li>",
     installWinSign:
       "安装包目前未做代码签名。若弹出 Windows 安全提示，选「更多信息」→「仍要运行」。",
     installMacToggle: "macOS 安装说明",
     installMacSteps:
-      "<li>点上方 macOS 下载并打开 <code>Prism-darwin-arm64.pkg</code>。</li><li>按安装向导装到「应用程序」，再从启动台打开。</li>",
+      "<li>点上方 macOS 下载并打开 <code>Prism-desktop-darwin-arm64.pkg</code>。</li><li>按安装向导装到「应用程序」，再从启动台打开。</li>",
     installMacSign:
       "若提示无法验证开发者：系统设置 → 隐私与安全性 → 仍要打开。",
+    installAndroidToggle: "Android 安装说明",
+    installAndroidSteps:
+      "<li>点上方 Android 下载 <code>Prism-android.apk</code>。</li><li>在手机上打开安装。若被拦截，到系统设置里允许安装未知应用。</li>",
     proxyTitle: "代理说明",
     proxyIntro:
       "先选一个节点，再在代理面板里选模式。桌面端是手动模式或 TUN；移动端没有这个开关，一律走系统 VPN，效果接近 TUN。",
@@ -159,18 +162,21 @@ const messages = {
     platformIos: "iOS",
     winDesc: "64-bit installer",
     macDesc: "Apple silicon (arm64) installer",
-    androidDesc: "Not available yet",
+    androidDesc: "APK",
     iosDesc: "Not available yet",
     installWinToggle: "Windows installation",
     installWinSteps:
-      "<li>Use Windows above to get <code>Prism-windows-amd64-installer.exe</code>.</li><li>Run the wizard, then open Prism from the Start menu.</li>",
+      "<li>Use Windows above to get <code>Prism-desktop-windows-amd64-installer.exe</code>.</li><li>Run the wizard, then open Prism from the Start menu.</li>",
     installWinSign:
       "Builds are not code-signed yet. If SmartScreen appears, choose More info → Run anyway.",
     installMacToggle: "macOS installation",
     installMacSteps:
-      "<li>Use macOS above to open <code>Prism-darwin-arm64.pkg</code>.</li><li>Follow the installer into Applications, then open Prism from Launchpad.</li>",
+      "<li>Use macOS above to open <code>Prism-desktop-darwin-arm64.pkg</code>.</li><li>Follow the installer into Applications, then open Prism from Launchpad.</li>",
     installMacSign:
       "If macOS says the developer cannot be verified: System Settings → Privacy & Security → Open Anyway.",
+    installAndroidToggle: "Android installation",
+    installAndroidSteps:
+      "<li>Use Android above to get <code>Prism-android.apk</code>.</li><li>Open it on the phone. If the system blocks it, allow unknown apps in Settings.</li>",
     proxyTitle: "Proxy modes",
     proxyIntro:
       "Select a node, then pick a mode on the proxy panel. Desktop has Manual and TUN. Mobile has no switch — it always uses a system VPN, close to TUN.",
