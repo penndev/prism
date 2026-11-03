@@ -77,6 +77,8 @@ class PrismVpnService : VpnService() {
             .setMtu(MTU)
             .addAddress(TUN_IPV4, 32)
             .addRoute("0.0.0.0", 0)
+            .addAddress(TUN_IPV6, 128)
+            .addRoute("::", 0)
             .addDnsServer(TUN_DNS)
             .setBlocking(true)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -274,6 +276,7 @@ class PrismVpnService : VpnService() {
         private const val NOTIFICATION_ID = 1
         private const val MTU = 1500
         private const val TUN_IPV4 = "172.19.0.1"
+        private const val TUN_IPV6 = "fd19::1"
 
         // 只是告诉系统「隧道内的 DNS 服务器是这个地址」。
         // 实际上所有目标端口 53 的 UDP 都在 Go 侧被 fakeip 无条件劫持，不看目标 IP，

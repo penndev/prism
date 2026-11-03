@@ -94,7 +94,11 @@ enum TunnelBridge {
     }
 
     private static func append(_ kind: LogKind, _ line: String) {
-        let text = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = line
+            .components(separatedBy: .newlines)
+            .joined(separator: " ")
+            .replacingOccurrences(of: "\t", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         if text.isEmpty { return }
         if !Prefs().loadSettings().system.enableLogRecording { return }
         lock.lock()

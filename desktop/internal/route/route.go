@@ -42,6 +42,9 @@ func Start(options Options) error {
 		}
 		if err := SetRouteAddr(item, gw); err != nil {
 			internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "SetRouteAddr failed: "+err.Error())
+			if item.Addr().Is6() {
+				return err
+			}
 		}
 	}
 	setDevDNS(options.DevName)

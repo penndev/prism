@@ -12,162 +12,206 @@ import (
 )
 
 const (
-	udpTimeout = 5 * time.Second
-	fakeTTL    = 60
-	mapTTL     = 30 * time.Minute
+	upstreamTimeout = 5 * time.Second
+	dnsAnswerTTL    = 60
+	addressMapTTL   = 30 * time.Minute
+	fakeIPv4CIDR    = "198.18.0.0/15"
+	fakeIPv6CIDR    = "fd19:ffff:198:18::/64"
 
-	// DefaultUpstream 是没有配置上游 DNS 时的兜底地址。
+	// DefaultUpstream is used when no DNS server has been configured.
 	DefaultUpstream = "8.8.8.8:53"
 )
 
 var (
-	mu       sync.Mutex
-	optMu    sync.RWMutex
-	p        *pool
-	hostToIP = ttlmap.New()
-	ipToHost = ttlmap.New()
+	addressMu sync.Mutex
+	configMu  sync.RWMutex
+	ipv4Pool  *addressPool
+	ipv6Pool  *addressPool
 
-	needFake func(string) bool
-	handle   transport.HandleConnect
-	upstream = DefaultUpstream
+	hostToIPv4 = ttlmap.New()
+	ipv4ToHost = ttlmap.New()
+	hostToIPv6 = ttlmap.New()
+	ipv6ToHost = ttlmap.New()
+
+	shouldFakeDomain func(string) bool
+	dnsForwarder     transport.HandleConnect
+	dnsUpstream      = DefaultUpstream
 )
 
 func init() {
 	var err error
-	p, err = newPool(defaultNet)
+	ipv4Pool, err = newIPv4Pool(fakeIPv4CIDR)
 	if err != nil {
 		panic(err)
 	}
-	handle = transport.Local()
-}
-
-func SetNeedFake(fn func(domain string) bool) {
-	optMu.Lock()
-	needFake = fn
-	optMu.Unlock()
-}
-
-func SetHandleConnect(h transport.HandleConnect) {
-	optMu.Lock()
-	if h != nil {
-		handle = h
+	ipv6Pool, err = newIPv6Pool(fakeIPv6CIDR)
+	if err != nil {
+		panic(err)
 	}
-	optMu.Unlock()
+	dnsForwarder = transport.Local()
 }
 
-func SetUpstream(dnsAddr string) {
-	dnsAddr = strings.TrimSpace(dnsAddr)
-	if dnsAddr == "" {
+// SetNeedFake sets the predicate that selects domains for synthetic answers.
+func SetNeedFake(shouldFake func(domain string) bool) {
+	configMu.Lock()
+	shouldFakeDomain = shouldFake
+	configMu.Unlock()
+}
+
+// SetHandleConnect sets the connection handler used to reach the DNS upstream.
+func SetHandleConnect(connect transport.HandleConnect) {
+	configMu.Lock()
+	if connect != nil {
+		dnsForwarder = connect
+	}
+	configMu.Unlock()
+}
+
+// SetUpstream sets the DNS server for queries that are not answered locally.
+func SetUpstream(address string) {
+	address = strings.TrimSpace(address)
+	if address == "" {
 		return
 	}
-	if _, _, err := net.SplitHostPort(dnsAddr); err != nil {
-		dnsAddr = net.JoinHostPort(dnsAddr, "53")
+	if _, _, err := net.SplitHostPort(address); err != nil {
+		address = net.JoinHostPort(address, "53")
 	}
-	optMu.Lock()
-	upstream = dnsAddr
-	optMu.Unlock()
+	configMu.Lock()
+	dnsUpstream = address
+	configMu.Unlock()
 }
 
-func Lookup(fakeIP string) (string, bool) {
-	ip := net.ParseIP(strings.TrimSpace(fakeIP))
+// Lookup returns the domain associated with a synthetic IPv4 or IPv6 address.
+func Lookup(address string) (string, bool) {
+	ip := net.ParseIP(strings.TrimSpace(address))
 	if ip == nil {
 		return "", false
 	}
-	if v4 := ip.To4(); v4 != nil {
-		ip = v4
+	if ipv4 := ip.To4(); ipv4 != nil {
+		value, ok := ipv4ToHost.Get(ipv4.String())
+		if !ok {
+			return "", false
+		}
+		domain, _ := value.(string)
+		return domain, domain != ""
 	}
-	d, ok := ipToHost.Get(ip.String())
+	value, ok := ipv6ToHost.Get(ip.String())
 	if !ok {
 		return "", false
 	}
-	s, _ := d.(string)
-	return s, s != ""
+	domain, _ := value.(string)
+	return domain, domain != ""
 }
 
-// Answer 回答一条 DNS 查询。命中 fake 名单的 A/AAAA 在本地生成，其余原样转给上游。
+// Answer handles a DNS wire-format query, synthesizing addresses for selected domains.
 func Answer(query []byte) ([]byte, error) {
-	req := new(dns.Msg)
-	if err := req.Unpack(query); err != nil {
+	request := new(dns.Msg)
+	if err := request.Unpack(query); err != nil {
 		return nil, err
 	}
-	if len(req.Question) == 0 {
+	if len(request.Question) == 0 {
 		return nil, nil
 	}
-	q := req.Question[0]
-	name := strings.ToLower(strings.TrimSuffix(strings.TrimSpace(q.Name), "."))
 
-	optMu.RLock()
-	fn := needFake
-	optMu.RUnlock()
-	if name != "" && fn != nil && fn(name) && (q.Qtype == dns.TypeA || q.Qtype == dns.TypeAAAA) {
-		resp := new(dns.Msg)
-		resp.SetReply(req)
-		resp.Authoritative = true
-		resp.RecursionAvailable = true
-		if q.Qtype == dns.TypeA {
-			ip := assign(name)
-			if ip != nil {
-				resp.Answer = append(resp.Answer, &dns.A{
-					Hdr: dns.RR_Header{Name: q.Name, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: fakeTTL},
-					A:   ip,
-				})
-			}
+	question := request.Question[0]
+	domain := strings.ToLower(strings.TrimSuffix(strings.TrimSpace(question.Name), "."))
+	configMu.RLock()
+	shouldFake := shouldFakeDomain
+	configMu.RUnlock()
+	if domain != "" && shouldFake != nil && shouldFake(domain) {
+		if response, handled, err := synthesizeAnswer(request, question, domain); handled || err != nil {
+			return response, err
 		}
-		return resp.Pack()
 	}
-	return forward(req)
+	return forward(request)
 }
 
-func assign(domain string) net.IP {
-	mu.Lock()
-	defer mu.Unlock()
-	if v, ok := hostToIP.Get(domain); ok {
-		if ip, ok := v.(net.IP); ok && ip != nil {
-			hostToIP.Set(domain, ip, mapTTL)
-			ipToHost.Set(ip.String(), domain, mapTTL)
-			return ip
+func synthesizeAnswer(request *dns.Msg, question dns.Question, domain string) ([]byte, bool, error) {
+	var record dns.RR
+	switch question.Qtype {
+	case dns.TypeA:
+		if address := assignAddress(domain, ipv4Pool, hostToIPv4, ipv4ToHost); address != nil {
+			record = &dns.A{A: address}
+		}
+	case dns.TypeAAAA:
+		if address := assignAddress(domain, ipv6Pool, hostToIPv6, ipv6ToHost); address != nil {
+			record = &dns.AAAA{AAAA: address}
+		}
+	default:
+		return nil, false, nil
+	}
+
+	response := new(dns.Msg)
+	response.SetReply(request)
+	response.Authoritative = true
+	response.RecursionAvailable = true
+	if record != nil {
+		record.Header().Name = question.Name
+		record.Header().Class = dns.ClassINET
+		record.Header().Ttl = dnsAnswerTTL
+		response.Answer = append(response.Answer, record)
+	}
+	packed, err := response.Pack()
+	return packed, true, err
+}
+
+func assignAddress(domain string, pool *addressPool, hostToAddress, addressToHost interface {
+	Get(string) (any, bool)
+	Set(string, any, time.Duration)
+	Delete(any)
+}) net.IP {
+	addressMu.Lock()
+	defer addressMu.Unlock()
+
+	if value, ok := hostToAddress.Get(domain); ok {
+		if address, ok := value.(net.IP); ok && address != nil {
+			hostToAddress.Set(domain, address, addressMapTTL)
+			addressToHost.Set(address.String(), domain, addressMapTTL)
+			return address
 		}
 	}
-	ip := p.nextIP()
-	if ip == nil {
+
+	address := pool.nextIP()
+	if address == nil {
 		return nil
 	}
-	if old, ok := ipToHost.Get(ip.String()); ok {
-		if s, ok := old.(string); ok {
-			hostToIP.Delete(s)
+	if value, ok := addressToHost.Get(address.String()); ok {
+		if previousDomain, ok := value.(string); ok {
+			hostToAddress.Delete(previousDomain)
 		}
 	}
-	hostToIP.Set(domain, ip, mapTTL)
-	ipToHost.Set(ip.String(), domain, mapTTL)
-	return ip
+	hostToAddress.Set(domain, address, addressMapTTL)
+	addressToHost.Set(address.String(), domain, addressMapTTL)
+	return address
 }
 
-func forward(req *dns.Msg) ([]byte, error) {
-	optMu.RLock()
-	h := handle
-	up := upstream
-	optMu.RUnlock()
-	if h == nil {
-		h = transport.Local()
+func forward(request *dns.Msg) ([]byte, error) {
+	configMu.RLock()
+	connect := dnsForwarder
+	upstream := dnsUpstream
+	configMu.RUnlock()
+	if connect == nil {
+		connect = transport.Local()
 	}
-	packed, err := req.Pack()
+
+	packed, err := request.Pack()
 	if err != nil {
 		return nil, err
 	}
-	left, right := net.Pipe()
+	client, server := net.Pipe()
 	go func() {
-		_ = h(right, "udp", up)
-		_ = right.Close()
+		_ = connect(server, "udp", upstream)
+		_ = server.Close()
 	}()
-	defer left.Close()
-	_ = left.SetDeadline(time.Now().Add(udpTimeout))
-	if _, err := left.Write(packed); err != nil {
+	defer client.Close()
+	_ = client.SetDeadline(time.Now().Add(upstreamTimeout))
+	if _, err := client.Write(packed); err != nil {
 		return nil, err
 	}
-	buf := make([]byte, 4096)
-	n, err := left.Read(buf)
+	response := make([]byte, 4096)
+	n, err := client.Read(response)
 	if err != nil {
 		return nil, err
 	}
-	return buf[:n], nil
+	return response[:n], nil
 }

@@ -27,6 +27,7 @@ import { CloseOutlined } from "@ant-design/icons-vue";
 import { t } from "@/locale";
 import { theme } from "ant-design-vue";
 import { AppConfig } from "@bindings/desktop/internal/appconst";
+import { formatLogLine } from "@/utils";
 
 const { token } = theme.useToken();
 
@@ -66,7 +67,9 @@ onMounted(async () => {
       eventName,
       // 整个 BottomBar 挂在 enableLogRecording 的 v-if 下，这里不用再判一次
       (eventPayload) => {
-        lines.value.push(String(eventPayload.data));
+        const line = formatLogLine(eventPayload.data);
+        if (!line) return;
+        lines.value.push(line);
         if (lines.value.length > MAX_LOG_LINES) {
           lines.value.shift();
         }

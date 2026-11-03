@@ -54,7 +54,7 @@ fun SettingsScreen(
 ) {
     val settings = state.settings
     val context = LocalContext.current
-    val aboutVersion = "0.0.1"
+    val aboutVersion = context.packageManager.getPackageInfo(context.packageName, 0).versionName.orEmpty()
     val aboutWebsite = "https://penndev.github.io/prism/"
     val privacyPolicy = "https://penndev.github.io/prism/privacy.html"
     var dialog by remember { mutableStateOf(SettingsDialog.None) }

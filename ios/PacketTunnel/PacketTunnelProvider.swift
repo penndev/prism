@@ -21,7 +21,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         ipv4.includedRoutes = [NEIPv4Route.default()]
         settings.ipv4Settings = ipv4
         // 把 IPv6 默认路由也收进隧道，否则系统会继续用局域网的 IPv6 DNS，查询进不了引擎。
-        let ipv6 = NEIPv6Settings(addresses: ["fdfe:dcba:9876::1"], networkPrefixLengths: [NSNumber(value: 128)])
+        let ipv6 = NEIPv6Settings(addresses: ["fd19::1"], networkPrefixLengths: [NSNumber(value: 128)])
         ipv6.includedRoutes = [NEIPv6Route.default()]
         settings.ipv6Settings = ipv6
         // 8.8.8.8 会被系统升级成加密 DNS，不走 UDP/53。这里用只在隧道里可达的地址，并强制明文。

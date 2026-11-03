@@ -554,7 +554,8 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun stamp(line: String): String {
         val time = java.time.LocalTime.now().format(logClock)
-        return "$time $line"
+        val singleLine = line.replace(Regex("[\\r\\n\\t]+"), " ").trim()
+        return "$time $singleLine"
     }
 
     private fun refreshEngineUi() {

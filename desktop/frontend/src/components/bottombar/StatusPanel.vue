@@ -27,6 +27,7 @@ import { CloseOutlined } from "@ant-design/icons-vue";
 import { t } from "@/locale";
 import { theme } from "ant-design-vue";
 import { AppConfig } from "@bindings/desktop/internal/appconst";
+import { formatLogLine } from "@/utils";
 
 const { token } = theme.useToken();
 
@@ -52,7 +53,9 @@ onMounted(async () => {
   try {
     const appConst = await AppConfig();
     statusEventOff = Events.On(appConst.LogTypeName_STATUS, (eventPayload) => {
-      lines.value.push(String(eventPayload.data));
+      const line = formatLogLine(eventPayload.data);
+      if (!line) return;
+      lines.value.push(line);
       if (lines.value.length > MAX_STATUS_LINES) {
         lines.value.shift();
       }

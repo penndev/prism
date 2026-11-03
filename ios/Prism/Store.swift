@@ -574,7 +574,13 @@ final class Store: ObservableObject {
     }
 
     private func appendStatus(_ line: String) {
-        statusLogs = Array((statusLogs + ["\(logClock.string(from: Date())) \(line)"]).suffix(logLimit))
+        let singleLine = line
+            .components(separatedBy: .newlines)
+            .joined(separator: " ")
+            .replacingOccurrences(of: "\t", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !singleLine.isEmpty else { return }
+        statusLogs = Array((statusLogs + ["\(logClock.string(from: Date())) \(singleLine)"]).suffix(logLimit))
     }
 
     private func refreshEngineUi() {

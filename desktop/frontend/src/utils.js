@@ -10,6 +10,23 @@ export function debounce(fn, delay = 1000) {
   };
 }
 
+const logClock = new Intl.DateTimeFormat("en-GB", {
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  fractionalSecondDigits: 3,
+  hourCycle: "h23",
+});
+
+export function formatLogLine(value) {
+  const line = String(value ?? "")
+    .replace(/[\r\n\t]+/g, " ")
+    .trim();
+  if (!line) return "";
+  const time = logClock.format(new Date());
+  return `${time} ${line}`;
+}
+
 /**
  * 在 document 上监听 mousemove/mouseup，按轴向拖拽更新数值（与 BottomBar 纵向拖拽同一模式）。
  * @param {MouseEvent} e

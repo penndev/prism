@@ -5,7 +5,9 @@ struct SettingsView: View {
     @Environment(\.openURL) private var openURL
     @State private var dialog: SettingsDialog = .none
     @State private var latencyDraft = ""
-    private let aboutVersion = "0.0.1"
+    private var aboutVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+    }
     private let aboutWebsite = "https://penndev.github.io/prism/"
     private let privacyPolicy = "https://penndev.github.io/prism/privacy.html"
 

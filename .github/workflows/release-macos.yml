@@ -1,0 +1,165 @@
+name: macOS Desktop Build
+on:
+  workflow_call:
+permissions:
+  contents: read
+env:
+  WAILS3_VERSION: v3.0.0-alpha.82
+jobs:
+  macos:
+    name: macOS arm64
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: desktop/go.mod
+          cache-dependency-path: |
+            go.sum
+            desktop/go.sum
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: desktop/frontend/package-lock.json
+
+      - name: Install Task
+        uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Wails3 CLI
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@${{ env.WAILS3_VERSION }}
+
+      - name: Fill about placeholders
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="$(git tag -l 'v*' --sort=-v:refname | head -n1)"
+          fi
+          if [[ -z "${TAG}" ]]; then echo "no v* tag" >&2; exit 1; fi
+          WEBSITE="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/"
+          FILE="frontend/src/components/SettingPanel.vue"
+          VERSION="${TAG#v}"
+          sed -i.bak "s|<version>|${TAG}|g" "$FILE"
+          sed -i.bak "s|<website>|${WEBSITE}|g" "$FILE"
+          rm -f "${FILE}.bak"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION}" build/darwin/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${VERSION}" build/darwin/Info.plist
+
+      - name: Package
+        run: wails3 package
+
+      - name: Import macOS signing identities
+        shell: bash
+        env:
+          APP_P12_BASE64: ${{ secrets.MACOS_SIGNING_APP_P12_BASE64 }}
+          APP_P12_PASSWORD: ${{ secrets.MACOS_SIGNING_APP_P12_PASSWORD }}
+          INSTALLER_P12_BASE64: ${{ secrets.MACOS_SIGNING_INSTALLER_P12_BASE64 }}
+          INSTALLER_P12_PASSWORD: ${{ secrets.MACOS_SIGNING_INSTALLER_P12_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.MACOS_SIGNING_KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          : "${APP_P12_BASE64:?Missing MACOS_SIGNING_APP_P12_BASE64 secret}"
+          : "${APP_P12_PASSWORD:?Missing MACOS_SIGNING_APP_P12_PASSWORD secret}"
+          : "${INSTALLER_P12_BASE64:?Missing MACOS_SIGNING_INSTALLER_P12_BASE64 secret}"
+          : "${INSTALLER_P12_PASSWORD:?Missing MACOS_SIGNING_INSTALLER_P12_PASSWORD secret}"
+          : "${KEYCHAIN_PASSWORD:?Missing MACOS_SIGNING_KEYCHAIN_PASSWORD secret}"
+          keychain="$RUNNER_TEMP/prism-signing.keychain-db"
+          app_p12="$RUNNER_TEMP/developer-id-application.p12"
+          installer_p12="$RUNNER_TEMP/developer-id-installer.p12"
+          printf '%s' "$APP_P12_BASE64" | base64 -D -o "$app_p12"
+          printf '%s' "$INSTALLER_P12_BASE64" | base64 -D -o "$installer_p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$keychain"
+          security import "$app_p12" -k "$keychain" -P "$APP_P12_PASSWORD" -T /usr/bin/codesign
+          security import "$installer_p12" -k "$keychain" -P "$INSTALLER_P12_PASSWORD" -T /usr/bin/productsign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$keychain"
+          security list-keychains -d user -s "$keychain"
+          identities="$(security find-identity -v "$keychain")"
+          app_identity="$(printf '%s\n' "$identities" | sed -n 's/.*"\(Developer ID Application:.*\)"/\1/p' | head -n 1)"
+          installer_identity="$(printf '%s\n' "$identities" | sed -n 's/.*"\(Developer ID Installer:.*\)"/\1/p' | head -n 1)"
+          if [[ -z "$app_identity" || -z "$installer_identity" ]]; then
+            echo "Could not find both Developer ID identities." >&2
+            printf '%s\n' "$identities" >&2
+            exit 1
+          fi
+          echo "MACOS_APP_SIGN_IDENTITY=$app_identity" >> "$GITHUB_ENV"
+          echo "MACOS_INSTALLER_SIGN_IDENTITY=$installer_identity" >> "$GITHUB_ENV"
+
+      - name: Sign macOS app
+        shell: bash
+        run: |
+          set -euo pipefail
+          wails3 tool sign --input "bin/Prism.app" --identity "$MACOS_APP_SIGN_IDENTITY"
+          codesign --verify --deep --strict --verbose=2 "bin/Prism.app"
+
+      - name: Build signed installer
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          STAGE="$(mktemp -d)"
+          SCRIPTS="$(mktemp -d)"
+          export COPYFILE_DISABLE=1
+          ditto "bin/Prism.app" "$STAGE/Prism.app"
+          cp build/darwin/pkg/preinstall "$SCRIPTS/preinstall"
+          chmod 755 "$SCRIPTS/preinstall"
+          IDENTIFIER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' bin/Prism.app/Contents/Info.plist)"
+          VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' bin/Prism.app/Contents/Info.plist)"
+          UNSIGNED_PKG="$RUNNER_TEMP/Prism-desktop-darwin-arm64-unsigned.pkg"
+          pkgbuild --root "$STAGE" --identifier "$IDENTIFIER" --version "$VERSION" \
+            --install-location /Applications --component-plist build/darwin/pkg/components.plist \
+            --scripts "$SCRIPTS" "$UNSIGNED_PKG"
+          productsign --sign "$MACOS_INSTALLER_SIGN_IDENTITY" "$UNSIGNED_PKG" \
+            "dist/Prism-desktop-darwin-arm64.pkg"
+          rm -f "$UNSIGNED_PKG"
+          rm -rf "$STAGE" "$SCRIPTS"
+
+      - name: Notarize and staple macOS installer
+        shell: bash
+        env:
+          NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARIZATION_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARIZATION_ISSUER_ID }}
+          NOTARY_API_KEY_P8: ${{ secrets.MACOS_NOTARIZATION_API_KEY_P8 }}
+        run: |
+          set -euo pipefail
+          : "${NOTARY_KEY_ID:?Missing MACOS_NOTARIZATION_KEY_ID secret}"
+          : "${NOTARY_ISSUER_ID:?Missing MACOS_NOTARIZATION_ISSUER_ID secret}"
+          : "${NOTARY_API_KEY_P8:?Missing MACOS_NOTARIZATION_API_KEY_P8 secret}"
+          pkg="dist/Prism-desktop-darwin-arm64.pkg"
+          api_key="$RUNNER_TEMP/AuthKey_${NOTARY_KEY_ID}.p8"
+          printf '%s' "$NOTARY_API_KEY_P8" > "$api_key"
+          xcrun notarytool submit "$pkg" --key "$api_key" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" --wait
+          xcrun stapler staple "$pkg"
+          xcrun stapler validate "$pkg"
+          pkgutil --check-signature "$pkg"
+          rm -f "$api_key"
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Prism-desktop-darwin-arm64
+          path: desktop/dist/*
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Remove macOS signing keychain
+        if: always()
+        shell: bash
+        run: security delete-keychain "$RUNNER_TEMP/prism-signing.keychain-db" || true

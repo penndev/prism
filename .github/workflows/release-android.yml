@@ -1,0 +1,116 @@
+name: Android Build
+on:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  android:
+    name: Android
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install NDK
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager --install "ndk;27.2.12479018"
+
+      - name: Build engine AAR
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.2.12479018
+          CGO_LDFLAGS: -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384
+        run: |
+          set -euo pipefail
+          go install golang.org/x/mobile/cmd/gomobile golang.org/x/mobile/cmd/gobind
+          gomobile init
+          gomobile bind -target=android -androidapi 26 -javapkg com.penndev.prism -o android/engine/engine.aar github.com/penndev/prism/engine
+
+      - name: Set version
+        working-directory: android
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="$(git tag -l 'v*' --sort=-v:refname | head -n1)"
+          fi
+          if [[ -z "${TAG}" ]]; then
+            echo "no v* tag" >&2
+            exit 1
+          fi
+          CODE="$(git rev-list --count HEAD)"
+          sed -i "s/versionCode = .*/versionCode = ${CODE}/" app/build.gradle.kts
+          sed -i "s/versionName = \".*\"/versionName = \"${TAG#v}\"/" app/build.gradle.kts
+
+      - name: Point Gradle wrapper at the official distribution
+        working-directory: android
+        run: sed -i 's|mirrors.cloud.tencent.com/gradle/|services.gradle.org/distributions/|' gradle/wrapper/gradle-wrapper.properties
+
+      - name: Build release APK
+        working-directory: android
+        run: java -classpath gradle/wrapper/gradle-wrapper.jar org.gradle.wrapper.GradleWrapperMain assembleRelease --no-daemon
+
+      - name: Sign APK
+        working-directory: android
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          store="$RUNNER_TEMP/release.keystore"
+          if [[ -n "${ANDROID_KEYSTORE_BASE64}" ]]; then
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$store"
+            ks_pass="$ANDROID_KEYSTORE_PASSWORD"
+            key_alias="$ANDROID_KEY_ALIAS"
+            key_pass="$ANDROID_KEY_PASSWORD"
+          else
+            ks_pass=prism
+            key_alias=prism
+            key_pass=prism
+            keytool -genkeypair -keystore "$store" -alias "$key_alias" -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass "$ks_pass" -keypass "$key_pass" -dname "CN=Prism"
+            echo "::warning::鏈厤缃?Android 绛惧悕 secret锛屾湰娆?APK 浣跨敤涓存椂瀵嗛挜锛屼笉鑳借鐩栧畨瑁呬笂涓€鐗堛€?
+          fi
+          unsigned="$(find app/build/outputs/apk/release -name '*.apk' | head -n 1)"
+          bt="$(find "${ANDROID_HOME}/build-tools" -mindepth 1 -maxdepth 1 -type d | sort | tail -n 1)"
+          "$bt/zipalign" -f -p 4 "$unsigned" "$RUNNER_TEMP/aligned.apk"
+          "$bt/apksigner" sign \
+            --ks "$store" \
+            --ks-pass "pass:${ks_pass}" \
+            --ks-key-alias "$key_alias" \
+            --key-pass "pass:${key_pass}" \
+            --out dist/Prism-android.apk \
+            "$RUNNER_TEMP/aligned.apk"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Prism-android
+          path: android/dist/*
+          if-no-files-found: error
+          retention-days: 14

@@ -27,6 +27,8 @@ func init() {
 	TUN_IP = netip.MustParsePrefix("172.19.0.1/32")
 	TUN_IP6 = netip.MustParsePrefix("fd19::1/128")
 	Routes = []netip.Prefix{
+		netip.MustParsePrefix("::/1"),
+		netip.MustParsePrefix("8000::/1"),
 		netip.MustParsePrefix("1.0.0.0/8"),
 		netip.MustParsePrefix("2.0.0.0/7"),
 		netip.MustParsePrefix("4.0.0.0/6"),
