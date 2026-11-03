@@ -107,7 +107,10 @@ jobs:
         run: |
           set -euo pipefail
           wails3 tool sign --input "bin/Prism.app" --identity "$MACOS_APP_SIGN_IDENTITY"
+          codesign --force --deep --options runtime --timestamp \
+            --sign "$MACOS_APP_SIGN_IDENTITY" "bin/Prism.app"
           codesign --verify --deep --strict --verbose=2 "bin/Prism.app"
+          codesign --display --verbose=2 "bin/Prism.app/Contents/MacOS/Prism" 2>&1 | grep -q 'flags=.*runtime'
 
       - name: Build signed installer
         shell: bash
