@@ -155,11 +155,12 @@ jobs:
             --issuer "$NOTARY_ISSUER_ID" --output-format json > "$submission"
           cat "$submission"
           submission_id="$(jq -r '.id // empty' "$submission")"
-          status="$(jq -r '.status // empty' "$submission")"
           if [[ -z "$submission_id" ]]; then
             echo "Apple notarization did not return a submission ID." >&2
             exit 1
           fi
+          echo "Apple notarization submission created: $submission_id"
+          status="In Progress"
           deadline=$((SECONDS + 1800))
           while [[ "$status" == "In Progress" ]]; do
             if (( SECONDS >= deadline )); then
@@ -168,12 +169,15 @@ jobs:
                 --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" --output-format json || true
               exit 1
             fi
-            echo "Apple notarization status: $status; checking again in 15 seconds."
-            sleep 15
+            echo "Checking Apple notarization status for submission $submission_id."
             xcrun notarytool info "$submission_id" --key "$api_key" \
               --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" --output-format json > "$result"
             cat "$result"
             status="$(jq -r '.status // empty' "$result")"
+            if [[ "$status" == "In Progress" ]]; then
+              echo "Apple notarization is still in progress; checking again in 15 seconds."
+              sleep 15
+            fi
           done
           if [[ "$status" != "Accepted" ]]; then
             echo "Apple notarization finished with status: ${status:-unknown}" >&2
