@@ -94,7 +94,7 @@ jobs:
             key_pass=prism
             keytool -genkeypair -keystore "$store" -alias "$key_alias" -keyalg RSA -keysize 2048 -validity 10000 \
               -storepass "$ks_pass" -keypass "$key_pass" -dname "CN=Prism"
-            echo "::warning::鏈厤缃?Android 绛惧悕 secret锛屾湰娆?APK 浣跨敤涓存椂瀵嗛挜锛屼笉鑳借鐩栧畨瑁呬笂涓€鐗堛€?
+            echo "::warning::Android signing secrets are not configured; this APK uses a temporary key and cannot upgrade an existing installation."
           fi
           unsigned="$(find app/build/outputs/apk/release -name '*.apk' | head -n 1)"
           bt="$(find "${ANDROID_HOME}/build-tools" -mindepth 1 -maxdepth 1 -type d | sort | tail -n 1)"
