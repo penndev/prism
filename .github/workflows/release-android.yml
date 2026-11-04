@@ -25,6 +25,13 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+          cache: gradle
+          cache-dependency-path: |
+            android/**/build.gradle*
+            android/**/settings.gradle*
+            android/**/gradle.properties
+            android/**/gradle-wrapper.properties
+            android/gradle/libs.versions.toml
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
