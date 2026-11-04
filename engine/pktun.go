@@ -16,90 +16,90 @@ import (
 )
 
 // pktun 是 iOS 的 LinkEndpoint：Swift 推包进来，outbound 泵回调写出。
-type pktun struct {
+type packetTunnel struct {
 	*channel.Endpoint
 
-	startOnce sync.Once
-	pumps     sync.WaitGroup
-	write     func([]byte)
-	cancel    context.CancelFunc
+	startOnce       sync.Once
+	outboundWorkers sync.WaitGroup
+	writeBatch      func([]byte)
+	cancelOutbound  context.CancelFunc
 }
 
-func newPktun(mtu uint32, write func([]byte)) *pktun {
-	return &pktun{
-		Endpoint: channel.New(4096, mtu, ""),
-		write:    write,
+func newPacketTunnel(mtu uint32, writeBatch func([]byte)) *packetTunnel {
+	return &packetTunnel{
+		Endpoint:   channel.New(4096, mtu, ""),
+		writeBatch: writeBatch,
 	}
 }
 
-func (t *pktun) Close() {
-	if t.cancel != nil {
-		t.cancel()
+func (tunnel *packetTunnel) Close() {
+	if tunnel.cancelOutbound != nil {
+		tunnel.cancelOutbound()
 	}
-	t.Endpoint.Close()
+	tunnel.Endpoint.Close()
 }
 
-func (t *pktun) Attach(dispatcher stack.NetworkDispatcher) {
-	t.Endpoint.Attach(dispatcher)
-	t.startOnce.Do(func() {
+func (tunnel *packetTunnel) Attach(dispatcher stack.NetworkDispatcher) {
+	tunnel.Endpoint.Attach(dispatcher)
+	tunnel.startOnce.Do(func() {
 		ctx, cancel := context.WithCancel(context.Background())
-		t.cancel = cancel
-		t.pumps.Add(1)
-		go t.outbound(ctx)
+		tunnel.cancelOutbound = cancel
+		tunnel.outboundWorkers.Add(1)
+		go tunnel.writeOutboundPackets(ctx)
 	})
 }
 
-func (t *pktun) input(payload []byte) {
-	if len(payload) == 0 || !t.IsAttached() {
+func (tunnel *packetTunnel) injectPacket(packet []byte) {
+	if len(packet) == 0 || !tunnel.IsAttached() {
 		return
 	}
-	pkt := stack.NewPacketBuffer(stack.PacketBufferOptions{
-		Payload: buffer.MakeWithData(payload),
+	packetBuffer := stack.NewPacketBuffer(stack.PacketBufferOptions{
+		Payload: buffer.MakeWithData(packet),
 	})
-	switch header.IPVersion(payload) {
+	switch header.IPVersion(packet) {
 	case header.IPv4Version:
-		t.InjectInbound(header.IPv4ProtocolNumber, pkt)
+		tunnel.InjectInbound(header.IPv4ProtocolNumber, packetBuffer)
 	case header.IPv6Version:
-		t.InjectInbound(header.IPv6ProtocolNumber, pkt)
+		tunnel.InjectInbound(header.IPv6ProtocolNumber, packetBuffer)
 	}
-	pkt.DecRef()
+	packetBuffer.DecRef()
 }
 
-func (t *pktun) outbound(ctx context.Context) {
-	defer t.pumps.Done()
-	var pkts [][]byte
+func (tunnel *packetTunnel) writeOutboundPackets(ctx context.Context) {
+	defer tunnel.outboundWorkers.Done()
+	var packets [][]byte
 	flush := func() {
-		if len(pkts) == 0 {
+		if len(packets) == 0 {
 			return
 		}
-		var buf bytes.Buffer
-		var hdr [4]byte
-		for _, p := range pkts {
-			binary.BigEndian.PutUint32(hdr[:], uint32(len(p)))
-			buf.Write(hdr[:])
-			buf.Write(p)
+		var batch bytes.Buffer
+		var lengthHeader [4]byte
+		for _, packet := range packets {
+			binary.BigEndian.PutUint32(lengthHeader[:], uint32(len(packet)))
+			batch.Write(lengthHeader[:])
+			batch.Write(packet)
 		}
-		t.write(buf.Bytes())
-		pkts = pkts[:0]
+		tunnel.writeBatch(batch.Bytes())
+		packets = packets[:0]
 	}
 	for {
-		pkt := t.ReadContext(ctx)
-		if pkt == nil {
+		packetBuffer := tunnel.ReadContext(ctx)
+		if packetBuffer == nil {
 			flush()
 			return
 		}
-		pkts = append(pkts, copyPacket(pkt))
-		if len(pkts) >= 32 {
+		packets = append(packets, copyPacket(packetBuffer))
+		if len(packets) >= 32 {
 			flush()
 			continue
 		}
 		child, cancel := context.WithTimeout(ctx, 200*time.Microsecond)
-		for len(pkts) < 32 {
-			nxt := t.ReadContext(child)
-			if nxt == nil {
+		for len(packets) < 32 {
+			nextPacket := tunnel.ReadContext(child)
+			if nextPacket == nil {
 				break
 			}
-			pkts = append(pkts, copyPacket(nxt))
+			packets = append(packets, copyPacket(nextPacket))
 		}
 		cancel()
 		flush()
@@ -109,10 +109,10 @@ func (t *pktun) outbound(ctx context.Context) {
 	}
 }
 
-func copyPacket(pkt *stack.PacketBuffer) []byte {
-	buf := pkt.ToBuffer()
-	b := append([]byte(nil), buf.Flatten()...)
-	buf.Release()
-	pkt.DecRef()
-	return b
+func copyPacket(packetBuffer *stack.PacketBuffer) []byte {
+	buffer := packetBuffer.ToBuffer()
+	packet := append([]byte(nil), buffer.Flatten()...)
+	buffer.Release()
+	packetBuffer.DecRef()
+	return packet
 }

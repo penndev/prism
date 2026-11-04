@@ -15,23 +15,19 @@ const (
 	upstreamTimeout = 5 * time.Second
 	dnsAnswerTTL    = 60
 	addressMapTTL   = 30 * time.Minute
-	fakeIPv4CIDR    = "198.18.0.0/15"
-	fakeIPv6CIDR    = "fd19:ffff:198:18::/64"
+	// FakeIPv4CIDR is the IPv4 range used for synthetic addresses.
+	FakeIPv4CIDR = "198.18.0.0/15"
+	// FakeIPv6CIDR is the IPv6 range used for synthetic addresses.
+	FakeIPv6CIDR = "fd19:ffff:198:18::/64"
 
 	// DefaultUpstream is used when no DNS server has been configured.
 	DefaultUpstream = "8.8.8.8:53"
 )
 
 var (
-	addressMu sync.Mutex
-	configMu  sync.RWMutex
-	ipv4Pool  *addressPool
-	ipv6Pool  *addressPool
-
-	hostToIPv4 = ttlmap.New()
-	ipv4ToHost = ttlmap.New()
-	hostToIPv6 = ttlmap.New()
-	ipv6ToHost = ttlmap.New()
+	configMu      sync.RWMutex
+	ipv4Allocator addressAllocator
+	ipv6Allocator addressAllocator
 
 	shouldFakeDomain func(string) bool
 	dnsForwarder     transport.HandleConnect
@@ -40,13 +36,23 @@ var (
 
 func init() {
 	var err error
-	ipv4Pool, err = newIPv4Pool(fakeIPv4CIDR)
+	ipv4Pool, err := newIPv4Pool(FakeIPv4CIDR)
 	if err != nil {
 		panic(err)
 	}
-	ipv6Pool, err = newIPv6Pool(fakeIPv6CIDR)
+	ipv4Allocator = addressAllocator{
+		pool:          ipv4Pool,
+		hostToAddress: ttlmap.New(),
+		addressToHost: ttlmap.New(),
+	}
+	ipv6Pool, err := newIPv6Pool(FakeIPv6CIDR)
 	if err != nil {
 		panic(err)
+	}
+	ipv6Allocator = addressAllocator{
+		pool:          ipv6Pool,
+		hostToAddress: ttlmap.New(),
+		addressToHost: ttlmap.New(),
 	}
 	dnsForwarder = transport.Local()
 }
@@ -82,20 +88,19 @@ func SetUpstream(address string) {
 }
 
 // Lookup returns the domain associated with a synthetic IPv4 or IPv6 address.
-func Lookup(address string) (string, bool) {
-	ip := net.ParseIP(strings.TrimSpace(address))
+func Lookup(ip net.IP) (string, bool) {
 	if ip == nil {
 		return "", false
 	}
 	if ipv4 := ip.To4(); ipv4 != nil {
-		value, ok := ipv4ToHost.Get(ipv4.String())
+		value, ok := ipv4Allocator.addressToHost.Get(ipv4.String())
 		if !ok {
 			return "", false
 		}
 		domain, _ := value.(string)
 		return domain, domain != ""
 	}
-	value, ok := ipv6ToHost.Get(ip.String())
+	value, ok := ipv6Allocator.addressToHost.Get(ip.String())
 	if !ok {
 		return "", false
 	}
@@ -119,73 +124,35 @@ func Answer(query []byte) ([]byte, error) {
 	shouldFake := shouldFakeDomain
 	configMu.RUnlock()
 	if domain != "" && shouldFake != nil && shouldFake(domain) {
-		if response, handled, err := synthesizeAnswer(request, question, domain); handled || err != nil {
-			return response, err
+		var record dns.RR
+		header := dns.RR_Header{
+			Name:   question.Name,
+			Rrtype: question.Qtype,
+			Class:  dns.ClassINET,
+			Ttl:    dnsAnswerTTL,
 		}
-	}
-	return forward(request)
-}
-
-func synthesizeAnswer(request *dns.Msg, question dns.Question, domain string) ([]byte, bool, error) {
-	var record dns.RR
-	switch question.Qtype {
-	case dns.TypeA:
-		if address := assignAddress(domain, ipv4Pool, hostToIPv4, ipv4ToHost); address != nil {
-			record = &dns.A{A: address}
+		switch question.Qtype {
+		case dns.TypeA:
+			if address := ipv4Allocator.assign(domain); address != nil {
+				record = &dns.A{Hdr: header, A: address}
+			}
+		case dns.TypeAAAA:
+			if address := ipv6Allocator.assign(domain); address != nil {
+				record = &dns.AAAA{Hdr: header, AAAA: address}
+			}
 		}
-	case dns.TypeAAAA:
-		if address := assignAddress(domain, ipv6Pool, hostToIPv6, ipv6ToHost); address != nil {
-			record = &dns.AAAA{AAAA: address}
-		}
-	default:
-		return nil, false, nil
-	}
-
-	response := new(dns.Msg)
-	response.SetReply(request)
-	response.Authoritative = true
-	response.RecursionAvailable = true
-	if record != nil {
-		record.Header().Name = question.Name
-		record.Header().Class = dns.ClassINET
-		record.Header().Ttl = dnsAnswerTTL
-		response.Answer = append(response.Answer, record)
-	}
-	packed, err := response.Pack()
-	return packed, true, err
-}
-
-func assignAddress(domain string, pool *addressPool, hostToAddress, addressToHost interface {
-	Get(string) (any, bool)
-	Set(string, any, time.Duration)
-	Delete(any)
-}) net.IP {
-	addressMu.Lock()
-	defer addressMu.Unlock()
-
-	if value, ok := hostToAddress.Get(domain); ok {
-		if address, ok := value.(net.IP); ok && address != nil {
-			hostToAddress.Set(domain, address, addressMapTTL)
-			addressToHost.Set(address.String(), domain, addressMapTTL)
-			return address
+		if question.Qtype == dns.TypeA || question.Qtype == dns.TypeAAAA {
+			response := new(dns.Msg)
+			response.SetReply(request)
+			response.Authoritative = true
+			response.RecursionAvailable = true
+			if record != nil {
+				response.Answer = append(response.Answer, record)
+			}
+			return response.Pack()
 		}
 	}
 
-	address := pool.nextIP()
-	if address == nil {
-		return nil
-	}
-	if value, ok := addressToHost.Get(address.String()); ok {
-		if previousDomain, ok := value.(string); ok {
-			hostToAddress.Delete(previousDomain)
-		}
-	}
-	hostToAddress.Set(domain, address, addressMapTTL)
-	addressToHost.Set(address.String(), domain, addressMapTTL)
-	return address
-}
-
-func forward(request *dns.Msg) ([]byte, error) {
 	configMu.RLock()
 	connect := dnsForwarder
 	upstream := dnsUpstream

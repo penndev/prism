@@ -42,7 +42,7 @@
         </a-button>
       </div>
 
-      <a-radio-group v-model:value="proxyMode" class="proxy-mode-group">
+      <a-radio-group v-model:value="proxyMode" class="proxy-mode-group" :disabled="modeSwitching">
         <a-radio-button value="manual">
           {{ t("proxy.mode.manual") }}
         </a-radio-button>
@@ -50,6 +50,10 @@
           {{ t("proxy.mode.tun") }}
         </a-radio-button>
       </a-radio-group>
+      <div v-if="modeSwitching" class="proxy-mode-status" role="status" aria-live="polite">
+        <a-spin size="small" />
+        <span>{{ t("proxy.mode.switching") }}</span>
+      </div>
     </template>
   </a-card>
 </template>
@@ -76,6 +80,7 @@ const settingsStore = useSettingsStore();
 const serverStore = useServerStore();
 
 const proxyMode = ref("manual");
+const modeSwitching = ref(false);
 
 /** 在浏览器中打开规则编辑器 */
 async function openRuleEditor() {
@@ -94,6 +99,7 @@ async function openRuleEditor() {
 /** 切换代理模式时通知后端 SetMode 并持久化 */
 watch(proxyMode, async (mode, prevMode) => {
   const revert = prevMode ?? "manual";
+  modeSwitching.value = true;
   try {
     await SetMode(mode);
     settingsStore.proxyMode = mode;
@@ -102,6 +108,8 @@ watch(proxyMode, async (mode, prevMode) => {
       proxyMode.value = revert;
     }
     message.error(e?.message ?? "");
+  } finally {
+    modeSwitching.value = false;
   }
 });
 
@@ -219,6 +227,15 @@ watch(() => settingsStore.proxy, debounce(startLocalProxy, 1000), { deep: true }
       flex: 1;
       text-align: center;
     }
+  }
+
+  .proxy-mode-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+    color: v-bind("token.colorTextSecondary");
+    font-size: 12px;
   }
 
   .card-extra-btn {

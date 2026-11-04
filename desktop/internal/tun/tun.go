@@ -36,6 +36,14 @@ func (t *Tun) Wait() {
 	t.pumps.Wait()
 }
 
+// WritePacket writes an IP packet back to the host through the TUN device.
+func (t *Tun) WritePacket(packet []byte) error {
+	data := make([]byte, t.offset+len(packet))
+	copy(data[t.offset:], packet)
+	_, err := t.write(data)
+	return err
+}
+
 // return stack.LinkEndpoint interface
 func New(options Options) (*Tun, error) {
 	dev, err := tun.CreateTUN(options.Name, options.MTU)

@@ -30,13 +30,13 @@ func Ping(proxy, latencyHost string) int64 {
 	if host == "" {
 		return -1
 	}
-	r, err := url.Parse(proxy)
+	proxyURL, err := url.Parse(proxy)
 	if err != nil {
 		return -1
 	}
-	d, err := pkg.Ping(r, host)
+	duration, err := pkg.Ping(proxyURL, host)
 	if err != nil {
 		return -1
 	}
-	return d.Milliseconds()
+	return duration.Milliseconds()
 }

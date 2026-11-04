@@ -6,6 +6,7 @@ import (
 	"desktop/internal/route"
 	"desktop/internal/tun"
 	"errors"
+	"net/netip"
 
 	"github.com/penndev/prism/stack"
 )
@@ -48,6 +49,9 @@ func (p *Proxy) startTunDev() error {
 		},
 		HandlerUDP: func(f *stack.ForwarderUDPRequest) {
 			p.HandleConnect(f.Conn, f.RemoteAddr.Network(), f.RemoteAddr.String())
+		},
+		HandleICMP: func(src, dst netip.Addr, packet []byte) {
+			p.handleICMP(dev, src, dst, packet)
 		},
 	})
 	if err != nil {

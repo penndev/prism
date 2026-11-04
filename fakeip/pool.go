@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"sync"
+	"time"
 )
 
 // addressPool allocates synthetic addresses from a configured IPv4 or IPv6 range.
@@ -14,6 +16,34 @@ type addressPool struct {
 	prefixIPv6 [16]byte
 	nextIPv6   uint64
 	ipv6       bool
+}
+
+func (pool *addressPool) nextIP() net.IP {
+	if pool.ipv6 {
+		address := make(net.IP, net.IPv6len)
+		copy(address, pool.prefixIPv6[:])
+		binary.BigEndian.PutUint64(address[8:], pool.nextIPv6)
+		pool.nextIPv6++
+		if pool.nextIPv6 == 0 {
+			pool.nextIPv6 = 1
+		}
+		return address
+	}
+
+	available := pool.limitIPv4 - pool.firstIPv4
+	for checked := uint32(0); checked < available; checked++ {
+		value := pool.nextIPv4
+		pool.nextIPv4++
+		if pool.nextIPv4 >= pool.limitIPv4 {
+			pool.nextIPv4 = pool.firstIPv4
+		}
+		address := make(net.IP, net.IPv4len)
+		binary.BigEndian.PutUint32(address, value)
+		if address[3] != 0 && address[3] != 255 {
+			return address
+		}
+	}
+	return nil
 }
 
 func newIPv4Pool(cidr string) (*addressPool, error) {
@@ -48,30 +78,41 @@ func newIPv6Pool(cidr string) (*addressPool, error) {
 	return &addressPool{prefixIPv6: prefix, nextIPv6: 1, ipv6: true}, nil
 }
 
-func (pool *addressPool) nextIP() net.IP {
-	if pool.ipv6 {
-		address := make(net.IP, net.IPv6len)
-		copy(address, pool.prefixIPv6[:])
-		binary.BigEndian.PutUint64(address[8:], pool.nextIPv6)
-		pool.nextIPv6++
-		if pool.nextIPv6 == 0 {
-			pool.nextIPv6 = 1
-		}
-		return address
-	}
+type poolMap interface {
+	Get(string) (any, bool)
+	Set(string, any, time.Duration)
+	Delete(any)
+}
 
-	available := pool.limitIPv4 - pool.firstIPv4
-	for checked := uint32(0); checked < available; checked++ {
-		value := pool.nextIPv4
-		pool.nextIPv4++
-		if pool.nextIPv4 >= pool.limitIPv4 {
-			pool.nextIPv4 = pool.firstIPv4
-		}
-		address := make(net.IP, net.IPv4len)
-		binary.BigEndian.PutUint32(address, value)
-		if address[3] != 0 && address[3] != 255 {
+type addressAllocator struct {
+	mu            sync.Mutex
+	pool          *addressPool
+	hostToAddress poolMap
+	addressToHost poolMap
+}
+
+func (allocator *addressAllocator) assign(domain string) net.IP {
+	allocator.mu.Lock()
+	defer allocator.mu.Unlock()
+
+	if value, ok := allocator.hostToAddress.Get(domain); ok {
+		if address, ok := value.(net.IP); ok && address != nil {
+			allocator.hostToAddress.Set(domain, address, addressMapTTL)
+			allocator.addressToHost.Set(address.String(), domain, addressMapTTL)
 			return address
 		}
 	}
-	return nil
+
+	address := allocator.pool.nextIP()
+	if address == nil {
+		return nil
+	}
+	if value, ok := allocator.addressToHost.Get(address.String()); ok {
+		if previousDomain, ok := value.(string); ok {
+			allocator.hostToAddress.Delete(previousDomain)
+		}
+	}
+	allocator.hostToAddress.Set(domain, address, addressMapTTL)
+	allocator.addressToHost.Set(address.String(), domain, addressMapTTL)
+	return address
 }

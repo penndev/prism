@@ -3,6 +3,7 @@ package stack
 import (
 	"fmt"
 	"net"
+	"net/netip"
 	"runtime"
 
 	"gvisor.dev/gvisor/pkg/tcpip"
@@ -32,6 +33,7 @@ type ForwarderTCPRequest struct {
 type Option struct {
 	HandleTCP  func(*ForwarderTCPRequest)
 	HandlerUDP func(*ForwarderUDPRequest)
+	HandleICMP func(src, dst netip.Addr, packet []byte)
 	EndPoint   stack.LinkEndpoint
 }
 
@@ -125,6 +127,22 @@ func New(option Option) (*stack.Stack, error) {
 			go option.HandlerUDP(&fur)
 		})
 		s.SetTransportProtocolHandler(udp.ProtocolNumber, udpForwarder.HandlePacket)
+	}
+
+	if option.HandleICMP != nil {
+		handleICMP := func(id stack.TransportEndpointID, pkt *stack.PacketBuffer) bool {
+			view := pkt.ToView()
+			packet := append([]byte(nil), view.AsSlice()...)
+			view.Release()
+			src, srcOK := netip.AddrFromSlice(id.RemoteAddress.AsSlice())
+			dst, dstOK := netip.AddrFromSlice(id.LocalAddress.AsSlice())
+			if srcOK && dstOK {
+				go option.HandleICMP(src, dst, packet)
+			}
+			return true
+		}
+		s.SetTransportProtocolHandler(icmp.ProtocolNumber4, handleICMP)
+		s.SetTransportProtocolHandler(icmp.ProtocolNumber6, handleICMP)
 	}
 	return s, nil
 }

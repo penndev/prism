@@ -91,6 +91,7 @@
   "proxy.selectTip": "请先在下方列表中选择节点",
   "proxy.mode.manual": "手动模式",
   "proxy.mode.tun": "TUN 模式",
+  "proxy.mode.switching": "正在切换代理模式，请稍候…",
   "proxy.mode.system": "系统代理",
   "proxy.tun.noNode": "未设置代理节点，无法开启 TUN 模式",
   "proxy.tun.startFailed": "无法启动 TUN 设备，请检查权限或驱动",

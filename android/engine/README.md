@@ -14,10 +14,13 @@ Go 把 gVisor 挂到 VPN 的 TUN fd 上，转发 TCP/UDP。UDP/53 一律在本�
 | `start(opt)`                  | 用 `Options` 拉起隧道。已启动、缺少 `handler`、代理 URL 无法解析时返回错误。`mtu <= 0` 时用 1500。           |
 | `stop()`                      | 停掉协议栈并关闭 TUN fd。                                                                 |
 | `ping(proxyURL, latencyHost)` | 经代理测 HTTP 首字节时间，单位毫秒。`latencyHost` 是主机或 `主机:端口`（缺端口当 80）。失败或主机为空返回 `-1`。不经过 TUN。 |
+| `pingAsync(proxyURL, latencyHost, callback)` | 异步测速，立即返回；完成后调用 `PingCallback.onResult(ms)`。结果单位毫秒，失败返回负数。不经过 TUN。Android 应用当前使用此接口并发测多个节点。 |
 | `setIpregionDB(path, tmpDir)` | 以文件模式打开 `ipregion.db`，换库时关掉旧句柄。段表解压到 `tmpDir` 下的 `ipregion-*` 目录（约 30MB），内存只留索引。`tmpDir` 传应用的 cacheDir；本进程第一次打开时只清掉 `tmpDir` 里残留的 `ipregion-*` 目录，不删同前缀的普通文件。 |
 | `ipregionStatus()`            | 当前库的版本和地域数。没打开库时返回 `null`。文件是否存在、大小由 Kotlin 自己看。                              |
 | `areaTree()`                  | 整棵地域树的 JSON，形状与桌面 `/rule/api/areas` 相同。没打开库时返回 `[]`。                             |
 | `lookup(address)`             | 查 `主机` 或 `主机:端口` 的地域链，叶节点在前、父节点在后。传入域名时先解析成 IP（2 秒超时）。没打开库或查不到时返回空列表。 |
+
+`pingAsync` 通过代理测 HTTP 首字节时间，底层在 Go goroutine 中执行；回调的 `ms < 0` 表示失败。应用在回调中更新节点测速结果。同步接口 `ping` 仍可直接返回结果，但当前 Android 应用使用 `pingAsync`。
 
 
 

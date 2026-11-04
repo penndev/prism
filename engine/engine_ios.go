@@ -51,130 +51,130 @@ type Options struct {
 }
 
 var (
-	mu         sync.Mutex
-	ep         *pktun
-	netstack   *gvisorstack.Stack
-	errStarted = errors.New("already started")
-	localH     = transport.Local()
+	lifecycleMu       sync.Mutex
+	endpoint          *packetTunnel
+	networkStack      *gvisorstack.Stack
+	errAlreadyStarted = errors.New("already started")
+	directConnect     = transport.Local()
 )
 
-// WritePacket 把一批包注入协议栈。blob 是重复的 uint32 大端长度 + 包内容。未 Start 时丢掉。
-func WritePacket(blob []byte) {
-	mu.Lock()
-	t := ep
-	mu.Unlock()
-	if t == nil {
+// WritePacket 把一批包注入协议栈。batch 是重复的 uint32 大端长度 + 包内容。未 Start 时丢掉。
+func WritePacket(batch []byte) {
+	lifecycleMu.Lock()
+	tunnel := endpoint
+	lifecycleMu.Unlock()
+	if tunnel == nil {
 		return
 	}
-	for len(blob) >= 4 {
-		n := int(binary.BigEndian.Uint32(blob[:4]))
-		blob = blob[4:]
-		if n <= 0 || n > len(blob) {
+	for len(batch) >= 4 {
+		packetLength := int(binary.BigEndian.Uint32(batch[:4]))
+		batch = batch[4:]
+		if packetLength <= 0 || packetLength > len(batch) {
 			return
 		}
-		t.input(blob[:n])
-		blob = blob[n:]
+		tunnel.injectPacket(batch[:packetLength])
+		batch = batch[packetLength:]
 	}
 }
 
 // Start 挂 gVisor channel 端点和协议栈。包由 WritePacket / Handler.WritePacket 进出。
 // mtu <= 0 按 1500。
-func Start(opt *Options) error {
-	mu.Lock()
-	defer mu.Unlock()
-	if ep != nil {
-		return errStarted
+func Start(options *Options) error {
+	lifecycleMu.Lock()
+	defer lifecycleMu.Unlock()
+	if endpoint != nil {
+		return errAlreadyStarted
 	}
-	if opt == nil {
+	if options == nil {
 		return errors.New("options required")
 	}
-	h := opt.Handler
-	if h == nil {
+	handler := options.Handler
+	if handler == nil {
 		return errors.New("handler required")
 	}
-	mtu := opt.MTU
+	mtu := options.MTU
 	if mtu <= 0 {
 		mtu = 1500
 	}
 
-	r, err := url.Parse(opt.Proxy)
+	proxyURL, err := url.Parse(options.Proxy)
 	if err != nil {
 		return err
 	}
-	proxyH, err := transport.FromURL(r)
+	proxyConnect, err := transport.FromURL(proxyURL)
 	if err != nil {
 		return err
 	}
 
-	upstream := opt.Upstream
+	upstream := options.Upstream
 	if strings.TrimSpace(upstream) == "" {
 		upstream = fakeip.DefaultUpstream
 	}
 	fakeip.SetUpstream(upstream)
-	fakeip.SetNeedFake(h.NeedFake)
+	fakeip.SetNeedFake(handler.NeedFake)
 
-	endpoint := newPktun(uint32(mtu), h.WritePacket)
-	s, err := stack.New(stack.Option{
-		EndPoint: endpoint,
+	linkEndpoint := newPacketTunnel(uint32(mtu), handler.WritePacket)
+	forwardingStack, err := stack.New(stack.Option{
+		EndPoint: linkEndpoint,
 		HandleTCP: func(f *stack.ForwarderTCPRequest) {
-			Relay(proxyH, localH, h, f.Conn, f.RemoteAddr.Network(), f.RemoteAddr.String())
+			Relay(proxyConnect, directConnect, handler, f.Conn, f.RemoteAddr.Network(), f.RemoteAddr.String())
 		},
 		HandlerUDP: func(f *stack.ForwarderUDPRequest) {
-			Relay(proxyH, localH, h, f.Conn, f.RemoteAddr.Network(), f.RemoteAddr.String())
+			Relay(proxyConnect, directConnect, handler, f.Conn, f.RemoteAddr.Network(), f.RemoteAddr.String())
 		},
 	})
 	if err != nil {
-		endpoint.Close()
-		endpoint.pumps.Wait()
+		linkEndpoint.Close()
+		linkEndpoint.outboundWorkers.Wait()
 		fakeip.SetNeedFake(nil)
 		return err
 	}
 	// FIN_WAIT_2 留 5 秒，让手机把最后一段读走。设成 0 会马上拆连接，网页尾部会卡住重试。
 	// TIME_WAIT 只留 1 秒。默认各 60 秒时，Stop 里的 stack.Wait 会跟着等，端点也一直占着内存。
-	linger := tcpip.TCPLingerTimeoutOption(5 * time.Second)
-	tw := tcpip.TCPTimeWaitTimeoutOption(time.Second)
-	_ = s.SetTransportProtocolOption(tcp.ProtocolNumber, &linger)
-	_ = s.SetTransportProtocolOption(tcp.ProtocolNumber, &tw)
+	lingerTimeout := tcpip.TCPLingerTimeoutOption(5 * time.Second)
+	timeWaitTimeout := tcpip.TCPTimeWaitTimeoutOption(time.Second)
+	_ = forwardingStack.SetTransportProtocolOption(tcp.ProtocolNumber, &lingerTimeout)
+	_ = forwardingStack.SetTransportProtocolOption(tcp.ProtocolNumber, &timeWaitTimeout)
 	// 收发窗口自动放大。闲时停在 64KB，跑起来最多 1MB。
 	// packetFlow 这一跳有几毫秒延迟，窗口不张开的话速度上不去。
 	bufSize := tcpip.TCPReceiveBufferSizeRangeOption{Min: 4 << 10, Default: 64 << 10, Max: 1 << 20}
 	sendSize := tcpip.TCPSendBufferSizeRangeOption{Min: 4 << 10, Default: 64 << 10, Max: 1 << 20}
-	moderate := tcpip.TCPModerateReceiveBufferOption(true)
-	_ = s.SetTransportProtocolOption(tcp.ProtocolNumber, &bufSize)
-	_ = s.SetTransportProtocolOption(tcp.ProtocolNumber, &sendSize)
-	_ = s.SetTransportProtocolOption(tcp.ProtocolNumber, &moderate)
+	moderateReceiveBuffer := tcpip.TCPModerateReceiveBufferOption(true)
+	_ = forwardingStack.SetTransportProtocolOption(tcp.ProtocolNumber, &bufSize)
+	_ = forwardingStack.SetTransportProtocolOption(tcp.ProtocolNumber, &sendSize)
+	_ = forwardingStack.SetTransportProtocolOption(tcp.ProtocolNumber, &moderateReceiveBuffer)
 
 	// Packet Tunnel 扩展整个进程限 50MB，Swift 那边也要用。文件模式的 ipregion 索引也在 Go 堆里，给 36MB。
 	debug.SetMemoryLimit(36 << 20)
 	debug.SetGCPercent(50)
 
-	ep = endpoint
-	netstack = s
+	endpoint = linkEndpoint
+	networkStack = forwardingStack
 	return nil
 }
 
 // Stop 关掉协议栈和 channel 端点，等到 outbound 泵退出再返回。
-// 先把 ep 置空再解锁：WritePacket 也要这把锁，读回调卡在锁上时 writePackets 回不来。
+// 先把 endpoint 置空再解锁：WritePacket 也要这把锁，读回调卡在锁上时写包协程回不来。
 func Stop() {
-	mu.Lock()
-	endpoint := ep
-	s := netstack
-	if endpoint == nil {
-		mu.Unlock()
+	lifecycleMu.Lock()
+	tunnel := endpoint
+	forwardingStack := networkStack
+	if tunnel == nil {
+		lifecycleMu.Unlock()
 		return
 	}
-	ep = nil
-	netstack = nil
+	endpoint = nil
+	networkStack = nil
 	fakeip.SetNeedFake(nil)
-	mu.Unlock()
+	lifecycleMu.Unlock()
 
-	if s != nil {
-		s.Close()
+	if forwardingStack != nil {
+		forwardingStack.Close()
 	}
-	endpoint.Close()
-	endpoint.pumps.Wait()
-	if s != nil {
-		s.Wait()
+	tunnel.Close()
+	tunnel.outboundWorkers.Wait()
+	if forwardingStack != nil {
+		forwardingStack.Wait()
 	}
 }
 
