@@ -7,13 +7,6 @@ googleapis.com
 gstatic.com
 googleusercontent.com
 google.com.hk
-google.co.uk
-google.de
-google.fr
-google.co.jp
-google.com.tw
-google.com.au
-google.com.sg
 android.com
 blogger.com
 blogspot.com
@@ -62,6 +55,7 @@ github.com
 github.io
 githubassets.com
 githubcopilot.com
+githubusercontent.com
 github.dev
 github.blog
 gitlab.com
@@ -193,3 +187,7 @@ techpowerup.com
 phoronix.com
 discourse.org
 fandom.com
+
+! [常用杂项]
+steam-chat.com
+steampowered.com

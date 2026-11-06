@@ -5,6 +5,7 @@ import (
 	"desktop/internal"
 	"desktop/internal/storage"
 	"net"
+	"os"
 	"time"
 
 	"github.com/penndev/prism/engine"
@@ -59,14 +60,17 @@ func (h connectHook) OnProxyWrite(n int64) { h.p.writeBytes.Add(n) }
 func (h connectHook) UseProxy(network, address string) bool {
 	if st := storage.DefaultStorage; st != nil {
 		if cfg := st.CachedRuleConfig(); cfg != nil {
+			// 没库或没勾选：无法按地区区分，全部直连。有库时勾选的地区直连。
 			bypass := false
-			switch cfg.AreaMode {
-			case "none":
+			if cfg.AreaMode == "region" {
 				bypass = true
-			case "proxy":
-				bypass = len(cfg.AreaIDs) == 0 || !inAreas(address, cfg.AreaIDs)
-			case "bypass":
-				bypass = len(cfg.AreaIDs) > 0 && inAreas(address, cfg.AreaIDs)
+				if len(cfg.AreaIDs) > 0 {
+					if path, err := storage.IpregionDBPath(); err == nil {
+						if info, err := os.Stat(path); err == nil && !info.IsDir() {
+							bypass = inAreas(address, cfg.AreaIDs)
+						}
+					}
+				}
 			}
 			if bypass {
 				if internal.App != nil {

@@ -133,7 +133,7 @@
             <p data-i18n="assetDomainBody"></p>
           </div>
           <div class="asset-side">
-            <a class="asset-dl" href="https://penndev.github.io/prism/domain.txt">
+            <a class="asset-dl" href="https://penndev.github.io/prism/domain.txt" download="domain.txt">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path
                   fill="none"
@@ -180,7 +180,7 @@
           <div class="asset-side">
             <a
               class="asset-dl"
-              href="https://github.com/penndev/gopkg/releases/download/ipregion-db/ipregion.db"
+              href="https://github.com/penndev/gopkg/releases/download/ipregion-db/ipregion.czdb.db"
             >
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path
@@ -192,31 +192,24 @@
                   d="M12 4v10m0 0 4-4m-4 4-4-4M5 19h14"
                 />
               </svg>
-              ipregion.db
+              <span data-i18n="assetGeoCZDB">CZDB</span>
             </a>
-            <button type="button" class="copy-url">
+            <a
+              class="asset-dl"
+              href="https://github.com/penndev/gopkg/releases/download/ipregion-db/ipregion.geolite.db"
+            >
               <svg viewBox="0 0 24 24" aria-hidden="true">
-                <rect
-                  x="8"
-                  y="8"
-                  width="12"
-                  height="12"
-                  rx="2"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                />
                 <path
                   fill="none"
                   stroke="currentColor"
                   stroke-width="2"
                   stroke-linecap="round"
                   stroke-linejoin="round"
-                  d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"
+                  d="M12 4v10m0 0 4-4m-4 4-4-4M5 19h14"
                 />
               </svg>
-              <span data-i18n="assetCopy">复制网址</span>
-            </button>
+              <span data-i18n="assetGeoGeoLite2">GeoLite2</span>
+            </a>
           </div>
         </section>
       </div>
@@ -267,22 +260,23 @@
         <p data-i18n="ruleDomainTun"></p>
         <p>
           <span data-i18n="ruleDomainHint"></span>
-          <a href="https://penndev.github.io/prism/domain.txt">https://penndev.github.io/prism/domain.txt</a>
+          <a href="https://penndev.github.io/prism/domain.txt" download="domain.txt">https://penndev.github.io/prism/domain.txt</a>
         </p>
 
         <h3 data-i18n="ruleGeoTitle"></h3>
         <p data-i18n="ruleGeo"></p>
         <ul>
           <li data-i18n="ruleGlobal"></li>
-          <li data-i18n="ruleNone"></li>
-          <li data-i18n="ruleProxy"></li>
-          <li data-i18n="ruleBypass"></li>
+          <li data-i18n="ruleRegion"></li>
         </ul>
         <p data-i18n="ruleDb"></p>
         <p>
           <span data-i18n="ruleDbHint"></span>
-          <a href="https://github.com/penndev/gopkg/releases/download/ipregion-db/ipregion.db"
-            >https://github.com/penndev/gopkg/releases/download/ipregion-db/ipregion.db</a
+          <a href="https://github.com/penndev/gopkg/releases/download/ipregion-db/ipregion.czdb.db"
+            >CZDB: ipregion.czdb.db</a
+          ><br>
+          <a href="https://github.com/penndev/gopkg/releases/download/ipregion-db/ipregion.geolite.db"
+            >GeoLite2: ipregion.geolite.db</a
           >
         </p>
         <p data-i18n="ruleManual"></p>

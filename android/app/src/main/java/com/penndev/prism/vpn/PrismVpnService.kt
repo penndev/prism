@@ -14,6 +14,7 @@ import androidx.core.app.NotificationCompat
 import com.penndev.prism.MainActivity
 import com.penndev.prism.R
 import com.penndev.prism.data.GeoMode
+import com.penndev.prism.data.ipregionFile
 import com.penndev.prism.data.ipregionLookupIds
 import com.penndev.prism.engine.Engine
 import com.penndev.prism.engine.Handler
@@ -177,12 +178,10 @@ class PrismVpnService : VpnService() {
 
     private fun shouldProxy(address: String): Boolean {
         val rules = VpnController.rules
-        return when (rules.geoMode) {
-            GeoMode.Global -> true
-            GeoMode.None -> false
-            GeoMode.Proxy -> inSelectedAreas(address, rules.selectedAreaIds)
-            GeoMode.Bypass -> !inSelectedAreas(address, rules.selectedAreaIds)
-        }
+        if (rules.geoMode != GeoMode.Region) return true
+        // 没库或没勾选：全部直连。有库时勾选的地区直连，其余走代理。
+        if (rules.selectedAreaIds.isEmpty() || !ipregionFile(this).exists()) return false
+        return !inSelectedAreas(address, rules.selectedAreaIds)
     }
 
     private fun inSelectedAreas(address: String, ids: Set<Long>): Boolean {

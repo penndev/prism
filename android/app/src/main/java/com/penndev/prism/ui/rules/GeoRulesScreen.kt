@@ -74,8 +74,8 @@ fun GeoRulesScreen(
     var expandedIds by remember(state.geoAreas) {
         mutableStateOf(topLevelIdsWithSelected(state.geoAreas, rules.selectedAreaIds))
     }
-    val showAreas = rules.geoMode == GeoMode.Proxy || rules.geoMode == GeoMode.Bypass
     val hasDb = state.geoAreas.isNotEmpty()
+    val showAreas = rules.geoMode == GeoMode.Region && hasDb
     var editingDb by rememberSaveable { mutableStateOf(false) }
     // 输入时只改本地草稿，真正要用的时候才落库：updateRules 每次都会把整份
     // 地域 ID 和域名列表序列化后写 SharedPreferences，扛不住逐字符触发。
@@ -92,9 +92,7 @@ fun GeoRulesScreen(
     }
     val modes = listOf(
         Triple(GeoMode.Global, R.string.rules_mode_global, R.string.rules_mode_global_desc),
-        Triple(GeoMode.None, R.string.rules_mode_none, R.string.rules_mode_none_desc),
-        Triple(GeoMode.Proxy, R.string.rules_mode_proxy, R.string.rules_mode_proxy_desc),
-        Triple(GeoMode.Bypass, R.string.rules_mode_bypass, R.string.rules_mode_bypass_desc),
+        Triple(GeoMode.Region, R.string.rules_mode_region, R.string.rules_mode_region_desc),
     )
 
     Column(Modifier.fillMaxSize()) {
@@ -189,12 +187,11 @@ fun GeoRulesScreen(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     )
                     modes.forEachIndexed { index, (mode, title, desc) ->
-                        val enabled = mode == GeoMode.Global || mode == GeoMode.None || hasDb
                         if (index > 0) PreferenceDivider()
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable(enabled = enabled) {
+                                .clickable {
                                     viewModel.updateRules { it.copy(geoMode = mode) }
                                 }
                                 .padding(horizontal = 8.dp, vertical = 4.dp),
@@ -203,17 +200,11 @@ fun GeoRulesScreen(
                             RadioButton(
                                 selected = rules.geoMode == mode,
                                 onClick = { viewModel.updateRules { it.copy(geoMode = mode) } },
-                                enabled = enabled,
                             )
                             Column(Modifier.weight(1f)) {
                                 Text(
                                     stringResource(title),
                                     style = MaterialTheme.typography.bodyLarge,
-                                    color = if (enabled) {
-                                        MaterialTheme.colorScheme.onSurface
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                                    },
                                 )
                                 Text(
                                     stringResource(desc),
@@ -242,40 +233,29 @@ fun GeoRulesScreen(
                         )
                     }
                 }
-                if (!hasDb) {
-                    item {
-                        Text(
-                            stringResource(R.string.rules_area_empty),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                        )
-                    }
-                } else {
-                    items(rows, key = { it.area.id }) { row ->
-                        AreaTreeRow(
-                            row = row,
-                            onToggleExpand = {
-                                expandedIds = if (row.area.id in expandedIds) {
-                                    expandedIds - row.area.id
-                                } else {
-                                    expandedIds + row.area.id
-                                }
-                            },
-                            onToggleSelect = {
-                                viewModel.updateRules { draft ->
-                                    draft.copy(
-                                        selectedAreaIds = toggleAreaSelection(
-                                            state.geoAreas,
-                                            draft.selectedAreaIds,
-                                            row.area,
-                                            row.selected,
-                                        ),
-                                    )
-                                }
-                            },
-                        )
-                    }
+                items(rows, key = { it.area.id }) { row ->
+                    AreaTreeRow(
+                        row = row,
+                        onToggleExpand = {
+                            expandedIds = if (row.area.id in expandedIds) {
+                                expandedIds - row.area.id
+                            } else {
+                                expandedIds + row.area.id
+                            }
+                        },
+                        onToggleSelect = {
+                            viewModel.updateRules { draft ->
+                                draft.copy(
+                                    selectedAreaIds = toggleAreaSelection(
+                                        state.geoAreas,
+                                        draft.selectedAreaIds,
+                                        row.area,
+                                        row.selected,
+                                    ),
+                                )
+                            }
+                        },
+                    )
                 }
             }
         }

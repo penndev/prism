@@ -4,7 +4,6 @@ import (
 	"desktop/internal/storage"
 	"encoding/json"
 	"net/http"
-	"strings"
 )
 
 func HandleRuleConfig(w http.ResponseWriter, r *http.Request) {
@@ -23,69 +22,31 @@ func HandleRuleConfig(w http.ResponseWriter, r *http.Request) {
 		if cfg == nil {
 			cfg = &storage.RuleConfig{AreaMode: "global", AreaIDs: []uint32{}, Domains: ""}
 		}
-		out := storage.RuleConfig{
-			AreaMode: normalizeMode(cfg.AreaMode),
-			AreaIDs:  normalizeAreaIDs(cfg.AreaIDs),
-			Domains:  cfg.Domains,
-		}
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(out)
+		_ = json.NewEncoder(w).Encode(cfg)
 	case http.MethodPut, http.MethodPost:
 		var payload storage.RuleConfig
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 			http.Error(w, "invalid json", http.StatusBadRequest)
 			return
 		}
-		cfg := storage.RuleConfig{
-			AreaMode: normalizeMode(payload.AreaMode),
-			AreaIDs:  normalizeAreaIDs(payload.AreaIDs),
-			Domains:  payload.Domains,
-		}
-		if err := st.SetRuleConfig(cfg); err != nil {
+		if err := st.SetRuleConfig(payload); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		setDomainMap(cfg.Domains)
+		setDomainMap(payload.Domains)
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"ok":       true,
-			"areaMode": cfg.AreaMode,
-			"areaIds":  cfg.AreaIDs,
-			"domains":  cfg.Domains,
+			"areaMode": payload.AreaMode,
+			"areaIds":  payload.AreaIDs,
+			"domains":  payload.Domains,
 		})
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
-}
-
-func normalizeMode(mode string) string {
-	switch strings.TrimSpace(mode) {
-	case "proxy", "bypass", "none":
-		return mode
-	default:
-		return "global"
-	}
-}
-
-func normalizeAreaIDs(ids []uint32) []uint32 {
-	if ids == nil {
-		return []uint32{}
-	}
-	out := make([]uint32, 0, len(ids))
-	seen := make(map[uint32]struct{}, len(ids))
-	for _, id := range ids {
-		if id == 0 {
-			continue
-		}
-		if _, ok := seen[id]; ok {
-			continue
-		}
-		seen[id] = struct{}{}
-		out = append(out, id)
-	}
-	return out
 }
 
 func resetRuleToGlobal() {

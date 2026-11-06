@@ -38,7 +38,7 @@
 
     <section class="panel" id="geoSection">
       <h2 id="geoTitle">地域规则</h2>
-      <p id="geoDesc" class="subline">四种模式互斥：全局模式、本地模式、代理选定区域、绕过选定区域。</p>
+      <p id="geoDesc" class="subline">两种模式：全局模式、地域模式。没有 IP 库时无法选地区，等于全部直连。勾选的地区直连，其余走代理。</p>
 
         <div class="db-block">
           <div class="db-head">
@@ -67,16 +67,8 @@
             <span id="labelModeGlobal">全局模式</span>
           </label>
           <label class="mode-option">
-            <input type="radio" name="geoMode" value="none">
-            <span id="labelModeNone">本地模式</span>
-          </label>
-          <label class="mode-option">
-            <input type="radio" name="geoMode" value="proxy">
-            <span id="labelModeProxy">代理选定区域</span>
-          </label>
-          <label class="mode-option">
-            <input type="radio" name="geoMode" value="bypass">
-            <span id="labelModeBypass">绕过选定区域</span>
+            <input type="radio" name="geoMode" value="region">
+            <span id="labelModeRegion">地域模式</span>
           </label>
         </div>
 
@@ -165,9 +157,7 @@
       document.getElementById('geoDesc').textContent = t('geo.desc');
       document.getElementById('dbLabel').textContent = t('db.label');
       document.getElementById('labelModeGlobal').textContent = t('geo.mode.global');
-      document.getElementById('labelModeNone').textContent = t('geo.mode.none');
-      document.getElementById('labelModeProxy').textContent = t('geo.mode.proxy');
-      document.getElementById('labelModeBypass').textContent = t('geo.mode.bypass');
+      document.getElementById('labelModeRegion').textContent = t('geo.mode.region');
       document.getElementById('domainTitle').textContent = t('domain.title');
       document.getElementById('domainDesc').textContent = t('domain.desc');
       domainsEl.placeholder = t('domain.placeholder');
@@ -190,21 +180,14 @@
     }
 
     function setMode(mode) {
-      const value = mode === 'proxy' || mode === 'bypass' || mode === 'none' ? mode : 'global';
+      const value = mode === 'region' ? 'region' : 'global';
       const node = document.querySelector('input[name="geoMode"][value="' + value + '"]');
       if (node) node.checked = true;
       syncModeUI();
     }
 
     function syncModeUI() {
-      const mode = getMode();
-      const needAreas = mode === 'proxy' || mode === 'bypass';
-      areaPicker.hidden = !dbExists || !needAreas;
-      document.querySelectorAll('input[name="geoMode"]').forEach((el) => {
-        if (el.value === 'proxy' || el.value === 'bypass') {
-          el.disabled = !dbExists;
-        }
-      });
+      areaPicker.hidden = !dbExists || getMode() !== 'region';
       renderAreaChecks();
       updateSelectedCount();
     }
@@ -214,8 +197,7 @@
     }
 
     function updateSelectedCount() {
-      const mode = getMode();
-      if (mode === 'global' || mode === 'none') {
+      if (getMode() !== 'region' || !dbExists) {
         selectedCount.textContent = '';
         return;
       }
@@ -310,16 +292,6 @@
       updateSelectedCount();
     }
 
-    function setGeoEnabled(enabled) {
-      if (!enabled) {
-        const mode = getMode();
-        if (mode === 'proxy' || mode === 'bypass') {
-          setMode('global');
-        }
-      }
-      syncModeUI();
-    }
-
     function syncDbEditorUI() {
       if (!dbExists) {
         btnChangeDb.hidden = true;
@@ -355,13 +327,13 @@
           v6: st.v6 || 0
         });
         setPathTip(dbStatus, st.path || '');
-        setGeoEnabled(true);
+        syncModeUI();
       } else {
         editingDb = false;
         dbStatus.className = 'status-box warn';
         dbStatus.textContent = t('db.status.missingHint');
         setPathTip(dbStatus, st && st.path ? st.path : '');
-        setGeoEnabled(false);
+        syncModeUI();
       }
       syncDbEditorUI();
     }
@@ -627,11 +599,6 @@
         await loadConfig();
         if (st && st.exists) {
           await loadAreas();
-        } else {
-          const mode = getMode();
-          if (mode === 'proxy' || mode === 'bypass') {
-            setMode('global');
-          }
         }
         syncModeUI();
       } catch (e) {

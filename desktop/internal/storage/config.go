@@ -75,9 +75,10 @@ func normalizeServers(servers []ServerEntry) []ServerEntry {
 
 // RuleConfig 规则配置。
 type RuleConfig struct {
-	// AreaMode: global=全局模式，none=本地模式，proxy=代理选定区域，bypass=绕过选定区域。
+	// AreaMode: global=全局模式，region=地域模式。
+	// 地域模式没有 IP 库或没有勾选时全部直连；勾选的地区直连，其余走代理。
 	AreaMode string `json:"areaMode"`
-	// AreaIDs 选中的地域 ID 列表（global/none 时可为空）。
+	// AreaIDs 地域模式里要直连的地区。global 时忽略。
 	AreaIDs []uint32 `json:"areaIds"`
 	// Domains 域名规则原文（按行）。空字符串表示域名规则暂不生效。
 	Domains string `json:"domains"`

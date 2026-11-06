@@ -119,7 +119,7 @@
     <string name="rules_domain_count">%1$d 个域名</string>
     <string name="rules_domain_empty">未设置</string>
     <string name="rules_geo_title">地域规则</string>
-    <string name="rules_geo_desc">四种模式互斥：全局模式、本地模式、代理选定区域、绕过选定区域。</string>
+    <string name="rules_geo_desc">两种模式：全局模式、地域模式。没有 IP 库时无法选地区，等于全部直连。勾选的地区直连，其余走代理。</string>
     <string name="rules_db_label">IP 库</string>
     <string name="rules_db_missing">未找到 ipregion.db，请先下载或上传</string>
     <string name="rules_db_hint">可下载 ipregion.db</string>
@@ -137,12 +137,8 @@
     <string name="rules_upload_empty">无法读取所选文件</string>
     <string name="rules_mode_global">全局模式</string>
     <string name="rules_mode_global_desc">不按地区筛选，一律走代理</string>
-    <string name="rules_mode_none">本地模式</string>
-    <string name="rules_mode_none_desc">不按地区筛选，一律直连</string>
-    <string name="rules_mode_proxy">代理选定区域</string>
-    <string name="rules_mode_proxy_desc">仅勾选的地区走代理，其余直连</string>
-    <string name="rules_mode_bypass">绕过选定区域</string>
-    <string name="rules_mode_bypass_desc">勾选的地区直连，其余走代理</string>
+    <string name="rules_mode_region">地域模式</string>
+    <string name="rules_mode_region_desc">勾选的地区直连，其余走代理</string>
     <string name="rules_area_filter">搜索国家/地区</string>
     <string name="rules_area_empty">IP 库未打开，无法列出地域</string>
     <string name="rules_selected_count">已选 %1$d 个地区</string>

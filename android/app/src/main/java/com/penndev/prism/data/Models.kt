@@ -36,7 +36,7 @@ data class Subscription(
 
 enum class ThemeMode { System, Light, Dark }
 
-enum class GeoMode { Global, None, Proxy, Bypass }
+enum class GeoMode { Global, Region }
 
 data class LatencyTestSettings(
     val host: String = "google.com",

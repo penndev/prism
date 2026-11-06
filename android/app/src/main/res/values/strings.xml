@@ -119,7 +119,7 @@
     <string name="rules_domain_count">%1$d domains</string>
     <string name="rules_domain_empty">None</string>
     <string name="rules_geo_title">Geo rules</string>
-    <string name="rules_geo_desc">Four exclusive modes: global, local, proxy selected regions, or bypass selected regions.</string>
+    <string name="rules_geo_desc">Two modes: global and regional. Without an IP database there is nothing to select, so traffic goes direct. Checked regions go direct; the rest use the proxy.</string>
     <string name="rules_db_label">IP database</string>
     <string name="rules_db_missing">ipregion.db not found. Download or upload it first.</string>
     <string name="rules_db_hint">Download ipregion.db</string>
@@ -137,12 +137,8 @@
     <string name="rules_upload_empty">Could not read the selected file</string>
     <string name="rules_mode_global">Global mode</string>
     <string name="rules_mode_global_desc">No region filter; send via proxy</string>
-    <string name="rules_mode_none">Local mode</string>
-    <string name="rules_mode_none_desc">No region filter; send direct</string>
-    <string name="rules_mode_proxy">Proxy selected regions</string>
-    <string name="rules_mode_proxy_desc">Proxy only the checked regions</string>
-    <string name="rules_mode_bypass">Bypass selected regions</string>
-    <string name="rules_mode_bypass_desc">Direct for checked regions, proxy the rest</string>
+    <string name="rules_mode_region">Regional mode</string>
+    <string name="rules_mode_region_desc">Checked regions go direct, the rest use the proxy</string>
     <string name="rules_area_filter">Search country/region</string>
     <string name="rules_area_empty">IP database is not open, so regions cannot be listed</string>
     <string name="rules_selected_count">%1$d regions selected</string>

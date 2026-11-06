@@ -199,16 +199,14 @@ private final class TunnelHandler: NSObject, EngineHandlerProtocol {
         let address = address ?? ""
         let network = network ?? ""
         let rules = Prefs().loadRules()
-        // 本地模式和全局模式结论是固定的，查 IP 库只是拖慢每一条新连接。
-        let matched: Bool
-        switch rules.geoMode {
-        case .global, .none:
-            matched = false
-        case .proxy, .bypass:
+        // 全局模式，以及地域模式没库或没勾选时，结论是固定的，不必查 IP 库。
+        let use: Bool
+        if rules.geoMode == .region && !rules.selectedAreaIds.isEmpty && FileManager.default.fileExists(atPath: ipregionFile().path) {
             ensureDb()
-            matched = inSelectedAreas(ipregionLookupIds(address), rules.selectedAreaIds)
+            use = !inSelectedAreas(ipregionLookupIds(address), rules.selectedAreaIds)
+        } else {
+            use = rules.geoMode != .region
         }
-        let use = shouldProxy(rules.geoMode, matched)
         if !address.isEmpty {
             let tag = use ? "proxy" : "direct"
             let line = network.isEmpty ? "\(tag) \(address)" : "\(tag) \(network) \(address)"
@@ -245,15 +243,6 @@ private final class TunnelHandler: NSObject, EngineHandlerProtocol {
         }
         if !packets.isEmpty {
             flow.writePackets(packets, withProtocols: protocols)
-        }
-    }
-
-    private func shouldProxy(_ mode: GeoMode, _ matched: Bool) -> Bool {
-        switch mode {
-        case .global: return true
-        case .none: return false
-        case .proxy: return matched
-        case .bypass: return !matched
         }
     }
 

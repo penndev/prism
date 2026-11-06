@@ -43,9 +43,7 @@ fun RulesScreen(
     }
     val geoValue = when (rules.geoMode) {
         GeoMode.Global -> stringResource(R.string.rules_mode_global)
-        GeoMode.None -> stringResource(R.string.rules_mode_none)
-        GeoMode.Proxy -> stringResource(R.string.rules_mode_proxy)
-        GeoMode.Bypass -> stringResource(R.string.rules_mode_bypass)
+        GeoMode.Region -> stringResource(R.string.rules_mode_region)
     }
 
     Column(Modifier.fillMaxSize()) {

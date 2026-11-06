@@ -13,7 +13,9 @@ const messages = {
       "一份需要走代理的域名列表，一行一个，按后缀匹配。写 google.com 时，www.google.com 也会命中。在 TUN 或移动端 VPN 下，命中的连接一定走代理，不再按 IP 地域判断。",
     assetGeoTitle: "地域 IP 库",
     assetGeoBody:
-      "没有命中域名规则的连接，按目标 IP 查这个库，用来做「代理选定区域」和「绕过选定区域」。全局模式和本地模式不看地区，可以不加载。下载后在规则页导入。",
+      "没有命中域名规则的连接，按目标 IP 查这个库。地域模式用它决定哪些地区直连，其余走代理。没有这个库时无法选地区，等于全部直连。全局模式不看地区。CZDB 和 GeoLite2 都可用，下载其中一个后在规则页导入。",
+    assetGeoCZDB: "CZDB IP 库",
+    assetGeoGeoLite2: "GeoLite2 IP 库",
     assetDownload: "下载",
     assetCopy: "复制网址",
     assetCopied: "已复制",
@@ -88,16 +90,12 @@ const messages = {
     ruleDomainHint: "点击链接下载：",
     ruleGeoTitle: "IP 地域规则",
     ruleGeo:
-      "没命中域名规则的请求，按目标 IP 查地域库。四种模式互斥，同一时间只能选一个：",
+      "没命中域名规则的请求，按目标 IP 查地域库。两种模式：",
     ruleGlobal:
       "<strong>全局模式</strong>：不按 IP 地区筛选，除已命中域名规则的之外，其余连接都走代理。",
-    ruleNone:
-      "<strong>本地模式</strong>：不按 IP 地区筛选，除已命中域名规则的之外，其余连接都直连。",
-    ruleProxy:
-      "<strong>代理选定区域</strong>：只代理勾选的国家/地区，没勾选的直连。要先加载 IP 库。",
-    ruleBypass:
-      "<strong>绕过选定区域</strong>：勾选的地区直连，其余走代理。同样要 IP 库。",
-    ruleDb: "地域规则需要先加载 IP 库，可在应用规则页下载或上传。",
+    ruleRegion:
+      "<strong>地域模式</strong>：勾选的地区直连，其余走代理。没有 IP 库，或一个地区都没勾时，全部直连。",
+    ruleDb: "要按地区区分，先在规则页加载 IP 库。没有库时地域模式等于全部直连。",
     ruleDbHint: "点击链接下载：",
     ruleManual:
       "手动模式没有接管系统 DNS。软件若已解析成 IP 再出站，主要看这里的地域规则和 IP 库是否已加载。",
@@ -152,7 +150,9 @@ const messages = {
       "A list of domains that should use the proxy, one per line, matched by suffix. google.com also matches www.google.com. In TUN or the mobile VPN, a hit always uses the proxy and skips geo.",
     assetGeoTitle: "Geo IP database",
     assetGeoBody:
-      "Connections that missed the domain list are looked up here, for Proxy selected regions and Bypass selected regions. Global and Local modes ignore region, so the database is optional. Import it on the rules page.",
+      "Connections that missed the domain list are looked up here. Regional mode uses it so checked regions go direct and the rest use the proxy. Without the database there is nothing to select, so that traffic goes direct. Global mode ignores region. Choose either CZDB or GeoLite2, then import it on the rules page.",
+    assetGeoCZDB: "CZDB IP database",
+    assetGeoGeoLite2: "GeoLite2 IP database",
     assetDownload: "Download",
     assetCopy: "Copy link",
     assetCopied: "Copied",
@@ -228,16 +228,12 @@ const messages = {
     ruleDomainHint: "Click the link to download: ",
     ruleGeoTitle: "IP geo rules",
     ruleGeo:
-      "Requests that did not match a domain are looked up in the IP database. The four modes are exclusive — pick one:",
+      "Requests that did not match a domain are looked up in the IP database. Two modes:",
     ruleGlobal:
       "<strong>Global mode</strong>: no region filter. Traffic that did not match a domain rule also goes through the proxy.",
-    ruleNone:
-      "<strong>Local mode</strong>: no region filter. Traffic that did not match a domain rule goes direct.",
-    ruleProxy:
-      "<strong>Proxy selected regions</strong>: only checked countries/regions use the proxy; the rest go direct. Needs the IP database.",
-    ruleBypass:
-      "<strong>Bypass selected regions</strong>: checked regions go direct; the rest use the proxy. Also needs the IP database.",
-    ruleDb: "Geo rules need the IP database. Download or upload it on the rules page.",
+    ruleRegion:
+      "<strong>Regional mode</strong>: checked regions go direct and the rest use the proxy. With no IP database, or with nothing checked, everything goes direct.",
+    ruleDb: "Load the IP database on the rules page to split traffic by region. Without it, regional mode sends everything direct.",
     ruleDbHint: "Click the link to download: ",
     ruleManual:
       "Manual mode does not take over system DNS. If an app already resolved the name to an IP, geo rules and the IP database matter more.",

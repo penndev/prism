@@ -33,12 +33,7 @@ struct RulesView: View {
     }
 
     private var geoValue: String {
-        switch store.rules.geoMode {
-        case .global: return store.t("rules_mode_global")
-        case .none: return store.t("rules_mode_none")
-        case .proxy: return store.t("rules_mode_proxy")
-        case .bypass: return store.t("rules_mode_bypass")
-        }
+        store.rules.geoMode == .global ? store.t("rules_mode_global") : store.t("rules_mode_region")
     }
 }
 
@@ -243,8 +238,8 @@ struct GeoRulesView: View {
 
     var body: some View {
         let rules = store.rules
-        let showAreas = rules.geoMode == .proxy || rules.geoMode == .bypass
         let hasDb = !store.geoAreas.isEmpty
+        let showAreas = rules.geoMode == .region && hasDb
         let showDbEditor = !store.dbReady || editingDb
         let rows = flattenAreas(store.geoAreas, expanded: expandedIds, filter: areaFilter, selectedIds: rules.selectedAreaIds)
 
@@ -318,13 +313,9 @@ struct GeoRulesView: View {
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
-                    modeRow(.global, enabled: true)
+                    modeRow(.global)
                     PreferenceDivider()
-                    modeRow(.none, enabled: true)
-                    PreferenceDivider()
-                    modeRow(.proxy, enabled: hasDb)
-                    PreferenceDivider()
-                    modeRow(.bypass, enabled: hasDb)
+                    modeRow(.region)
                 }
 
                 if showAreas {
@@ -337,33 +328,26 @@ struct GeoRulesView: View {
                     }
                     .padding(.horizontal, 16)
 
-                    if !hasDb {
-                        Text(store.t("rules_area_empty"))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 16)
-                    } else {
-                        VStack(spacing: 0) {
-                            ForEach(rows, id: \.area.id) { row in
-                                AreaTreeRow(row: row, onToggleExpand: {
-                                    if expandedIds.contains(row.area.id) {
-                                        expandedIds.remove(row.area.id)
-                                    } else {
-                                        expandedIds.insert(row.area.id)
-                                    }
-                                }, onToggleSelect: {
-                                    store.updateRules { draft in
-                                        var next = draft
-                                        next.selectedAreaIds = toggleAreaSelection(
-                                            tree: store.geoAreas,
-                                            selected: draft.selectedAreaIds,
-                                            node: row.area,
-                                            currentlyChecked: row.selected,
-                                        )
-                                        return next
-                                    }
-                                })
-                            }
+                    VStack(spacing: 0) {
+                        ForEach(rows, id: \.area.id) { row in
+                            AreaTreeRow(row: row, onToggleExpand: {
+                                if expandedIds.contains(row.area.id) {
+                                    expandedIds.remove(row.area.id)
+                                } else {
+                                    expandedIds.insert(row.area.id)
+                                }
+                            }, onToggleSelect: {
+                                store.updateRules { draft in
+                                    var next = draft
+                                    next.selectedAreaIds = toggleAreaSelection(
+                                        tree: store.geoAreas,
+                                        selected: draft.selectedAreaIds,
+                                        node: row.area,
+                                        currentlyChecked: row.selected,
+                                    )
+                                    return next
+                                }
+                            })
                         }
                     }
                 }
@@ -389,23 +373,9 @@ struct GeoRulesView: View {
     }
 
     @ViewBuilder
-    private func modeRow(_ mode: GeoMode, enabled: Bool) -> some View {
-        let title: String = {
-            switch mode {
-            case .global: return store.t("rules_mode_global")
-            case .none: return store.t("rules_mode_none")
-            case .proxy: return store.t("rules_mode_proxy")
-            case .bypass: return store.t("rules_mode_bypass")
-            }
-        }()
-        let desc: String = {
-            switch mode {
-            case .global: return store.t("rules_mode_global_desc")
-            case .none: return store.t("rules_mode_none_desc")
-            case .proxy: return store.t("rules_mode_proxy_desc")
-            case .bypass: return store.t("rules_mode_bypass_desc")
-            }
-        }()
+    private func modeRow(_ mode: GeoMode) -> some View {
+        let title = mode == .global ? store.t("rules_mode_global") : store.t("rules_mode_region")
+        let desc = mode == .global ? store.t("rules_mode_global_desc") : store.t("rules_mode_region_desc")
         Button {
             store.updateRules {
                 var next = $0
@@ -415,10 +385,10 @@ struct GeoRulesView: View {
         } label: {
             HStack {
                 Image(systemName: store.rules.geoMode == mode ? "largecircle.fill.circle" : "circle")
-                    .foregroundStyle(enabled ? Color.prismBlue : Color.secondary.opacity(0.38))
+                    .foregroundStyle(Color.prismBlue)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .foregroundStyle(enabled ? Color.primary : Color.primary.opacity(0.38))
+                        .foregroundStyle(Color.primary)
                     Text(desc)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -430,7 +400,6 @@ struct GeoRulesView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(!enabled)
     }
 }
 

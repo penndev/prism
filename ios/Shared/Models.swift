@@ -81,9 +81,7 @@ enum ThemeMode: String, Codable, CaseIterable {
 
 enum GeoMode: String, Codable, CaseIterable {
     case global = "Global"
-    case none = "None"
-    case proxy = "Proxy"
-    case bypass = "Bypass"
+    case region = "Region"
 }
 
 struct LatencyTestSettings: Codable, Equatable {
