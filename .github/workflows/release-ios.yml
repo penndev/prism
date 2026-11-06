@@ -1,0 +1,148 @@
+name: iOS Build
+on:
+  workflow_call:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ios:
+    name: iOS
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Build engine xcframework
+        run: |
+          set -euo pipefail
+          go install golang.org/x/mobile/cmd/gomobile golang.org/x/mobile/cmd/gobind
+          gomobile init
+          gomobile bind -target=ios -iosversion=16.0 -o ios/engine/Engine.xcframework github.com/penndev/prism/engine
+
+      - name: Prepare App Store Connect API key
+        shell: bash
+        env:
+          NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARIZATION_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARIZATION_ISSUER_ID }}
+          NOTARY_API_KEY_P8: ${{ secrets.MACOS_NOTARIZATION_API_KEY_P8 }}
+        run: |
+          set -euo pipefail
+          : "${NOTARY_KEY_ID:?Missing MACOS_NOTARIZATION_KEY_ID secret}"
+          : "${NOTARY_ISSUER_ID:?Missing MACOS_NOTARIZATION_ISSUER_ID secret}"
+          : "${NOTARY_API_KEY_P8:?Missing MACOS_NOTARIZATION_API_KEY_P8 secret}"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="$(git tag -l 'v*' --sort=-v:refname | head -n1)"
+          fi
+          if [[ -z "${TAG}" ]]; then echo "no v* tag" >&2; exit 1; fi
+          umask 077
+          api_key="$RUNNER_TEMP/AuthKey_${NOTARY_KEY_ID}.p8"
+          printf '%s' "$NOTARY_API_KEY_P8" > "$api_key"
+          build="$(python3 "$GITHUB_WORKSPACE/.github/scripts/appstore_build.py" "$NOTARY_KEY_ID" "$NOTARY_ISSUER_ID" "$api_key")"
+          echo "versionName=${TAG#v} build=${build}"
+          echo "IOS_VERSION_NAME=${TAG#v}" >> "$GITHUB_ENV"
+          echo "IOS_BUILD_NUMBER=${build}" >> "$GITHUB_ENV"
+          echo "APPSTORE_API_KEY=${api_key}" >> "$GITHUB_ENV"
+          echo "APPSTORE_KEY_ID=${NOTARY_KEY_ID}" >> "$GITHUB_ENV"
+          echo "APPSTORE_ISSUER_ID=${NOTARY_ISSUER_ID}" >> "$GITHUB_ENV"
+
+      - name: Import Apple Distribution certificate
+        shell: bash
+        env:
+          P12_BASE64: ${{ secrets.IOS_DISTRIBUTION_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_P12_PASSWORD }}
+        run: |
+          set -euo pipefail
+          : "${P12_BASE64:?Missing IOS_DISTRIBUTION_P12_BASE64 secret. App Store Connect API key can upload, but signing still needs an Apple Distribution certificate.}"
+          : "${P12_PASSWORD:?Missing IOS_DISTRIBUTION_P12_PASSWORD secret}"
+          keychain="$RUNNER_TEMP/prism-ios.keychain-db"
+          p12="$RUNNER_TEMP/apple-distribution.p12"
+          password="$(openssl rand -base64 32)"
+          printf '%s' "$P12_BASE64" | base64 -D -o "$p12"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$p12" -k "$keychain" -P "$P12_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain"
+          security list-keychains -d user -s "$keychain" "$HOME/Library/Keychains/login.keychain-db"
+          rm -f "$p12"
+          security default-keychain -s "$keychain"
+          identities="$(security find-identity -v -p codesigning "$keychain")"
+          identity="$(printf '%s\n' "$identities" | sed -n 's/.*"\(Apple Distribution:.*\|iPhone Distribution:.*\)"/\1/p' | head -n 1)"
+          if [[ -z "$identity" ]]; then
+            echo "The p12 does not contain an Apple Distribution or iPhone Distribution identity." >&2
+            printf '%s\n' "$identities" >&2
+            exit 1
+          fi
+          echo "Using $identity"
+
+      - name: Archive and export IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/Prism.xcarchive"
+          export_opts="$RUNNER_TEMP/ExportOptions.plist"
+          mkdir -p dist
+          python3 -c 'import os; open(os.environ["RUNNER_TEMP"]+"/ExportOptions.plist","w").write("""<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\"><dict><key>method</key><string>app-store-connect</string><key>signingStyle</key><string>automatic</string><key>teamID</key><string>AZ2L3M66MP</string><key>uploadSymbols</key><true/><key>manageAppVersionAndBuildNumber</key><false/></dict></plist>\n""")'
+          xcodebuild archive \
+            -project ios/Prism.xcodeproj \
+            -scheme Prism \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$archive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$APPSTORE_API_KEY" \
+            -authenticationKeyID "$APPSTORE_KEY_ID" \
+            -authenticationKeyIssuerID "$APPSTORE_ISSUER_ID" \
+            DEVELOPMENT_TEAM=AZ2L3M66MP \
+            CODE_SIGN_STYLE=Automatic \
+            MARKETING_VERSION="$IOS_VERSION_NAME" \
+            CURRENT_PROJECT_VERSION="$IOS_BUILD_NUMBER"
+          xcodebuild -exportArchive \
+            -archivePath "$archive" \
+            -exportPath dist \
+            -exportOptionsPlist "$export_opts" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$APPSTORE_API_KEY" \
+            -authenticationKeyID "$APPSTORE_KEY_ID" \
+            -authenticationKeyIssuerID "$APPSTORE_ISSUER_ID"
+          ipa="$(find dist -name '*.ipa' | head -n 1)"
+          if [[ -z "$ipa" ]]; then
+            echo "xcodebuild did not produce an ipa" >&2
+            exit 1
+          fi
+          mv "$ipa" dist/Prism-ios.ipa
+          find dist -name '*.ipa' ! -name 'Prism-ios.ipa' -delete
+
+      - name: Upload IPA to App Store Connect
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.private_keys"
+          cp "$APPSTORE_API_KEY" "$HOME/.private_keys/AuthKey_${APPSTORE_KEY_ID}.p8"
+          xcrun altool --upload-app --type ios --file dist/Prism-ios.ipa \
+            --apiKey "$APPSTORE_KEY_ID" --apiIssuer "$APPSTORE_ISSUER_ID"
+          rm -f "$HOME/.private_keys/AuthKey_${APPSTORE_KEY_ID}.p8" "$APPSTORE_API_KEY"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Prism-ios
+          path: dist/Prism-ios.ipa
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Remove iOS signing keychain
+        if: always()
+        shell: bash
+        run: security delete-keychain "$RUNNER_TEMP/prism-ios.keychain-db" || true

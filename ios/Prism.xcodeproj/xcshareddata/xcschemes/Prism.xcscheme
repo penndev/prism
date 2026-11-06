@@ -20,6 +20,20 @@
                ReferencedContainer = "container:Prism.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "AC0000000000000000000020"
+               BuildableName = "PacketTunnel.appex"
+               BlueprintName = "PacketTunnel"
+               ReferencedContainer = "container:Prism.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
