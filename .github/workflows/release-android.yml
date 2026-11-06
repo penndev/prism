@@ -1,6 +1,7 @@
 name: Android Build
 on:
   workflow_call:
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -55,8 +56,14 @@ jobs:
       - name: Set version
         working-directory: android
         shell: bash
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
         run: |
           set -euo pipefail
+          if [[ -z "${PLAY_SERVICE_ACCOUNT_JSON}" ]]; then
+            echo "PLAY_SERVICE_ACCOUNT_JSON is not set" >&2
+            exit 1
+          fi
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             TAG="${GITHUB_REF_NAME}"
           else
@@ -66,7 +73,11 @@ jobs:
             echo "no v* tag" >&2
             exit 1
           fi
-          CODE="$(git rev-list --count HEAD)"
+          umask 077
+          printf '%s' "$PLAY_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/play.json"
+          CODE="$(python3 "$GITHUB_WORKSPACE/.github/scripts/play_android.py" next-code "$RUNNER_TEMP/play.json")"
+          echo "versionCode=${CODE} versionName=${TAG#v}"
+          echo "VERSION_NAME=${TAG#v}" >> "$GITHUB_ENV"
           sed -i "s/versionCode = .*/versionCode = ${CODE}/" app/build.gradle.kts
           sed -i "s/versionName = \".*\"/versionName = \"${TAG#v}\"/" app/build.gradle.kts
 
@@ -74,9 +85,9 @@ jobs:
         working-directory: android
         run: sed -i 's|mirrors.cloud.tencent.com/gradle/|services.gradle.org/distributions/|' gradle/wrapper/gradle-wrapper.properties
 
-      - name: Build release APK
+      - name: Build release APK and AAB
         working-directory: android
-        run: java -classpath gradle/wrapper/gradle-wrapper.jar org.gradle.wrapper.GradleWrapperMain assembleRelease --no-daemon
+        run: java -classpath gradle/wrapper/gradle-wrapper.jar org.gradle.wrapper.GradleWrapperMain assembleRelease bundleRelease --no-daemon
 
       - name: Sign APK
         working-directory: android
@@ -113,6 +124,27 @@ jobs:
             --key-pass "pass:${key_pass}" \
             --out dist/Prism-android.apk \
             "$RUNNER_TEMP/aligned.apk"
+          unsigned_aab="$(find app/build/outputs/bundle/release -name '*.aab' | head -n 1)"
+          jarsigner -sigalg SHA256withRSA -digestalg SHA-256 \
+            -keystore "$store" -storepass "$ks_pass" -keypass "$key_pass" \
+            -signedjar dist/Prism-android.aab "$unsigned_aab" "$key_alias"
+
+      - name: Upload AAB to Google Play
+        working-directory: android
+        shell: bash
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${ANDROID_KEYSTORE_BASE64}" ]]; then
+            echo "ANDROID_KEYSTORE_BASE64 is not set; refusing to upload a temporarily signed AAB" >&2
+            exit 1
+          fi
+          umask 077
+          printf '%s' "$PLAY_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/play.json"
+          python3 "$GITHUB_WORKSPACE/.github/scripts/play_android.py" upload \
+            "$RUNNER_TEMP/play.json" dist/Prism-android.aab "$VERSION_NAME" internal
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
