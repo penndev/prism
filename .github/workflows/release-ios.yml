@@ -1,7 +1,17 @@
 name: iOS Build
 on:
   workflow_call:
+    inputs:
+      upload:
+        description: 上传到 App Store Connect
+        type: boolean
+        default: false
   workflow_dispatch:
+    inputs:
+      upload:
+        description: 上传到 App Store Connect
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -125,6 +135,7 @@ jobs:
           find dist -name '*.ipa' ! -name 'Prism-ios.ipa' -delete
 
       - name: Upload IPA to App Store Connect
+        if: inputs.upload
         shell: bash
         run: |
           set -euo pipefail

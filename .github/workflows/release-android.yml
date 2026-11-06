@@ -1,7 +1,17 @@
 name: Android Build
 on:
   workflow_call:
+    inputs:
+      upload:
+        description: 上传到 Google Play（internal 草稿）
+        type: boolean
+        default: false
   workflow_dispatch:
+    inputs:
+      upload:
+        description: 上传到 Google Play（internal 草稿）
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -130,6 +140,7 @@ jobs:
             -signedjar dist/Prism-android.aab "$unsigned_aab" "$key_alias"
 
       - name: Upload AAB to Google Play
+        if: inputs.upload
         working-directory: android
         shell: bash
         env:
