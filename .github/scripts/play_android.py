@@ -109,6 +109,10 @@ def upload(key_path: str, aab_path: str, version_name: str, track: str) -> None:
         version_code = str(json.loads(uploaded)["versionCode"])
         current = json.loads(request("GET", f"{API}/edits/{edit_id}/tracks/{track}", token=token))
         releases = list(current.get("releases") or [])
+        drafts = [item.get("name") or item.get("versionCodes") for item in releases if item.get("status") == "draft"]
+        if drafts:
+            print(f"replacing existing draft on {track}: {drafts}")
+        releases = [item for item in releases if item.get("status") != "draft"]
         releases.append(
             {
                 "name": version_name,

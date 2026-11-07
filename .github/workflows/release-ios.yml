@@ -78,7 +78,7 @@ jobs:
           rm -f "$p12"
           security default-keychain -s "$keychain"
           identities="$(security find-identity -v -p codesigning "$keychain")"
-          identity="$(printf '%s\n' "$identities" | sed -n 's/.*"\(Apple Distribution:.*\|iPhone Distribution:.*\)"/\1/p' | head -n 1)"
+          identity="$(printf '%s\n' "$identities" | sed -nE 's/.*"((Apple|iPhone) Distribution:.*)"/\1/p' | head -n 1)"
           if [[ -z "$identity" ]]; then
             echo "The p12 does not contain an Apple Distribution or iPhone Distribution identity." >&2
             printf '%s\n' "$identities" >&2
