@@ -34,11 +34,9 @@ jobs:
           cache: npm
           cache-dependency-path: desktop/frontend/package-lock.json
 
+      # 不用 arduino/setup-task：它从 GitHub Releases 下载，经常 504。
       - name: Install Task
-        uses: arduino/setup-task@v2
-        with:
-          version: 3.x
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+        run: go install github.com/go-task/task/v3/cmd/task@v3.54.0
 
       - name: Install Wails3 CLI
         run: go install github.com/wailsapp/wails/v3/cmd/wails3@${{ env.WAILS3_VERSION }}
