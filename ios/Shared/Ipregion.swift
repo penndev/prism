@@ -50,6 +50,14 @@ func ipregionLookupIds(_ address: String) -> [Int64] {
     return (0..<list.len()).map { list.get($0) }
 }
 
+func deleteIpregionDb() throws {
+    EngineCloseIpregionDB()
+    let file = ipregionFile()
+    if FileManager.default.fileExists(atPath: file.path) {
+        try FileManager.default.removeItem(at: file)
+    }
+}
+
 func installIpregionDb(src: URL, dest: URL) throws {
     if src.standardizedFileURL != dest.standardizedFileURL {
         if FileManager.default.fileExists(atPath: dest.path) {

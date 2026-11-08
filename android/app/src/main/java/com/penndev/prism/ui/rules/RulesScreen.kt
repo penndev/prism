@@ -20,7 +20,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.penndev.prism.R
-import com.penndev.prism.data.GeoMode
 import com.penndev.prism.ui.PrismUiState
 import com.penndev.prism.ui.components.PreferenceDivider
 import com.penndev.prism.ui.components.PreferenceRow
@@ -41,9 +40,10 @@ fun RulesScreen(
     } else {
         stringResource(R.string.rules_domain_count, domainCount)
     }
-    val geoValue = when (rules.geoMode) {
-        GeoMode.Global -> stringResource(R.string.rules_mode_global)
-        GeoMode.Region -> stringResource(R.string.rules_mode_region)
+    val geoValue = if (rules.selectedAreaIds.isEmpty()) {
+        stringResource(R.string.rules_geo_all_proxy)
+    } else {
+        stringResource(R.string.rules_selected_count, rules.selectedAreaIds.size)
     }
 
     Column(Modifier.fillMaxSize()) {

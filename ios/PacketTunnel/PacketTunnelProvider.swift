@@ -199,13 +199,13 @@ private final class TunnelHandler: NSObject, EngineHandlerProtocol {
         let address = address ?? ""
         let network = network ?? ""
         let rules = Prefs().loadRules()
-        // 全局模式，以及地域模式没库或没勾选时，结论是固定的，不必查 IP 库。
+        // 没库或没勾选：不做地域判断，走代理。勾选的地区直连。
         let use: Bool
-        if rules.geoMode == .region && !rules.selectedAreaIds.isEmpty && FileManager.default.fileExists(atPath: ipregionFile().path) {
+        if !rules.selectedAreaIds.isEmpty && FileManager.default.fileExists(atPath: ipregionFile().path) {
             ensureDb()
             use = !inSelectedAreas(ipregionLookupIds(address), rules.selectedAreaIds)
         } else {
-            use = rules.geoMode != .region
+            use = true
         }
         if !address.isEmpty {
             let tag = use ? "proxy" : "direct"

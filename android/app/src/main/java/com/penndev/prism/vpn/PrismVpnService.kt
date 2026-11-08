@@ -13,7 +13,6 @@ import android.os.ParcelFileDescriptor
 import androidx.core.app.NotificationCompat
 import com.penndev.prism.MainActivity
 import com.penndev.prism.R
-import com.penndev.prism.data.GeoMode
 import com.penndev.prism.data.ipregionFile
 import com.penndev.prism.data.ipregionLookupIds
 import com.penndev.prism.engine.Engine
@@ -178,9 +177,8 @@ class PrismVpnService : VpnService() {
 
     private fun shouldProxy(address: String): Boolean {
         val rules = VpnController.rules
-        if (rules.geoMode != GeoMode.Region) return true
-        // 没库或没勾选：全部直连。有库时勾选的地区直连，其余走代理。
-        if (rules.selectedAreaIds.isEmpty() || !ipregionFile(this).exists()) return false
+        // 没库或没勾选：不做地域判断，走代理。勾选的地区直连。
+        if (rules.selectedAreaIds.isEmpty() || !ipregionFile(this).exists()) return true
         return !inSelectedAreas(address, rules.selectedAreaIds)
     }
 

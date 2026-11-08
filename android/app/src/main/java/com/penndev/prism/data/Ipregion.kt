@@ -60,6 +60,15 @@ fun ipregionLookupIds(address: String): List<Long> {
     return List(list.len().toInt()) { list.get(it.toLong()) }
 }
 
+fun deleteIpregionDb(file: File) {
+    runCatching { Engine.closeIpregionDB() }
+    if (file.exists() && !file.delete()) {
+        openIpregionDb(file)
+        error("delete ipregion.db failed")
+    }
+    ipregionPath = ""
+}
+
 fun installIpregionDb(src: File, dest: File) {
     if (src.canonicalPath != dest.canonicalPath) {
         src.copyTo(dest, overwrite = true)

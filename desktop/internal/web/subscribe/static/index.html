@@ -30,18 +30,14 @@
           </select>
           <input id="subscribeUrl" type="text" placeholder="粘贴订阅链接" autocomplete="off">
           <button id="btnPreviewSubscription" type="button" onclick="previewFromSubscription()">解析订阅</button>
-        </div>
-        <div class="file-import-grid">
           <label id="labelImportFile" for="importFile" class="file-pick-btn">导入文件</label>
           <input id="importFile" class="file-hidden-input" type="file" accept=".json,application/json">
-          <span id="importFileName" class="file-name-text">未选择文件</span>
-          <button id="confirmImportBtn" type="button" class="primary" onclick="confirmImport()" hidden disabled>导入并覆盖</button>
         </div>
       </div>
       <div id="importPreview" class="import-preview" hidden>
         <div class="import-preview-head">
-          <strong id="importPreviewTitle">导入预览</strong>
-          <span id="importPreviewMeta"></span>
+          <span><strong id="importPreviewTitle">导入预览</strong> <span id="importPreviewMeta"></span></span>
+          <button id="confirmImportBtn" type="button" class="primary" onclick="confirmImport()" hidden disabled>导入并覆盖</button>
         </div>
         <pre id="importPreviewBody"></pre>
       </div>
@@ -102,7 +98,6 @@
     const importPreviewEl = document.getElementById('importPreview');
     const importPreviewMetaEl = document.getElementById('importPreviewMeta');
     const importPreviewBodyEl = document.getElementById('importPreviewBody');
-    const importFileNameEl = document.getElementById('importFileName');
     const subscribeUrlEl = document.getElementById('subscribeUrl');
     const subscribeTypeEl = document.getElementById('subscribeType');
     function t(key, params) {
@@ -126,7 +121,6 @@
       subscribeUrlEl.placeholder = t('input.subscribeUrl.placeholder');
       document.getElementById('btnPreviewSubscription').textContent = t('button.previewSubscription');
       document.getElementById('labelImportFile').textContent = t('button.importFile');
-      importFileNameEl.textContent = t('import.file.none');
       confirmImportBtnEl.textContent = t('button.confirmImport');
       document.getElementById('importPreviewTitle').textContent = t('import.preview.title');
       document.getElementById('sectionListTitle').textContent = t('section.list.title');
@@ -209,7 +203,6 @@
       importPreviewBodyEl.textContent = '';
       confirmImportBtnEl.hidden = true;
       confirmImportBtnEl.disabled = true;
-      importFileNameEl.textContent = t('import.file.none');
     }
 
     function getFilteredServers() {
@@ -376,8 +369,7 @@
     async function queueImportPreview() {
       try {
         const f = importFileEl.files[0];
-        if (!f) throw new Error(t('error.selectJsonFirst'));
-        importFileNameEl.textContent = f.name || t('import.file.selected');
+        if (!f) return;
         const text = await f.text();
         const parsed = JSON.parse(text);
         const normalized = normalizeServers(parsed);
@@ -386,6 +378,8 @@
       } catch (e) {
         resetImportPreview();
         showMsg(e.message, true);
+      } finally {
+        importFileEl.value = '';
       }
     }
 

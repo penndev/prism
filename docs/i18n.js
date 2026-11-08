@@ -13,7 +13,7 @@ const messages = {
       "一份需要走代理的域名列表，一行一个，按后缀匹配。写 google.com 时，www.google.com 也会命中。在 TUN 或移动端 VPN 下，命中的连接一定走代理，不再按 IP 地域判断。",
     assetGeoTitle: "地域 IP 库",
     assetGeoBody:
-      "没有命中域名规则的连接默认走代理。这个库用来认出勾选的地区，这些地区直连，其余仍走代理。没有库或不勾选时，不做地域判断。下载后在规则页导入。",
+      "没有命中域名规则的连接默认走代理。导入这个库之后，勾选的地区直连，没勾选的仍走代理。没有库时全部走代理。下载后在规则页导入。",
     assetGeoUrl: "https://github.com/penndev/gopkg/releases/download/ipregion-db/ipregion.czdb.db",
     assetDownload: "下载",
     assetCopy: "复制网址",
@@ -92,7 +92,7 @@ const messages = {
     ruleGeo:
       "没命中域名规则的请求默认走代理。只有勾选了地区，才会按目标 IP 查地域库。",
     ruleGlobal:
-      "<strong>没有勾选，或没有 IP 库</strong>：不做地域判断，这些连接走代理。",
+      "<strong>没有勾选，或没有 IP 库</strong>：全部走代理。",
     ruleRegion:
       "<strong>勾选的地区</strong>：直连。没勾的地区仍然走代理。",
     ruleDb: "删掉 IP 库会清空地区勾选。之后这些连接不再按地区区分，全部走代理。",
@@ -150,8 +150,8 @@ const messages = {
       "A list of domains that should use the proxy, one per line, matched by suffix. google.com also matches www.google.com. In TUN or the mobile VPN, a hit always uses the proxy and skips geo.",
     assetGeoTitle: "Geo IP database",
     assetGeoBody:
-      "Connections that missed the domain list use the proxy. This database identifies checked regions so they go direct; the rest still use the proxy. With no database or nothing checked, geo is not applied. Download it and import it on the rules page.",
-    assetGeoUrl: "https://github.com/penndev/gopkg/releases/download/ipregion-db/ipregion.geolite.db",
+      "Connections that missed the domain list use the proxy. After you import this database, checked regions go direct and unchecked regions still use the proxy. With no database, everything uses the proxy. Download it and import it on the rules page.",
+    assetGeoUrl: "https://github.com/penndev/gopkg/releases/download/ipregion-db/ipregion.czdb.db",
     assetDownload: "Download",
     assetCopy: "Copy link",
     assetCopied: "Copied",
@@ -230,7 +230,7 @@ const messages = {
     ruleGeo:
       "Requests that missed the domain rules use the proxy. The IP database is consulted only when some regions are checked.",
     ruleGlobal:
-      "<strong>Nothing checked, or no IP database</strong>: geo is not applied, and this traffic uses the proxy.",
+      "<strong>Nothing checked, or no IP database</strong>: everything uses the proxy.",
     ruleRegion:
       "<strong>Checked regions</strong> go direct. Unchecked regions still use the proxy.",
     ruleDb: "Deleting the IP database clears the checked regions. After that, this traffic is no longer split by region and all of it uses the proxy.",

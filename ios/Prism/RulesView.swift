@@ -33,7 +33,9 @@ struct RulesView: View {
     }
 
     private var geoValue: String {
-        store.rules.geoMode == .global ? store.t("rules_mode_global") : store.t("rules_mode_region")
+        store.rules.selectedAreaIds.isEmpty
+            ? store.t("rules_geo_all_proxy")
+            : store.t("rules_selected_count", store.rules.selectedAreaIds.count)
     }
 }
 
@@ -239,7 +241,7 @@ struct GeoRulesView: View {
     var body: some View {
         let rules = store.rules
         let hasDb = !store.geoAreas.isEmpty
-        let showAreas = rules.geoMode == .region && hasDb
+        let showAreas = hasDb
         let showDbEditor = !store.dbReady || editingDb
         let rows = flattenAreas(store.geoAreas, expanded: expandedIds, filter: areaFilter, selectedIds: rules.selectedAreaIds)
 
@@ -248,8 +250,11 @@ struct GeoRulesView: View {
                 PreferenceGroup(
                     title: store.t("rules_db_label"),
                     actions: store.dbReady ? AnyView(
-                        Button(store.t(editingDb ? "rules_db_cancel" : "rules_db_replace")) {
-                            editingDb.toggle()
+                        HStack(spacing: 12) {
+                            Button(store.t("rules_db_delete")) { store.deleteDb() }
+                            Button(store.t(editingDb ? "rules_db_cancel" : "rules_db_replace")) {
+                                editingDb.toggle()
+                            }
                         }
                         .disabled(store.dbBusy)
                     ) : nil,
@@ -313,13 +318,26 @@ struct GeoRulesView: View {
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
-                    modeRow(.global)
-                    PreferenceDivider()
-                    modeRow(.region)
                 }
 
                 if showAreas {
                     VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 16) {
+                            Button(store.t("rules_select_all")) {
+                                store.updateRules {
+                                    var next = $0
+                                    next.selectedAreaIds = selectAllAreas(store.geoAreas)
+                                    return next
+                                }
+                            }
+                            Button(store.t("rules_invert")) {
+                                store.updateRules {
+                                    var next = $0
+                                    next.selectedAreaIds = invertAreas(store.geoAreas, selected: $0.selectedAreaIds)
+                                    return next
+                                }
+                            }
+                        }
                         TextField(store.t("rules_area_filter"), text: $areaFilter)
                             .textFieldStyle(.roundedBorder)
                         Text(store.t("rules_selected_count", rules.selectedAreaIds.count))
@@ -372,35 +390,6 @@ struct GeoRulesView: View {
         }
     }
 
-    @ViewBuilder
-    private func modeRow(_ mode: GeoMode) -> some View {
-        let title = mode == .global ? store.t("rules_mode_global") : store.t("rules_mode_region")
-        let desc = mode == .global ? store.t("rules_mode_global_desc") : store.t("rules_mode_region_desc")
-        Button {
-            store.updateRules {
-                var next = $0
-                next.geoMode = mode
-                return next
-            }
-        } label: {
-            HStack {
-                Image(systemName: store.rules.geoMode == mode ? "largecircle.fill.circle" : "circle")
-                    .foregroundStyle(Color.prismBlue)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .foregroundStyle(Color.primary)
-                    Text(desc)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
 }
 
 private struct AreaRow {
@@ -453,6 +442,38 @@ private func selfAndDescendantIds(_ node: AreaUi) -> Set<Int64> {
         n.children.forEach(walk)
     }
     walk(node)
+    return out
+}
+
+private func selectAllAreas(_ tree: [AreaUi]) -> Set<Int64> {
+    Set(tree.map(\.id).filter { $0 > 0 })
+}
+
+private func invertAreas(_ tree: [AreaUi], selected: Set<Int64>) -> Set<Int64> {
+    // 勾中父级等于整棵子树都直连。反选只保留「整段都没被选中」的最高节点。每个节点只访问一次。
+    struct Part {
+        var any: Bool
+        var ids: [Int64]
+    }
+    func visit(_ node: AreaUi) -> Part {
+        if selected.contains(node.id) { return Part(any: true, ids: []) }
+        var childAny = false
+        var parts: [[Int64]] = []
+        for child in node.children {
+            let result = visit(child)
+            if result.any { childAny = true } else { parts.append(result.ids) }
+        }
+        if !childAny {
+            return Part(any: false, ids: node.id > 0 ? [node.id] : [])
+        }
+        var ids: [Int64] = []
+        for part in parts { ids.append(contentsOf: part) }
+        return Part(any: true, ids: ids)
+    }
+    var out = Set<Int64>()
+    for node in tree {
+        out.formUnion(visit(node).ids)
+    }
     return out
 }
 

@@ -9,7 +9,6 @@ import com.penndev.prism.applyAppLanguage
 import com.penndev.prism.R
 import com.penndev.prism.data.AppSettings
 import com.penndev.prism.data.AreaUi
-import com.penndev.prism.data.GeoMode
 import com.penndev.prism.data.HOST_PATTERN
 import com.penndev.prism.data.LatencyTestSettings
 import com.penndev.prism.data.Prefs
@@ -20,6 +19,7 @@ import com.penndev.prism.data.SubscriptionException
 import com.penndev.prism.data.SubscriptionParser
 import com.penndev.prism.data.SystemSettings
 import com.penndev.prism.data.TrafficUi
+import com.penndev.prism.data.deleteIpregionDb
 import com.penndev.prism.data.downloadIpregionDb
 import com.penndev.prism.data.formatBytes
 import com.penndev.prism.data.installIpregionDb
@@ -463,6 +463,16 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
         VpnController.rules = rules
     }
 
+    fun deleteDb() {
+        runDbJob(R.string.rules_db_deleted) {
+            try {
+                deleteIpregionDb(ipregionFile(app))
+            } catch (_: IllegalStateException) {
+                error(str(R.string.rules_db_delete_failed))
+            }
+        }
+    }
+
     fun downloadDb() {
         val url = _state.value.rules.dbUrl.trim()
         if (url.isEmpty()) {
@@ -530,7 +540,7 @@ class PrismViewModel(application: Application) : AndroidViewModel(application) {
                 runCatching { block() }.exceptionOrNull()
             }
             if (error == null) {
-                updateRules { it.copy(geoMode = GeoMode.Global, selectedAreaIds = emptySet()) }
+                updateRules { it.copy(selectedAreaIds = emptySet()) }
             }
             withContext(Dispatchers.IO) { refreshEngineUi() }
             _state.update {

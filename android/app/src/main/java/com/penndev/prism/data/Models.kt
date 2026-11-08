@@ -36,8 +36,6 @@ data class Subscription(
 
 enum class ThemeMode { System, Light, Dark }
 
-enum class GeoMode { Global, Region }
-
 data class LatencyTestSettings(
     val host: String = "google.com",
     val sortAfterPing: Boolean = true,
@@ -64,7 +62,6 @@ data class AreaUi(
 )
 
 data class RuleDraft(
-    val geoMode: GeoMode = GeoMode.Global,
     val selectedAreaIds: Set<Long> = emptySet(),
     val dbUrl: String = "",
     val domains: List<String> = listOf("google.com"),

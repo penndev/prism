@@ -79,11 +79,6 @@ enum ThemeMode: String, Codable, CaseIterable {
     case dark = "Dark"
 }
 
-enum GeoMode: String, Codable, CaseIterable {
-    case global = "Global"
-    case region = "Region"
-}
-
 struct LatencyTestSettings: Codable, Equatable {
     var host: String = "google.com"
     var sortAfterPing: Bool = true
@@ -119,7 +114,6 @@ struct Subscription: Codable, Equatable {
 }
 
 struct RuleDraft: Equatable {
-    var geoMode: GeoMode = .global
     var selectedAreaIds: Set<Int64> = []
     var dbUrl: String = ""
     var domains: [String] = ["google.com"]

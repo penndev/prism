@@ -25,10 +25,8 @@
       <div class="row">
         <input id="domainUrl" type="url" placeholder="https://…" spellcheck="false">
         <button id="btnDomainFetch" class="primary" type="button">获取</button>
-      </div>
-      <div class="row">
-        <input id="domainFile" type="file" accept=".txt,.list,text/plain">
-        <button id="btnDomainFile" type="button">上传文件</button>
+        <label id="labelDomainFile" class="file-pick" for="domainFile">上传文件</label>
+        <input id="domainFile" class="file-hidden" type="file" accept=".txt,.list,text/plain">
       </div>
       <textarea id="domains" spellcheck="false" placeholder="example.com&#10;github.com"></textarea>
       <div class="row">
@@ -38,7 +36,7 @@
 
     <section class="panel" id="geoSection">
       <h2 id="geoTitle">地域规则</h2>
-      <p id="geoDesc" class="subline">默认不做地域判断，这些连接都走代理。有 IP 库后，勾选的地区直连，其余仍走代理。</p>
+      <p id="geoDesc" class="subline">勾选的地区直连，没勾选的走代理。没有 IP 库时，全部走代理。</p>
 
         <div class="db-block">
           <div class="db-head">
@@ -48,15 +46,13 @@
               <button id="btnChangeDb" type="button" hidden>更换</button>
             </span>
           </div>
-          <div id="dbStatus" class="status-box has-path-tip" title="">-</div>
+          <div id="dbStatus" class="status-box">-</div>
           <div id="dbEditor" hidden>
             <div class="row">
-              <input id="dbUrl" type="url" placeholder="" spellcheck="false">
+              <input id="dbUrl" type="url" placeholder="https://…" spellcheck="false">
               <button id="btnDownload" class="primary" type="button">下载</button>
-            </div>
-            <div class="row">
-              <input id="dbFile" type="file" accept=".db,application/octet-stream">
-              <button id="btnUpload" type="button">上传文件</button>
+              <label id="labelDbFile" class="file-pick" for="dbFile">上传文件</label>
+              <input id="dbFile" class="file-hidden" type="file" accept=".db,application/octet-stream">
             </div>
           </div>
           <div class="row">
@@ -94,6 +90,8 @@
     let saveTimer = null;
     let saving = false;
     let pendingSave = null;
+    // 删库期间不再发保存。先等已经发出的 PUT 结束，再 DELETE，避免旧的地区勾选写回去。
+    let holdSaves = false;
     let dbExists = false;
     let editingDb = false;
 
@@ -107,7 +105,7 @@
     const btnSelectAll = document.getElementById('btnSelectAll');
     const btnInvert = document.getElementById('btnInvert');
     const btnDownload = document.getElementById('btnDownload');
-    const btnUpload = document.getElementById('btnUpload');
+    const labelDbFile = document.getElementById('labelDbFile');
     const areaPicker = document.getElementById('areaPicker');
     const areaFilter = document.getElementById('areaFilter');
     const areaChecks = document.getElementById('areaChecks');
@@ -117,7 +115,6 @@
     const domainUrlEl = document.getElementById('domainUrl');
     const domainFileEl = document.getElementById('domainFile');
     const btnDomainFetch = document.getElementById('btnDomainFetch');
-    const btnDomainFile = document.getElementById('btnDomainFile');
     const domainMsg = document.getElementById('domainMsg');
 
     function t(key, params) {
@@ -154,11 +151,11 @@
       domainsEl.placeholder = t('domain.placeholder');
       domainUrlEl.placeholder = t('domain.url.placeholder');
       btnDomainFetch.textContent = t('domain.fetch');
-      btnDomainFile.textContent = t('domain.importFile');
+      document.getElementById('labelDomainFile').textContent = t('domain.importFile');
+      labelDbFile.textContent = t('button.upload');
       areaFilter.placeholder = t('area.filter');
       dbUrlEl.placeholder = t('db.url.placeholder');
       btnDownload.textContent = t('button.download');
-      btnUpload.textContent = t('button.upload');
       if (dbExists) {
         btnChangeDb.textContent = editingDb ? t('button.cancel') : t('button.replace');
       }
@@ -329,6 +326,7 @@
     }
 
     async function saveConfig(payload, msgEl) {
+      if (holdSaves) return;
       if (saving) {
         pendingSave = { payload, msgEl };
         return;
@@ -342,15 +340,18 @@
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify(payload)
         });
+        if (holdSaves) return;
         areaIds = Array.isArray(res.areaIds) ? res.areaIds.map(Number).filter((id) => id > 0) : payload.areaIds;
         el.textContent = t('status.saved');
-        updateSelectedCount();
+        renderAreaChecks();
       } catch (e) {
-        el.textContent = e.message;
+        if (!holdSaves) el.textContent = e.message;
         throw e;
       } finally {
         saving = false;
-        if (pendingSave) {
+        if (holdSaves) {
+          pendingSave = null;
+        } else if (pendingSave) {
           const next = pendingSave;
           pendingSave = null;
           try {
@@ -361,6 +362,7 @@
     }
 
     function scheduleSaveFromUI(msgEl) {
+      if (holdSaves) return;
       clearTimeout(saveTimer);
       saveTimer = setTimeout(async () => {
         try {
@@ -377,33 +379,42 @@
 
     function invertAreas() {
       const selected = new Set(selectedAreaIds());
-      function covered(id) {
-        const path = findPath(areas, id) || [];
-        return path.some((n) => selected.has(Number(n.id)));
-      }
-      function subtreeHasSelection(node) {
-        if (selected.has(Number(node.id))) return true;
-        return (node.children || []).some(subtreeHasSelection);
+      // 勾中父级等于整棵子树都直连。反选只保留「整段都没被选中」的最高节点。
+      // 每个节点只访问一次；不要对每个节点再全树查找。
+      function visit(node) {
+        const id = Number(node.id);
+        if (selected.has(id)) return { any: true, ids: [] };
+        let childAny = false;
+        const parts = [];
+        for (const child of node.children || []) {
+          const result = visit(child);
+          if (result.any) childAny = true;
+          else parts.push(result.ids);
+        }
+        if (!childAny) return { any: false, ids: id > 0 ? [id] : [] };
+        const ids = [];
+        for (const part of parts) {
+          for (const item of part) ids.push(item);
+        }
+        return { any: true, ids };
       }
       const out = [];
-      function walk(nodes) {
-        for (const node of nodes || []) {
-          const id = Number(node.id);
-          const whole = !covered(id) && !subtreeHasSelection(node);
-          if (whole) {
-            if (id > 0) out.push(id);
-          } else {
-            walk(node.children);
-          }
-        }
+      for (const node of areas || []) {
+        const result = visit(node);
+        for (const id of result.ids) out.push(id);
       }
-      walk(areas);
       areaIds = out;
       renderAreaChecks();
       scheduleSaveFromUI(geoMsg);
     }
 
     async function deleteDb() {
+      clearTimeout(saveTimer);
+      holdSaves = true;
+      pendingSave = null;
+      while (saving) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
       btnDeleteDb.disabled = true;
       dbMsg.textContent = t('db.status.deleting');
       try {
@@ -418,6 +429,9 @@
       } catch (e) {
         dbMsg.textContent = e.message;
       } finally {
+        clearTimeout(saveTimer);
+        pendingSave = null;
+        holdSaves = false;
         btnDeleteDb.disabled = false;
       }
     }
@@ -474,7 +488,7 @@
         if (node) collectIds(node).forEach((x) => set.delete(x));
       }
       areaIds = Array.from(set).filter((n) => n > 0);
-      updateSelectedCount();
+      renderAreaChecks();
       scheduleSaveFromUI(geoMsg);
     }
 
@@ -507,11 +521,9 @@
 
     async function uploadDb() {
       const file = dbFileEl.files && dbFileEl.files[0];
-      if (!file) {
-        dbMsg.textContent = t('db.error.noFile');
-        return;
-      }
-      btnUpload.disabled = true;
+      if (!file) return;
+      dbFileEl.disabled = true;
+      labelDbFile.classList.add('is-disabled');
       dbMsg.textContent = t('db.status.uploading');
       try {
         const fd = new FormData();
@@ -528,7 +540,9 @@
       } catch (e) {
         dbMsg.textContent = e.message;
       } finally {
-        btnUpload.disabled = false;
+        dbFileEl.disabled = false;
+        dbFileEl.value = '';
+        labelDbFile.classList.remove('is-disabled');
       }
     }
 
@@ -549,7 +563,7 @@
       syncDbEditorUI();
     });
     btnDownload.addEventListener('click', downloadDb);
-    btnUpload.addEventListener('click', uploadDb);
+    dbFileEl.addEventListener('change', uploadDb);
     btnDomainFetch.addEventListener('click', async () => {
       const url = domainUrlEl.value.trim();
       if (!url) {
@@ -577,12 +591,9 @@
         btnDomainFetch.disabled = false;
       }
     });
-    btnDomainFile.addEventListener('click', async () => {
+    domainFileEl.addEventListener('change', async () => {
       const file = domainFileEl.files && domainFileEl.files[0];
-      if (!file) {
-        domainMsg.textContent = t('db.error.noFile');
-        return;
-      }
+      if (!file) return;
       try {
         const text = await file.text();
         const body = String(text || '').trim();
@@ -595,6 +606,8 @@
         scheduleSaveFromUI(domainMsg);
       } catch (e) {
         domainMsg.textContent = t('domain.error.emptyFile');
+      } finally {
+        domainFileEl.value = '';
       }
     });
 

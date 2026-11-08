@@ -151,13 +151,30 @@ textarea {
   resize: vertical;
 }
 
-input[type="file"] {
-  max-width: 100%;
-  color: var(--muted);
-  font-size: 13px;
+.file-pick {
+  flex: none;
+  white-space: nowrap;
 }
 
-button {
+.file-pick.is-disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.file-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+button,
+.file-pick {
   font: inherit;
   cursor: pointer;
   padding: 0.5rem 0.9rem;
@@ -167,7 +184,8 @@ button {
   color: var(--text);
 }
 
-button:hover {
+button:hover,
+.file-pick:hover {
   border-color: #aebad0;
   background: #f8fbff;
 }
@@ -193,11 +211,6 @@ button:disabled {
   font-size: 13px;
 }
 
-.db-hint {
-  margin: 0.5rem 0 0.35rem;
-  word-break: break-all;
-}
-
 .status-box {
   margin-top: 0.4rem;
   padding: 0.65rem 0.75rem;
@@ -209,24 +222,8 @@ button:disabled {
   word-break: break-word;
 }
 
-.status-box.has-path-tip {
-  cursor: help;
-}
-
-.status-box.warn {
-  color: #b45309;
-  border-color: #f59e0b55;
-  background: #fffbeb;
-}
-
 .status-box.ok {
   color: var(--muted);
-}
-
-:root[data-theme="dark"] .status-box.warn {
-  color: #fbbf24;
-  background: #1f1808;
-  border-color: #92400e;
 }
 
 .db-block {
@@ -258,44 +255,6 @@ button:disabled {
 
 .db-block .status-box {
   margin-top: 0;
-}
-
-.rule-section {
-  margin-top: 0.9rem;
-  padding-top: 0.85rem;
-  border-top: 1px solid var(--border);
-}
-
-.rule-section:first-of-type {
-  margin-top: 0.35rem;
-  padding-top: 0.35rem;
-  border-top: 0;
-}
-
-.rule-section-head h3 {
-  margin: 0 0 0.35rem;
-  font-size: 0.95rem;
-  font-weight: 600;
-}
-
-.mode-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem 1.1rem;
-  margin: 0.55rem 0 0.75rem;
-}
-
-.mode-option {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 14px;
-  cursor: pointer;
-}
-
-.mode-option:has(input:disabled) {
-  opacity: 0.55;
-  cursor: not-allowed;
 }
 
 .area-picker {

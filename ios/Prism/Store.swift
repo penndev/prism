@@ -458,6 +458,12 @@ final class Store: ObservableObject {
         TunnelController.shared.rules = rules
     }
 
+    func deleteDb() {
+        runDbJob(okKey: "rules_db_deleted") {
+            try deleteIpregionDb()
+        }
+    }
+
     func downloadDb() {
         let url = rules.dbUrl.trimmingCharacters(in: .whitespacesAndNewlines)
         if url.isEmpty {
@@ -548,7 +554,6 @@ final class Store: ObservableObject {
                 if error == nil {
                     self.updateRules {
                         var next = $0
-                        next.geoMode = .global
                         next.selectedAreaIds = []
                         return next
                     }

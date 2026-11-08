@@ -116,7 +116,6 @@ final class Prefs {
               let data = raw.data(using: .utf8),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { return RuleDraft() }
-        let mode = GeoMode(rawValue: obj["geoMode"] as? String ?? "Global") ?? .global
         let areasSrc = obj["selectedAreaIds"] as? [Any] ?? []
         var areaIds = Set<Int64>()
         for item in areasSrc {
@@ -137,7 +136,6 @@ final class Prefs {
             if !d.isEmpty { domains.append(d) }
         }
         return RuleDraft(
-            geoMode: mode,
             selectedAreaIds: areaIds,
             dbUrl: obj["dbUrl"] as? String ?? "",
             domains: domains,
@@ -146,7 +144,6 @@ final class Prefs {
 
     func saveRules(_ draft: RuleDraft) {
         let obj: [String: Any] = [
-            "geoMode": draft.geoMode.rawValue,
             "selectedAreaIds": draft.selectedAreaIds.sorted().map { NSNumber(value: $0) },
             "dbUrl": draft.dbUrl,
             "domains": draft.domains,

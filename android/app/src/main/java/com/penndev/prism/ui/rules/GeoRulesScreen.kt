@@ -29,7 +29,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -47,10 +46,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.penndev.prism.R
 import com.penndev.prism.data.AreaUi
-import com.penndev.prism.data.GeoMode
 import com.penndev.prism.ui.PrismUiState
 import com.penndev.prism.ui.PrismViewModel
-import com.penndev.prism.ui.components.PreferenceDivider
 import com.penndev.prism.ui.components.PreferenceGroup
 
 private data class AreaRow(
@@ -75,7 +72,7 @@ fun GeoRulesScreen(
         mutableStateOf(topLevelIdsWithSelected(state.geoAreas, rules.selectedAreaIds))
     }
     val hasDb = state.geoAreas.isNotEmpty()
-    val showAreas = rules.geoMode == GeoMode.Region && hasDb
+    val showAreas = hasDb
     var editingDb by rememberSaveable { mutableStateOf(false) }
     // 输入时只改本地草稿，真正要用的时候才落库：updateRules 每次都会把整份
     // 地域 ID 和域名列表序列化后写 SharedPreferences，扛不住逐字符触发。
@@ -90,11 +87,6 @@ fun GeoRulesScreen(
     val rows = remember(state.geoAreas, areaFilter, expandedIds, rules.selectedAreaIds) {
         flattenAreas(state.geoAreas, expandedIds, areaFilter, rules.selectedAreaIds)
     }
-    val modes = listOf(
-        Triple(GeoMode.Global, R.string.rules_mode_global, R.string.rules_mode_global_desc),
-        Triple(GeoMode.Region, R.string.rules_mode_region, R.string.rules_mode_region_desc),
-    )
-
     Column(Modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text(stringResource(R.string.rules_geo_title)) },
@@ -118,6 +110,12 @@ fun GeoRulesScreen(
                     title = stringResource(R.string.rules_db_label),
                     actions = {
                         if (state.dbReady) {
+                            TextButton(
+                                onClick = { viewModel.deleteDb() },
+                                enabled = !state.dbBusy,
+                            ) {
+                                Text(stringResource(R.string.rules_db_delete))
+                            }
                             TextButton(
                                 onClick = { editingDb = !editingDb },
                                 enabled = !state.dbBusy,
@@ -186,39 +184,25 @@ fun GeoRulesScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     )
-                    modes.forEachIndexed { index, (mode, title, desc) ->
-                        if (index > 0) PreferenceDivider()
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    viewModel.updateRules { it.copy(geoMode = mode) }
-                                }
-                                .padding(horizontal = 8.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            RadioButton(
-                                selected = rules.geoMode == mode,
-                                onClick = { viewModel.updateRules { it.copy(geoMode = mode) } },
-                            )
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    stringResource(title),
-                                    style = MaterialTheme.typography.bodyLarge,
-                                )
-                                Text(
-                                    stringResource(desc),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                    }
                 }
             }
             if (showAreas) {
                 item {
                     Column(Modifier.padding(horizontal = 16.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(onClick = {
+                                viewModel.updateRules { it.copy(selectedAreaIds = selectAllAreas(state.geoAreas)) }
+                            }) {
+                                Text(stringResource(R.string.rules_select_all))
+                            }
+                            TextButton(onClick = {
+                                viewModel.updateRules {
+                                    it.copy(selectedAreaIds = invertAreas(state.geoAreas, it.selectedAreaIds))
+                                }
+                            }) {
+                                Text(stringResource(R.string.rules_invert))
+                            }
+                        }
                         OutlinedTextField(
                             value = areaFilter,
                             onValueChange = { areaFilter = it },
@@ -313,6 +297,30 @@ private fun selfAndDescendantIds(node: AreaUi): Set<Long> = buildSet {
 
 // 父地区勾上时子地区只是显示成勾选，id 并不在集合里。
 // 去勾子节点要把祖先拆开，把旁支加回去，才能做到「选整个亚洲但排除日本」。
+private fun selectAllAreas(tree: List<AreaUi>): Set<Long> =
+    tree.map { it.id }.filter { it > 0L }.toSet()
+
+private fun invertAreas(tree: List<AreaUi>, selected: Set<Long>): Set<Long> {
+    // 勾中父级等于整棵子树都直连。反选只保留「整段都没被选中」的最高节点。每个节点只访问一次。
+    data class Part(val any: Boolean, val ids: List<Long>)
+    fun visit(node: AreaUi): Part {
+        if (node.id in selected) return Part(true, emptyList())
+        val parts = ArrayList<List<Long>>()
+        var childAny = false
+        for (child in node.children) {
+            val result = visit(child)
+            if (result.any) childAny = true else parts.add(result.ids)
+        }
+        if (!childAny) return Part(false, if (node.id > 0L) listOf(node.id) else emptyList())
+        val ids = ArrayList<Long>()
+        for (part in parts) ids.addAll(part)
+        return Part(true, ids)
+    }
+    val out = mutableSetOf<Long>()
+    for (node in tree) out.addAll(visit(node).ids)
+    return out
+}
+
 private fun toggleAreaSelection(
     tree: List<AreaUi>,
     selected: Set<Long>,
