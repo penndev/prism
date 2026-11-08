@@ -13,9 +13,8 @@ const messages = {
       "一份需要走代理的域名列表，一行一个，按后缀匹配。写 google.com 时，www.google.com 也会命中。在 TUN 或移动端 VPN 下，命中的连接一定走代理，不再按 IP 地域判断。",
     assetGeoTitle: "地域 IP 库",
     assetGeoBody:
-      "没有命中域名规则的连接，按目标 IP 查这个库。地域模式用它决定哪些地区直连，其余走代理。没有这个库时无法选地区，等于全部直连。全局模式不看地区。CZDB 和 GeoLite2 都可用，下载其中一个后在规则页导入。",
-    assetGeoCZDB: "CZDB IP 库",
-    assetGeoGeoLite2: "GeoLite2 IP 库",
+      "没有命中域名规则的连接默认走代理。这个库用来认出勾选的地区，这些地区直连，其余仍走代理。没有库或不勾选时，不做地域判断。下载后在规则页导入。",
+    assetGeoUrl: "https://github.com/penndev/gopkg/releases/download/ipregion-db/ipregion.czdb.db",
     assetDownload: "下载",
     assetCopy: "复制网址",
     assetCopied: "已复制",
@@ -25,7 +24,8 @@ const messages = {
     platformIos: "iOS",
     winDesc: "64 位安装包",
     macDesc: "Apple 芯片（arm64）安装包",
-    androidDesc: "安装包",
+    androidPlay: "Google Play",
+    androidApk: "APK",
     iosDesc: "暂未提供",
     installWinToggle: "Windows 安装说明",
     installWinSteps:
@@ -39,7 +39,7 @@ const messages = {
       "若提示无法验证开发者：系统设置 → 隐私与安全性 → 仍要打开。",
     installAndroidToggle: "Android 安装说明",
     installAndroidSteps:
-      "<li>点上方 Android 下载 <code>Prism-android.apk</code>。</li><li>在手机上打开安装。若被拦截，到系统设置里允许安装未知应用。</li>",
+      "<li>用 Google Play 安装，或下载自动打包的 <code>Prism-android.apk</code>。</li><li>用 APK 安装时，若被拦截，到系统设置里允许安装未知应用。</li>",
     proxyTitle: "代理说明",
     proxyIntro:
       "先选一个节点，再在代理面板里选模式。桌面端是手动模式或 TUN；移动端没有这个开关，一律走系统 VPN，效果接近 TUN。",
@@ -90,12 +90,12 @@ const messages = {
     ruleDomainHint: "点击链接下载：",
     ruleGeoTitle: "IP 地域规则",
     ruleGeo:
-      "没命中域名规则的请求，按目标 IP 查地域库。两种模式：",
+      "没命中域名规则的请求默认走代理。只有勾选了地区，才会按目标 IP 查地域库。",
     ruleGlobal:
-      "<strong>全局模式</strong>：不按 IP 地区筛选，除已命中域名规则的之外，其余连接都走代理。",
+      "<strong>没有勾选，或没有 IP 库</strong>：不做地域判断，这些连接走代理。",
     ruleRegion:
-      "<strong>地域模式</strong>：勾选的地区直连，其余走代理。没有 IP 库，或一个地区都没勾时，全部直连。",
-    ruleDb: "要按地区区分，先在规则页加载 IP 库。没有库时地域模式等于全部直连。",
+      "<strong>勾选的地区</strong>：直连。没勾的地区仍然走代理。",
+    ruleDb: "删掉 IP 库会清空地区勾选。之后这些连接不再按地区区分，全部走代理。",
     ruleDbHint: "点击链接下载：",
     ruleManual:
       "手动模式没有接管系统 DNS。软件若已解析成 IP 再出站，主要看这里的地域规则和 IP 库是否已加载。",
@@ -150,9 +150,8 @@ const messages = {
       "A list of domains that should use the proxy, one per line, matched by suffix. google.com also matches www.google.com. In TUN or the mobile VPN, a hit always uses the proxy and skips geo.",
     assetGeoTitle: "Geo IP database",
     assetGeoBody:
-      "Connections that missed the domain list are looked up here. Regional mode uses it so checked regions go direct and the rest use the proxy. Without the database there is nothing to select, so that traffic goes direct. Global mode ignores region. Choose either CZDB or GeoLite2, then import it on the rules page.",
-    assetGeoCZDB: "CZDB IP database",
-    assetGeoGeoLite2: "GeoLite2 IP database",
+      "Connections that missed the domain list use the proxy. This database identifies checked regions so they go direct; the rest still use the proxy. With no database or nothing checked, geo is not applied. Download it and import it on the rules page.",
+    assetGeoUrl: "https://github.com/penndev/gopkg/releases/download/ipregion-db/ipregion.geolite.db",
     assetDownload: "Download",
     assetCopy: "Copy link",
     assetCopied: "Copied",
@@ -162,7 +161,8 @@ const messages = {
     platformIos: "iOS",
     winDesc: "64-bit installer",
     macDesc: "Apple silicon (arm64) installer",
-    androidDesc: "APK",
+    androidPlay: "Google Play",
+    androidApk: "APK",
     iosDesc: "Not available yet",
     installWinToggle: "Windows installation",
     installWinSteps:
@@ -176,7 +176,7 @@ const messages = {
       "If macOS says the developer cannot be verified: System Settings → Privacy & Security → Open Anyway.",
     installAndroidToggle: "Android installation",
     installAndroidSteps:
-      "<li>Use Android above to get <code>Prism-android.apk</code>.</li><li>Open it on the phone. If the system blocks it, allow unknown apps in Settings.</li>",
+      "<li>Install from Google Play, or download the automatically built <code>Prism-android.apk</code>.</li><li>If the system blocks the APK, allow unknown apps in Settings.</li>",
     proxyTitle: "Proxy modes",
     proxyIntro:
       "Select a node, then pick a mode on the proxy panel. Desktop has Manual and TUN. Mobile has no switch — it always uses a system VPN, close to TUN.",
@@ -228,12 +228,12 @@ const messages = {
     ruleDomainHint: "Click the link to download: ",
     ruleGeoTitle: "IP geo rules",
     ruleGeo:
-      "Requests that did not match a domain are looked up in the IP database. Two modes:",
+      "Requests that missed the domain rules use the proxy. The IP database is consulted only when some regions are checked.",
     ruleGlobal:
-      "<strong>Global mode</strong>: no region filter. Traffic that did not match a domain rule also goes through the proxy.",
+      "<strong>Nothing checked, or no IP database</strong>: geo is not applied, and this traffic uses the proxy.",
     ruleRegion:
-      "<strong>Regional mode</strong>: checked regions go direct and the rest use the proxy. With no IP database, or with nothing checked, everything goes direct.",
-    ruleDb: "Load the IP database on the rules page to split traffic by region. Without it, regional mode sends everything direct.",
+      "<strong>Checked regions</strong> go direct. Unchecked regions still use the proxy.",
+    ruleDb: "Deleting the IP database clears the checked regions. After that, this traffic is no longer split by region and all of it uses the proxy.",
     ruleDbHint: "Click the link to download: ",
     ruleManual:
       "Manual mode does not take over system DNS. If an app already resolved the name to an IP, geo rules and the IP database matter more.",

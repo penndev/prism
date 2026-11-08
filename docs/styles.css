@@ -246,6 +246,17 @@ a.os-link:not([href]):hover {
   font-size: 14px;
 }
 
+.os-alt {
+  display: inline-block;
+  margin: 8px 2px 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.os-alt:hover {
+  color: var(--accent);
+}
+
 .assets {
   margin-top: 16px;
   background: var(--bg);

@@ -38,12 +38,15 @@
 
     <section class="panel" id="geoSection">
       <h2 id="geoTitle">地域规则</h2>
-      <p id="geoDesc" class="subline">两种模式：全局模式、地域模式。没有 IP 库时无法选地区，等于全部直连。勾选的地区直连，其余走代理。</p>
+      <p id="geoDesc" class="subline">默认不做地域判断，这些连接都走代理。有 IP 库后，勾选的地区直连，其余仍走代理。</p>
 
         <div class="db-block">
           <div class="db-head">
             <span id="dbLabel" class="db-label">IP 库</span>
-            <button id="btnChangeDb" type="button" hidden>更换</button>
+            <span class="db-actions">
+              <button id="btnDeleteDb" type="button" hidden>删除</button>
+              <button id="btnChangeDb" type="button" hidden>更换</button>
+            </span>
           </div>
           <div id="dbStatus" class="status-box has-path-tip" title="">-</div>
           <div id="dbEditor" hidden>
@@ -61,19 +64,10 @@
           </div>
         </div>
 
-        <div class="mode-row">
-          <label class="mode-option">
-            <input type="radio" name="geoMode" value="global" checked>
-            <span id="labelModeGlobal">全局模式</span>
-          </label>
-          <label class="mode-option">
-            <input type="radio" name="geoMode" value="region">
-            <span id="labelModeRegion">地域模式</span>
-          </label>
-        </div>
-
         <div id="areaPicker" class="area-picker" hidden>
           <div class="row">
+            <button id="btnSelectAll" type="button">全选</button>
+            <button id="btnInvert" type="button">反选</button>
             <input id="areaFilter" type="text" placeholder="搜索国家/地区">
             <span id="selectedCount" class="muted"></span>
           </div>
@@ -108,7 +102,10 @@
     const dbUrlEl = document.getElementById('dbUrl');
     const dbFileEl = document.getElementById('dbFile');
     const dbMsg = document.getElementById('dbMsg');
+    const btnDeleteDb = document.getElementById('btnDeleteDb');
     const btnChangeDb = document.getElementById('btnChangeDb');
+    const btnSelectAll = document.getElementById('btnSelectAll');
+    const btnInvert = document.getElementById('btnInvert');
     const btnDownload = document.getElementById('btnDownload');
     const btnUpload = document.getElementById('btnUpload');
     const areaPicker = document.getElementById('areaPicker');
@@ -125,13 +122,6 @@
 
     function t(key, params) {
       return translate(currentLang, key, params);
-    }
-
-    function formatSize(n) {
-      n = Number(n) || 0;
-      if (n < 1024) return n + ' B';
-      if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
-      return (n / (1024 * 1024)).toFixed(2) + ' MB';
     }
 
     async function api(url, opt = {}) {
@@ -156,8 +146,9 @@
       document.getElementById('geoTitle').textContent = t('geo.title');
       document.getElementById('geoDesc').textContent = t('geo.desc');
       document.getElementById('dbLabel').textContent = t('db.label');
-      document.getElementById('labelModeGlobal').textContent = t('geo.mode.global');
-      document.getElementById('labelModeRegion').textContent = t('geo.mode.region');
+      btnDeleteDb.textContent = t('button.delete');
+      btnSelectAll.textContent = t('button.selectAll');
+      btnInvert.textContent = t('button.invert');
       document.getElementById('domainTitle').textContent = t('domain.title');
       document.getElementById('domainDesc').textContent = t('domain.desc');
       domainsEl.placeholder = t('domain.placeholder');
@@ -174,20 +165,8 @@
       updateSelectedCount();
     }
 
-    function getMode() {
-      const node = document.querySelector('input[name="geoMode"]:checked');
-      return node ? node.value : 'global';
-    }
-
-    function setMode(mode) {
-      const value = mode === 'region' ? 'region' : 'global';
-      const node = document.querySelector('input[name="geoMode"][value="' + value + '"]');
-      if (node) node.checked = true;
-      syncModeUI();
-    }
-
     function syncModeUI() {
-      areaPicker.hidden = !dbExists || getMode() !== 'region';
+      areaPicker.hidden = !dbExists;
       renderAreaChecks();
       updateSelectedCount();
     }
@@ -197,7 +176,7 @@
     }
 
     function updateSelectedCount() {
-      if (getMode() !== 'region' || !dbExists) {
+      if (!dbExists) {
         selectedCount.textContent = '';
         return;
       }
@@ -207,8 +186,7 @@
 
     function buildPayloadFromUI() {
       return {
-        areaMode: getMode(),
-        areaIds: selectedAreaIds(),
+        areaIds: dbExists ? selectedAreaIds() : [],
         domains: domainsEl.value || ''
       };
     }
@@ -293,6 +271,7 @@
     }
 
     function syncDbEditorUI() {
+      btnDeleteDb.hidden = !dbExists;
       if (!dbExists) {
         btnChangeDb.hidden = true;
         dbEditor.hidden = false;
@@ -303,38 +282,23 @@
       dbEditor.hidden = !editingDb;
     }
 
-    function setPathTip(el, path) {
-      const p = (path || '').trim();
-      if (p) {
-        el.title = t('db.path.tip', { path: p });
-        el.classList.add('has-path-tip');
-      } else {
-        el.removeAttribute('title');
-        el.classList.remove('has-path-tip');
-      }
-    }
-
     function renderDbStatus(st) {
-      dbExists = !!(st && st.exists);
+      dbExists = !!(st && typeof st === 'object');
+      dbStatus.hidden = !dbExists;
       if (dbExists) {
         dbStatus.className = 'status-box ok';
         dbStatus.textContent = t('db.status.ready', {
-          size: formatSize(st.size),
           version: st.version || '-',
           remark: st.remark || '-',
           areas: st.areas || 0,
           v4: st.v4 || 0,
           v6: st.v6 || 0
         });
-        setPathTip(dbStatus, st.path || '');
-        syncModeUI();
       } else {
         editingDb = false;
-        dbStatus.className = 'status-box warn';
-        dbStatus.textContent = t('db.status.missingHint');
-        setPathTip(dbStatus, st && st.path ? st.path : '');
-        syncModeUI();
+        dbStatus.textContent = '';
       }
+      syncModeUI();
       syncDbEditorUI();
     }
 
@@ -360,8 +324,8 @@
     async function loadConfig() {
       const cfg = await api('/rule/api/config');
       areaIds = Array.isArray(cfg.areaIds) ? cfg.areaIds.map(Number).filter((id) => id > 0) : [];
-      setMode(cfg.areaMode || 'global');
       domainsEl.value = cfg.domains || '';
+      syncModeUI();
     }
 
     async function saveConfig(payload, msgEl) {
@@ -405,13 +369,56 @@
       }, 200);
     }
 
-    async function onModeChange() {
-      syncModeUI();
+    function selectAllAreas() {
+      areaIds = (areas || []).map((a) => Number(a.id)).filter((id) => id > 0);
+      renderAreaChecks();
+      scheduleSaveFromUI(geoMsg);
+    }
+
+    function invertAreas() {
+      const selected = new Set(selectedAreaIds());
+      function covered(id) {
+        const path = findPath(areas, id) || [];
+        return path.some((n) => selected.has(Number(n.id)));
+      }
+      function subtreeHasSelection(node) {
+        if (selected.has(Number(node.id))) return true;
+        return (node.children || []).some(subtreeHasSelection);
+      }
+      const out = [];
+      function walk(nodes) {
+        for (const node of nodes || []) {
+          const id = Number(node.id);
+          const whole = !covered(id) && !subtreeHasSelection(node);
+          if (whole) {
+            if (id > 0) out.push(id);
+          } else {
+            walk(node.children);
+          }
+        }
+      }
+      walk(areas);
+      areaIds = out;
+      renderAreaChecks();
+      scheduleSaveFromUI(geoMsg);
+    }
+
+    async function deleteDb() {
+      btnDeleteDb.disabled = true;
+      dbMsg.textContent = t('db.status.deleting');
       try {
-        await saveConfig(buildPayloadFromUI(), geoMsg);
-        renderAreaChecks();
-      } catch (_) {
-        renderAreaChecks();
+        const res = await api('/rule/api/db', { method: 'DELETE' });
+        editingDb = false;
+        areas = [];
+        areaIds = [];
+        renderDbStatus(res.db || await api('/rule/api/db'));
+        dbMsg.textContent = t('db.status.deleted');
+        await loadConfig();
+        syncModeUI();
+      } catch (e) {
+        dbMsg.textContent = e.message;
+      } finally {
+        btnDeleteDb.disabled = false;
       }
     }
 
@@ -525,9 +532,9 @@
       }
     }
 
-    document.querySelectorAll('input[name="geoMode"]').forEach((el) => {
-      el.addEventListener('change', onModeChange);
-    });
+    btnSelectAll.addEventListener('click', selectAllAreas);
+    btnInvert.addEventListener('click', invertAreas);
+    btnDeleteDb.addEventListener('click', deleteDb);
     domainsEl.addEventListener('input', () => {
       scheduleSaveFromUI(domainMsg);
     });
@@ -597,7 +604,7 @@
       try {
         const st = await loadDb();
         await loadConfig();
-        if (st && st.exists) {
+        if (st) {
           await loadAreas();
         }
         syncModeUI();

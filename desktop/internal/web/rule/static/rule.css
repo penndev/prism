@@ -246,6 +246,11 @@ button:disabled {
   font-weight: 600;
 }
 
+.db-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
 .db-head button {
   padding: 0.28rem 0.65rem;
   font-size: 12px;

@@ -1,9 +1,6 @@
 package rule
 
 import (
-	"desktop/internal"
-	"desktop/internal/lang"
-	"desktop/internal/storage"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,19 +11,35 @@ import (
 	"strings"
 	"time"
 
-	"github.com/penndev/gopkg/ipregion"
+	"desktop/internal/ipregion"
+	"desktop/internal/lang"
+
+	"github.com/penndev/prism/engine"
 )
 
 const maxDBBytes = 64 << 20
 
 func HandleRuleDB(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
+	switch r.Method {
+	case http.MethodGet:
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(ipregion.Read())
+	case http.MethodDelete:
+		if err := ipregion.Remove(); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		resetGeoToDefault()
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok": true,
+			"db": ipregion.Read(),
+		})
+	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
 	}
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(dbStatusJSON())
 }
 
 func HandleRuleDBDownload(w http.ResponseWriter, r *http.Request) {
@@ -50,12 +63,12 @@ func HandleRuleDBDownload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	resetRuleToGlobal()
+	resetGeoToDefault()
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"ok": true,
-		"db": dbStatusJSON(),
+		"db": ipregion.Read(),
 	})
 }
 
@@ -78,37 +91,13 @@ func HandleRuleDBUpload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	resetRuleToGlobal()
+	resetGeoToDefault()
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"ok": true,
-		"db": dbStatusJSON(),
+		"db": ipregion.Read(),
 	})
-}
-
-func dbStatusJSON() map[string]any {
-	path, err := storage.IpregionDBPath()
-	if err != nil {
-		return map[string]any{}
-	}
-	out := map[string]any{"path": path, "exists": false, "size": int64(0)}
-	if fi, err := os.Stat(path); err == nil {
-		out["exists"] = true
-		out["size"] = fi.Size()
-	}
-	_ = internal.EnsureSearcher(path)
-	searcher := internal.AcquireSearcher()
-	defer internal.ReleaseSearcher()
-	if searcher != nil {
-		m := searcher.Meta()
-		out["version"] = m.Version
-		out["remark"] = m.Remark
-		out["areas"] = m.Areas
-		out["v4"] = m.V4
-		out["v6"] = m.V6
-	}
-	return out
 }
 
 func downloadDBFile(rawURL string) error {
@@ -120,7 +109,7 @@ func downloadDBFile(rawURL string) error {
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
 		return errors.New(lang.DefaultLang.T("rules.db.badURL"))
 	}
-	path, err := storage.IpregionDBPath()
+	path, err := ipregion.Path()
 	if err != nil {
 		return err
 	}
@@ -155,11 +144,11 @@ func downloadDBFile(rawURL string) error {
 		_ = os.Remove(tmp)
 		return errors.New(lang.DefaultLang.T("rules.db.tooLarge"))
 	}
-	return swapDBFile(tmp, path)
+	return swapDBFile(tmp)
 }
 
 func saveUploadedDBFile(r io.Reader) error {
-	path, err := storage.IpregionDBPath()
+	path, err := ipregion.Path()
 	if err != nil {
 		return err
 	}
@@ -183,35 +172,13 @@ func saveUploadedDBFile(r io.Reader) error {
 		_ = os.Remove(tmp)
 		return errors.New(lang.DefaultLang.T("rules.db.tooLarge"))
 	}
-	return swapDBFile(tmp, path)
+	return swapDBFile(tmp)
 }
 
-// swapDBFile 用校验通过的 tmp 覆盖当前库并重新打开。
-// Windows 不允许 rename 覆盖仍被打开的文件，所以必须先关掉当前 Searcher，
-// 否则只要规则页加载过一次 DB 状态，后续所有下载/上传都会以「拒绝访问」失败。
-func swapDBFile(tmp, path string) error {
-	if err := validateDBFile(tmp); err != nil {
+func swapDBFile(tmp string) error {
+	if err := engine.CheckIpregionDB(tmp); err != nil {
 		_ = os.Remove(tmp)
-		return err
-	}
-	internal.SetSearcher(nil)
-	if err := os.Rename(tmp, path); err != nil {
-		_ = os.Remove(tmp)
-		return err
-	}
-	s, err := ipregion.Open(path, ipregion.ModeMemory)
-	if err != nil {
-		return err
-	}
-	internal.SetSearcher(s)
-	return nil
-}
-
-func validateDBFile(path string) error {
-	s, err := ipregion.Open(path, ipregion.ModeMemory)
-	if err != nil {
 		return fmt.Errorf("%s: %w", lang.DefaultLang.T("rules.db.invalid"), err)
 	}
-	_ = s.Close()
-	return nil
+	return ipregion.Replace(tmp)
 }

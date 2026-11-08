@@ -12,10 +12,7 @@ import (
 	"go.etcd.io/bbolt"
 )
 
-const (
-	bucketName     = "data"
-	IpregionDBName = "ipregion.db"
-)
+const bucketName = "data"
 
 type Storage struct {
 	db *bbolt.DB
@@ -31,14 +28,6 @@ func AppDir() (string, error) {
 		return "", err
 	}
 	return dbDir, nil
-}
-
-func IpregionDBPath() (string, error) {
-	dir, err := AppDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, IpregionDBName), nil
 }
 
 func (s *Storage) SetSettings(v Settings) error {

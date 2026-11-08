@@ -23,6 +23,9 @@ function applyLocale(next) {
     if (/<[a-z/]/i.test(s)) el.innerHTML = s;
     else el.textContent = s;
   });
+  document.querySelectorAll("[data-i18n-href]").forEach((el) => {
+    el.href = text(el.dataset.i18nHref);
+  });
   document.querySelectorAll("[data-lang]").forEach((btn) => {
     const on = btn.dataset.lang === locale;
     btn.classList.toggle("is-active", on);

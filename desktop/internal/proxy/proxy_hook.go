@@ -1,12 +1,10 @@
 package proxy
 
 import (
-	"context"
 	"desktop/internal"
+	"desktop/internal/ipregion"
 	"desktop/internal/storage"
 	"net"
-	"os"
-	"time"
 
 	"github.com/penndev/prism/engine"
 	"github.com/penndev/prism/transport"
@@ -54,25 +52,15 @@ func (h connectHook) OnDNS(name, qtype, result string) {
 	internal.App.Event.Emit(internal.AppConfig.LogTypeName_DNS, line)
 }
 
-func (h connectHook) OnProxyRead(n int64)  { h.p.readBytes.Add(n) }
+func (h connectHook) OnProxyRead(n int64) { h.p.readBytes.Add(n) }
+
 func (h connectHook) OnProxyWrite(n int64) { h.p.writeBytes.Add(n) }
 
 func (h connectHook) UseProxy(network, address string) bool {
 	if st := storage.DefaultStorage; st != nil {
 		if cfg := st.CachedRuleConfig(); cfg != nil {
-			// 没库或没勾选：无法按地区区分，全部直连。有库时勾选的地区直连。
-			bypass := false
-			if cfg.AreaMode == "region" {
-				bypass = true
-				if len(cfg.AreaIDs) > 0 {
-					if path, err := storage.IpregionDBPath(); err == nil {
-						if info, err := os.Stat(path); err == nil && !info.IsDir() {
-							bypass = inAreas(address, cfg.AreaIDs)
-						}
-					}
-				}
-			}
-			if bypass {
+			// AreaIDs 为空就不做地域判断，一律走代理。名单里的地区直连。
+			if len(cfg.AreaIDs) > 0 && ipregion.Contains(address, cfg.AreaIDs) {
 				if internal.App != nil {
 					internal.App.Event.Emit(internal.AppConfig.LogTypeName_LOG, "bypass -> "+network+" "+address)
 				}
@@ -84,55 +72,4 @@ func (h connectHook) UseProxy(network, address string) bool {
 		internal.App.Event.Emit(internal.AppConfig.LogTypeName_LOG, "proxy -> "+network+" "+address)
 	}
 	return true
-}
-
-func inAreas(address string, areaIDs []uint32) bool {
-	if len(areaIDs) == 0 {
-		return false
-	}
-	path, err := storage.IpregionDBPath()
-	if err != nil {
-		return false
-	}
-	if err := internal.EnsureSearcher(path); err != nil {
-		return false
-	}
-	host, _, err := net.SplitHostPort(address)
-	if err != nil {
-		host = address
-	}
-	ip := net.ParseIP(host)
-	if ip == nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		ips, err := net.DefaultResolver.LookupIP(ctx, "ip", host)
-		cancel()
-		if err != nil || len(ips) == 0 {
-			return false
-		}
-		ip = ips[0]
-	}
-	searcher := internal.AcquireSearcher()
-	defer internal.ReleaseSearcher()
-	if searcher == nil {
-		return false
-	}
-	info, err := searcher.Find(ip.String())
-	if err != nil || info.Area.ID == 0 {
-		return false
-	}
-	set := make(map[uint32]struct{}, len(areaIDs))
-	for _, id := range areaIDs {
-		if id != 0 {
-			set[id] = struct{}{}
-		}
-	}
-	if len(set) == 0 {
-		return false
-	}
-	for a := &info.Area; a != nil; a = a.Parent {
-		if _, ok := set[a.ID]; ok {
-			return true
-		}
-	}
-	return false
 }

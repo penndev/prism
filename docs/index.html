@@ -103,26 +103,33 @@
               </svg>
               <span>
                 <strong data-i18n="platformAndroid"></strong>
-                <small data-i18n="androidDesc"></small>
+                <small data-i18n="androidApk"></small>
               </span>
             </a>
+            <a
+              class="os-alt"
+              href="https://play.google.com/store/apps/details?id=com.penndev.prism"
+              data-i18n="androidPlay"
+            >Google Play</a>
             <details class="install">
               <summary data-i18n="installAndroidToggle"></summary>
               <ol data-i18n="installAndroidSteps"></ol>
             </details>
           </div>
-          <a class="os-link">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path
-                fill="currentColor"
-                d="M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm0 2v14h8V4H8zm4 16.2a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"
-              />
-            </svg>
-            <span>
-              <strong data-i18n="platformIos"></strong>
-              <small data-i18n="iosDesc"></small>
-            </span>
-          </a>
+          <div>
+            <a class="os-link">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  fill="currentColor"
+                  d="M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm0 2v14h8V4H8zm4 16.2a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"
+                />
+              </svg>
+              <span>
+                <strong data-i18n="platformIos"></strong>
+                <small data-i18n="iosDesc"></small>
+              </span>
+            </a>
+          </div>
         </div>
       </section>
 
@@ -180,6 +187,7 @@
           <div class="asset-side">
             <a
               class="asset-dl"
+              data-i18n-href="assetGeoUrl"
               href="https://github.com/penndev/gopkg/releases/download/ipregion-db/ipregion.czdb.db"
             >
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -192,23 +200,7 @@
                   d="M12 4v10m0 0 4-4m-4 4-4-4M5 19h14"
                 />
               </svg>
-              <span data-i18n="assetGeoCZDB">CZDB</span>
-            </a>
-            <a
-              class="asset-dl"
-              href="https://github.com/penndev/gopkg/releases/download/ipregion-db/ipregion.geolite.db"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  d="M12 4v10m0 0 4-4m-4 4-4-4M5 19h14"
-                />
-              </svg>
-              <span data-i18n="assetGeoGeoLite2">GeoLite2</span>
+              <span data-i18n="assetDownload">下载</span>
             </a>
           </div>
         </section>
@@ -272,12 +264,7 @@
         <p data-i18n="ruleDb"></p>
         <p>
           <span data-i18n="ruleDbHint"></span>
-          <a href="https://github.com/penndev/gopkg/releases/download/ipregion-db/ipregion.czdb.db"
-            >CZDB: ipregion.czdb.db</a
-          ><br>
-          <a href="https://github.com/penndev/gopkg/releases/download/ipregion-db/ipregion.geolite.db"
-            >GeoLite2: ipregion.geolite.db</a
-          >
+          <a data-i18n-href="assetGeoUrl" href="https://github.com/penndev/gopkg/releases/download/ipregion-db/ipregion.czdb.db">ipregion.db</a>
         </p>
         <p data-i18n="ruleManual"></p>
       </section>

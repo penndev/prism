@@ -23,8 +23,11 @@ var (
 
 // DBStatus is the summary of the opened ipregion.db.
 type DBStatus struct {
-	Version string
-	Areas   int64
+	Version string `json:"version"`
+	Remark  string `json:"remark"`
+	Areas   int64  `json:"areas"`
+	V4      int64  `json:"v4"`
+	V6      int64  `json:"v6"`
 }
 
 // AreaList is the area chain returned by Lookup, leaf first then parents.
@@ -76,6 +79,26 @@ func SetIpregionDB(dbPath, tempDir string) error {
 	return nil
 }
 
+// CloseIpregionDB 关掉当前库。没打开时无操作。
+func CloseIpregionDB() {
+	ipRegionMu.Lock()
+	previousSearcher := ipRegionSearcher
+	ipRegionSearcher = nil
+	ipRegionMu.Unlock()
+	if previousSearcher != nil {
+		_ = previousSearcher.Close()
+	}
+}
+
+// CheckIpregionDB 试开 path，确认是可用的库，不替换当前库。
+func CheckIpregionDB(path string) error {
+	searcher, err := ipregion.Open(path, ipregion.ModeFile)
+	if err != nil {
+		return err
+	}
+	return searcher.Close()
+}
+
 // IpregionStatus returns nil when no ipregion.db is opened.
 func IpregionStatus() *DBStatus {
 	ipRegionMu.RLock()
@@ -84,7 +107,13 @@ func IpregionStatus() *DBStatus {
 		return nil
 	}
 	metadata := ipRegionSearcher.Meta()
-	return &DBStatus{Version: metadata.Version, Areas: int64(metadata.Areas)}
+	return &DBStatus{
+		Version: metadata.Version,
+		Remark:  metadata.Remark,
+		Areas:   int64(metadata.Areas),
+		V4:      int64(metadata.V4),
+		V6:      int64(metadata.V6),
+	}
 }
 
 type areaNode struct {

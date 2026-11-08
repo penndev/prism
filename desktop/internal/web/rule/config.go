@@ -20,7 +20,7 @@ func HandleRuleConfig(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if cfg == nil {
-			cfg = &storage.RuleConfig{AreaMode: "global", AreaIDs: []uint32{}, Domains: ""}
+			cfg = &storage.RuleConfig{AreaIDs: []uint32{}, Domains: ""}
 		}
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
@@ -31,6 +31,9 @@ func HandleRuleConfig(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "invalid json", http.StatusBadRequest)
 			return
 		}
+		if payload.AreaIDs == nil {
+			payload.AreaIDs = []uint32{}
+		}
 		if err := st.SetRuleConfig(payload); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -39,26 +42,22 @@ func HandleRuleConfig(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"ok":       true,
-			"areaMode": payload.AreaMode,
-			"areaIds":  payload.AreaIDs,
-			"domains":  payload.Domains,
+			"ok":      true,
+			"areaIds": payload.AreaIDs,
+			"domains": payload.Domains,
 		})
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
 }
 
-func resetRuleToGlobal() {
+// resetGeoToDefault 清掉地区选择，回到全部走代理。域名规则保留。
+func resetGeoToDefault() {
 	st := storage.DefaultStorage
 	if st == nil {
 		return
 	}
-	next := storage.RuleConfig{
-		AreaMode: "global",
-		AreaIDs:  []uint32{},
-		Domains:  "",
-	}
+	next := storage.RuleConfig{AreaIDs: []uint32{}}
 	if cfg, err := st.GetRuleConfig(); err == nil && cfg != nil {
 		next.Domains = cfg.Domains
 	}

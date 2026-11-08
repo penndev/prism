@@ -4,6 +4,7 @@ import (
 	"desktop/build"
 	"desktop/internal"
 	"desktop/internal/autostart"
+	"desktop/internal/ipregion"
 	"desktop/internal/lang"
 	"desktop/internal/proxy"
 	"desktop/internal/storage"
@@ -79,7 +80,7 @@ func main() {
 
 	// 退出收尾：先停代理和 tun（会关掉设备、还原系统代理与路由），再释放库句柄和存储。
 	localProxy.SetStop()
-	internal.SetSearcher(nil)
+	ipregion.Close()
 	if storage.DefaultStorage != nil {
 		_ = storage.DefaultStorage.Close()
 	}
