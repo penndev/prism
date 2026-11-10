@@ -1,7 +1,10 @@
 package proxy
 
 import (
+	"bytes"
+	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
@@ -9,133 +12,288 @@ import (
 
 	"desktop/internal/route"
 	"desktop/internal/tun"
+
+	"github.com/penndev/prism/fakeip"
 )
 
-const icmpDirectTimeout = 3 * time.Second
+const (
+	icmpDirectTimeout = 3 * time.Second
+	maxICMPPacketSize = 65535
+
+	ipv4MinHeaderLen  = 20
+	ipv6HeaderLen     = 40
+	icmpEchoHeaderLen = 8 // type, code, checksum, id, seq
+	defaultTTL        = 64
+
+	protoICMPv4 = 1
+	protoICMPv6 = 58
+
+	icmpv4EchoReply   = 0
+	icmpv4EchoRequest = 8
+	icmpv6EchoRequest = 128
+	icmpv6EchoReply   = 129
+)
+
+var (
+	fake4 = netip.MustParsePrefix(fakeip.FakeIPv4CIDR)
+	fake6 = netip.MustParsePrefix(fakeip.FakeIPv6CIDR)
+)
+
+// ---------------------------------------------------------------------------
+// Entry point
+// ---------------------------------------------------------------------------
+
+// handleICMP sends an echo request using the host's normal routing and injects
+// the reply back into the host's TUN interface. Failures are silently dropped,
+// exactly like a lost ping.
+func (p *Proxy) handleICMP(dev *tun.Tun, src, dst netip.Addr, packet []byte) {
+	req, ok := parseEchoRequest(packet)
+	if !ok {
+		return
+	}
+	target, err := p.resolveICMPTarget(dst)
+	if err != nil {
+		return
+	}
+	reply, err := exchangeEcho(target, req)
+	if err != nil {
+		return
+	}
+	writeEchoReply(dev, src, dst, reply, req.isV6)
+}
+
+// ---------------------------------------------------------------------------
+// Request parsing
+// ---------------------------------------------------------------------------
+
+// echoRequest is an ICMP(v6) echo request with the IP header stripped.
+type echoRequest struct {
+	isV6    bool
+	message []byte // owned copy of the ICMP message
+}
+
+// parseEchoRequest validates an IP packet and extracts its ICMP echo request.
+func parseEchoRequest(packet []byte) (echoRequest, bool) {
+	if len(packet) < ipv4MinHeaderLen {
+		return echoRequest{}, false
+	}
+
+	var (
+		headerLen   int
+		proto       byte
+		requestType byte
+		isV6        bool
+	)
+	switch packet[0] >> 4 {
+	case 4:
+		headerLen = int(packet[0]&0x0f) * 4
+		if headerLen < ipv4MinHeaderLen {
+			return echoRequest{}, false
+		}
+		proto, requestType = packet[9], icmpv4EchoRequest
+	case 6:
+		headerLen = ipv6HeaderLen
+		proto, requestType, isV6 = packet[6], icmpv6EchoRequest, true
+	default:
+		return echoRequest{}, false
+	}
+
+	wantProto := byte(protoICMPv4)
+	if isV6 {
+		wantProto = protoICMPv6
+	}
+	if len(packet) < headerLen+icmpEchoHeaderLen || proto != wantProto ||
+		packet[headerLen] != requestType || packet[headerLen+1] != 0 {
+		return echoRequest{}, false
+	}
+
+	return echoRequest{
+		isV6:    isV6,
+		message: append([]byte(nil), packet[headerLen:]...),
+	}, true
+}
+
+// isReplyTo reports whether msg is the echo reply matching this request
+// (same type/code and same identifier + sequence number).
+func (r echoRequest) isReplyTo(msg []byte) bool {
+	if len(msg) < icmpEchoHeaderLen {
+		return false
+	}
+	wantType := byte(icmpv4EchoReply)
+	if r.isV6 {
+		wantType = icmpv6EchoReply
+	}
+	return msg[0] == wantType && msg[1] == 0 && bytes.Equal(msg[4:8], r.message[4:8])
+}
+
+// ---------------------------------------------------------------------------
+// Target resolution
+// ---------------------------------------------------------------------------
+
+// resolveICMPTarget maps the packet's destination to the address we really ping.
+// Fake IPs have no real host behind them, so they are redirected to the remote
+// proxy server instead.
+func (p *Proxy) resolveICMPTarget(dst netip.Addr) (netip.Addr, error) {
+	if !fake4.Contains(dst) && !fake6.Contains(dst) {
+		return dst, nil
+	}
+	u := p.remoteURL.Load()
+	if u == nil {
+		return netip.Addr{}, errors.New("remote URL not set")
+	}
+	return lookupAddr(u.Hostname(), dst.Is6())
+}
+
+// lookupAddr returns an IP of the requested family for host, which may be
+// either an IP literal or a domain name.
+func lookupAddr(host string, wantV6 bool) (netip.Addr, error) {
+	if addr, err := netip.ParseAddr(host); err == nil {
+		addr = addr.Unmap()
+		if addr.Is6() != wantV6 {
+			return netip.Addr{}, fmt.Errorf("%s is not of the requested IP family", host)
+		}
+		return addr, nil
+	}
+
+	network := "ip4"
+	if wantV6 {
+		network = "ip6"
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), icmpDirectTimeout)
+	defer cancel()
+	addrs, err := net.DefaultResolver.LookupNetIP(ctx, network, host)
+	if err != nil {
+		return netip.Addr{}, err
+	}
+	for _, a := range addrs {
+		if a = a.Unmap(); a.Is6() == wantV6 {
+			return a, nil
+		}
+	}
+	return netip.Addr{}, fmt.Errorf("no %s address for %s", network, host)
+}
+
+// ---------------------------------------------------------------------------
+// Sending / receiving
+// ---------------------------------------------------------------------------
 
 // openDirectICMP uses the physical source address selected by the direct UDP dialer,
 // so Windows' default route to the TUN cannot send the raw packet back into itself.
-func openDirectICMP(dst netip.Addr) (*net.IPConn, []byte, error) {
+func openDirectICMP(dst netip.Addr) (*net.IPConn, net.IP, error) {
 	localIP := route.SourceIP(dst)
 	if localIP == nil {
 		return nil, nil, fmt.Errorf("no physical source address for %s", dst)
 	}
-	icmpNetwork := "ip4:icmp"
+	network := "ip4:icmp"
 	if dst.Is6() {
-		icmpNetwork = "ip6:ipv6-icmp"
+		network = "ip6:ipv6-icmp"
 	}
-	conn, err := net.ListenIP(icmpNetwork, &net.IPAddr{IP: localIP})
+	conn, err := net.ListenIP(network, &net.IPAddr{IP: localIP})
 	if err != nil {
 		return nil, nil, fmt.Errorf("open direct ICMP socket: %w", err)
 	}
-	return conn, append([]byte(nil), localIP...), nil
+	return conn, localIP, nil
 }
 
-// handleICMP sends echo requests using the host's normal routing and injects
-// the reply back into the host's TUN interface.
-func (p *Proxy) handleICMP(dev *tun.Tun, src, dst netip.Addr, packet []byte) {
-	if len(packet) < 20 {
-		return
-	}
-	version := packet[0] >> 4
-	headerLen := 0
-	switch version {
-	case 4:
-		headerLen = int(packet[0]&0x0f) * 4
-		if headerLen < 20 || len(packet) < headerLen+8 || packet[9] != 1 || packet[headerLen] != 8 || packet[headerLen+1] != 0 {
-			return
-		}
-	case 6:
-		headerLen = 40
-		if len(packet) < headerLen+8 || packet[6] != 58 || packet[headerLen] != 128 || packet[headerLen+1] != 0 {
-			return
-		}
-	default:
-		return
-	}
-	request := append([]byte(nil), packet[headerLen:]...)
-	conn, localIP, err := openDirectICMP(dst)
+// exchangeEcho sends req to target over the physical network and waits for the
+// matching echo reply, returning the ICMP message (without IP header).
+func exchangeEcho(target netip.Addr, req echoRequest) ([]byte, error) {
+	conn, localIP, err := openDirectICMP(target)
 	if err != nil {
-		return
+		return nil, err
 	}
 	defer conn.Close()
+
 	if err := conn.SetDeadline(time.Now().Add(icmpDirectTimeout)); err != nil {
-		return
+		return nil, err
 	}
-	if version == 6 {
-		setICMPv6Checksum(request, localIP, dst.AsSlice())
+
+	targetIP := net.IP(target.AsSlice())
+	if req.isV6 {
+		// The pseudo-header changes with the new source address.
+		setICMPv6Checksum(req.message, localIP, targetIP)
 	}
-	if _, err := conn.WriteTo(request, &net.IPAddr{IP: dst.AsSlice()}); err != nil {
-		return
+	if _, err := conn.WriteTo(req.message, &net.IPAddr{IP: targetIP}); err != nil {
+		return nil, err
 	}
-	response := make([]byte, 65535)
+
+	buf := make([]byte, maxICMPPacketSize)
 	for {
-		n, from, err := conn.ReadFrom(response)
+		n, from, err := conn.ReadFrom(buf)
 		if err != nil {
-			return
+			return nil, err
 		}
-		addr, ok := from.(*net.IPAddr)
-		if !ok || !net.IP(addr.IP).Equal(net.IP(dst.AsSlice())) || n < 8 {
+		if ipAddr, ok := from.(*net.IPAddr); !ok || !ipAddr.IP.Equal(targetIP) {
 			continue
 		}
-		if version == 4 && (response[0] != 0 || response[1] != 0) || version == 6 && (response[0] != 129 || response[1] != 0) {
-			continue
+		if req.isReplyTo(buf[:n]) {
+			return append([]byte(nil), buf[:n]...), nil
 		}
-		if response[4] != request[4] || response[5] != request[5] || response[6] != request[6] || response[7] != request[7] {
-			continue
-		}
-		payload := append([]byte(nil), response[:n]...)
-		if version == 4 {
-			dev.WritePacket(buildIPv4Packet(dst.AsSlice(), src.AsSlice(), payload))
-		} else {
-			setICMPv6Checksum(payload, dst.AsSlice(), src.AsSlice())
-			dev.WritePacket(buildIPv6Packet(dst.AsSlice(), src.AsSlice(), payload))
-		}
-		return
 	}
 }
 
+// writeEchoReply wraps reply in an IP header (from dst back to src, as if the
+// original destination had answered) and writes it into the TUN device.
+func writeEchoReply(dev *tun.Tun, src, dst netip.Addr, reply []byte, isV6 bool) {
+	from, to := dst.AsSlice(), src.AsSlice()
+	if isV6 {
+		setICMPv6Checksum(reply, from, to)
+		dev.WritePacket(buildIPv6Packet(from, to, reply))
+		return
+	}
+	dev.WritePacket(buildIPv4Packet(from, to, reply))
+}
+
+// ---------------------------------------------------------------------------
+// Packet building & checksums
+// ---------------------------------------------------------------------------
+
 func buildIPv4Packet(src, dst, payload []byte) []byte {
-	packet := make([]byte, 20+len(payload))
-	packet[0] = 0x45
+	packet := make([]byte, ipv4MinHeaderLen+len(payload))
+	packet[0] = 0x45 // version 4, IHL 5
 	binary.BigEndian.PutUint16(packet[2:4], uint16(len(packet)))
-	packet[8], packet[9] = 64, 1
+	packet[8], packet[9] = defaultTTL, protoICMPv4
 	copy(packet[12:16], src)
 	copy(packet[16:20], dst)
-	binary.BigEndian.PutUint16(packet[10:12], checksum(packet[:20]))
-	copy(packet[20:], payload)
+	binary.BigEndian.PutUint16(packet[10:12], checksum(packet[:ipv4MinHeaderLen]))
+	copy(packet[ipv4MinHeaderLen:], payload)
 	return packet
 }
 
 func buildIPv6Packet(src, dst, payload []byte) []byte {
-	packet := make([]byte, 40+len(payload))
-	packet[0] = 0x60
+	packet := make([]byte, ipv6HeaderLen+len(payload))
+	packet[0] = 0x60 // version 6
 	binary.BigEndian.PutUint16(packet[4:6], uint16(len(payload)))
-	packet[6], packet[7] = 58, 64
+	packet[6], packet[7] = protoICMPv6, defaultTTL
 	copy(packet[8:24], src)
 	copy(packet[24:40], dst)
-	copy(packet[40:], payload)
+	copy(packet[ipv6HeaderLen:], payload)
 	return packet
 }
 
+// setICMPv6Checksum recomputes the checksum of an ICMPv6 message in place,
+// including the IPv6 pseudo-header (RFC 8200 §8.1).
 func setICMPv6Checksum(message, src, dst []byte) {
 	if len(message) < 4 {
 		return
 	}
 	message[2], message[3] = 0, 0
-	pseudo := make([]byte, 40+len(message))
-	copy(pseudo[:16], src)
+
+	pseudo := make([]byte, ipv6HeaderLen+len(message))
+	copy(pseudo[0:16], src)
 	copy(pseudo[16:32], dst)
 	binary.BigEndian.PutUint32(pseudo[32:36], uint32(len(message)))
-	pseudo[39] = 58
-	copy(pseudo[40:], message)
+	pseudo[39] = protoICMPv6
+	copy(pseudo[ipv6HeaderLen:], message)
+
 	binary.BigEndian.PutUint16(message[2:4], checksum(pseudo))
 }
 
+// checksum is the RFC 1071 Internet checksum.
 func checksum(data []byte) uint16 {
 	var sum uint32
 	for len(data) >= 2 {
-		sum += uint32(binary.BigEndian.Uint16(data[:2]))
+		sum += uint32(binary.BigEndian.Uint16(data))
 		data = data[2:]
 	}
 	if len(data) == 1 {

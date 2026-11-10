@@ -34,7 +34,9 @@ type Option struct {
 	HandleTCP  func(*ForwarderTCPRequest)
 	HandlerUDP func(*ForwarderUDPRequest)
 	HandleICMP func(src, dst netip.Addr, packet []byte)
-	EndPoint   stack.LinkEndpoint
+	// Refuse 在握手前拒绝。没有 IPv6 出口时，直连不能先握手，否则客户端不会改走 IPv4。
+	Refuse   func(network string, dst netip.Addr, port uint16) bool
+	EndPoint stack.LinkEndpoint
 }
 
 // New 建好协议栈并挂上转发器。返回的 *stack.Stack 由调用方负责 Close，
@@ -82,6 +84,16 @@ func New(option Option) (*stack.Stack, error) {
 	// handle TCP setting
 	if option.HandleTCP != nil {
 		tcpForwarder := tcp.NewForwarder(s, 0, 2048, func(r *tcp.ForwarderRequest) {
+			addrInfo := r.ID()
+
+			if option.Refuse != nil {
+				dst, ok := netip.AddrFromSlice(addrInfo.LocalAddress.AsSlice())
+				if ok && option.Refuse("tcp", dst.Unmap(), addrInfo.LocalPort) {
+					r.Complete(true)
+					return
+				}
+			}
+
 			var ftr ForwarderTCPRequest
 			var waiterQueue waiter.Queue
 			if endPoint, err := r.CreateEndpoint(&waiterQueue); err == nil {
@@ -91,7 +103,6 @@ func New(option Option) (*stack.Stack, error) {
 				return
 			}
 			defer r.Complete(false)
-			addrInfo := r.ID()
 			ftr.LocalAddr = net.TCPAddr{
 				IP:   addrInfo.RemoteAddress.AsSlice(),
 				Port: int(addrInfo.RemotePort),
@@ -108,6 +119,20 @@ func New(option Option) (*stack.Stack, error) {
 
 	if option.HandlerUDP != nil {
 		udpForwarder := udp.NewForwarder(s, func(r *udp.ForwarderRequest) {
+			addrInfo := r.ID()
+
+			// 是否直接拒绝，不要建立链接超时
+			if option.Refuse != nil {
+				dst, ok := netip.AddrFromSlice(addrInfo.LocalAddress.AsSlice())
+				if ok && option.Refuse("udp", dst.Unmap(), addrInfo.LocalPort) {
+					var waiterQueue waiter.Queue
+					if endPoint, err := r.CreateEndpoint(&waiterQueue); err == nil {
+						endPoint.Close()
+					}
+					return
+				}
+			}
+
 			var fur ForwarderUDPRequest
 			var waiterQueue waiter.Queue
 			if endPoint, err := r.CreateEndpoint(&waiterQueue); err == nil {
@@ -115,7 +140,6 @@ func New(option Option) (*stack.Stack, error) {
 			} else {
 				return
 			}
-			addrInfo := r.ID()
 			fur.LocalAddr = net.UDPAddr{
 				IP:   addrInfo.RemoteAddress.AsSlice(),
 				Port: int(addrInfo.RemotePort),

@@ -7,8 +7,10 @@ import (
 	"desktop/internal/route"
 	"desktop/internal/tun"
 	"errors"
+	"net"
 	"net/netip"
 
+	"github.com/penndev/prism/fakeip"
 	"github.com/penndev/prism/stack"
 )
 
@@ -46,6 +48,19 @@ func (p *Proxy) startTunDev() error {
 	}
 	netstack, err := stack.New(stack.Option{
 		EndPoint: dev,
+		// 没有 IPv6 出口时，直连的 IPv6 在握手前拒绝，客户端才能退回 IPv4。代理和 DNS 仍接收。
+		Refuse: func(network string, dst netip.Addr, port uint16) bool {
+			if !dst.Is6() || route.Load().Iface(true) != nil {
+				return false
+			}
+			if network == "udp" && port == 53 {
+				return false
+			}
+			if _, ok := fakeip.Lookup(net.IP(dst.AsSlice())); ok {
+				return false
+			}
+			return true
+		},
 		HandleTCP: func(f *stack.ForwarderTCPRequest) {
 			p.HandleConnect(f.Conn, f.RemoteAddr.Network(), f.RemoteAddr.String())
 		},
