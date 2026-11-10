@@ -3,6 +3,7 @@ package proxy
 import (
 	"desktop/internal"
 	"desktop/internal/lang"
+	"desktop/internal/network"
 	"desktop/internal/route"
 	"desktop/internal/tun"
 	"errors"
@@ -12,7 +13,6 @@ import (
 )
 
 func (p *Proxy) closeTunDev() {
-	route.RestoreDNS()
 	if p.netstack != nil {
 		p.netstack.Close()
 		p.netstack = nil
@@ -22,6 +22,8 @@ func (p *Proxy) closeTunDev() {
 	}
 	p.dev.Close()
 	p.dev = nil
+	route.Stop()
+	network.Stop()
 	internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "tun dev close success")
 }
 
@@ -61,6 +63,8 @@ func (p *Proxy) startTunDev() error {
 	}
 	p.dev = dev
 	p.netstack = netstack
+	// 先于改路由装上拨号器，这段时间里连节点的流量不会进 TUN。
+	network.Start()
 	if err := route.Start(route.Options{
 		DevName:      dev.Name(),
 		DevIP:        TUN_IP,

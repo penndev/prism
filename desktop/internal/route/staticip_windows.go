@@ -17,6 +17,7 @@ import (
 
 func hideConsole(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{
+		HideWindow:    true,
 		CreationFlags: windows.CREATE_NO_WINDOW,
 	}
 }
@@ -55,7 +56,6 @@ func SetDevAddr(tunName string, prefix netip.Prefix) error {
 			"dadtransmits=0",
 			"forwarding=enabled",
 		}
-		internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "netsh "+strings.Join(prep, " "))
 		cmd := exec.Command("netsh", prep...)
 		hideConsole(cmd)
 		if out, err := cmd.CombinedOutput(); err != nil {
@@ -69,8 +69,6 @@ func SetDevAddr(tunName string, prefix netip.Prefix) error {
 	default:
 		return fmt.Errorf("unsupported prefix: %v", prefix)
 	}
-	internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "netsh "+strings.Join(args, " "))
-
 	cmd := exec.Command("netsh", args...)
 	hideConsole(cmd)
 	out, err := cmd.CombinedOutput()
@@ -83,7 +81,6 @@ func SetDevAddr(tunName string, prefix netip.Prefix) error {
 	}
 	if prefix.Addr().Is4() {
 		metric := []string{"interface", "ipv4", "set", "interface", "interface=" + tunName, "metric=1"}
-		internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "netsh "+strings.Join(metric, " "))
 		cmd := exec.Command("netsh", metric...)
 		hideConsole(cmd)
 		if out, err := cmd.CombinedOutput(); err != nil {
@@ -184,7 +181,6 @@ func setDevDNS(tunName string) {
 		"register=none",
 		"validate=no",
 	}
-	internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "netsh "+strings.Join(args, " "))
 	cmd := exec.Command("netsh", args...)
 	hideConsole(cmd)
 	if out, err := cmd.CombinedOutput(); err != nil {
@@ -199,7 +195,6 @@ func setDevDNS(tunName string) {
 			fmt.Sprintf("index=%d", i+2),
 			"validate=no",
 		}
-		internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "netsh "+strings.Join(args, " "))
 		cmd := exec.Command("netsh", args...)
 		hideConsole(cmd)
 		if out, err := cmd.CombinedOutput(); err != nil {
@@ -292,7 +287,6 @@ func SetRouteAddr(addr netip.Prefix, gateway net.IP) error {
 
 	if addr.Addr().Is6() {
 		args := []string{"-6", "add", addr.String(), gateway.String()}
-		internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "route "+strings.Join(args, " "))
 		rc := exec.Command("route", args...)
 		hideConsole(rc)
 		out, err := rc.CombinedOutput()
@@ -333,7 +327,6 @@ func SetRouteAddr(addr netip.Prefix, gateway net.IP) error {
 		"metric=1",
 		"store=active",
 	}
-	internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "netsh "+strings.Join(args, " "))
 	cmd := exec.Command("netsh", args...)
 	hideConsole(cmd)
 	out, err := cmd.CombinedOutput()

@@ -3,27 +3,7 @@ package transport
 import (
 	"crypto/tls"
 	"net"
-
-	"github.com/penndev/prism/transport/dialer"
 )
-
-func isLoopback(hostport string) bool {
-	host, _, err := net.SplitHostPort(hostport)
-	if err != nil {
-		return false
-	}
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
-}
-
-// dialProxy 连到上游代理。回环地址不走自定义 dialer：
-// dialer 会把源地址绑到物理出口网卡上，绑了就连不上本机。
-func dialProxy(host string) (net.Conn, error) {
-	if isLoopback(host) {
-		return net.Dial("tcp", host)
-	}
-	return dialer.TCPDialer.Dial("tcp", host)
-}
 
 // tlsConfigFor 按上游地址补全 ServerName，返回一份独立副本。
 // 必须在构造 HandleConnect 时算一次，不能放进返回的闭包里：

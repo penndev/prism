@@ -16,18 +16,22 @@
         </a-button>
       </div>
     </div>
-    <pre class="panel-content">{{ displayText }}</pre>
+    <div ref="contentEl" class="panel-content" @scroll="onScroll">
+      <div v-for="line in lines" :key="line.id">{{ line.text }}</div>
+      <template v-if="lines.length === 0">{{ t("log.statusEmpty") }}</template>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from "vue";
+import { ref, onMounted, onBeforeUnmount } from "vue";
 import { Events } from "@wailsio/runtime";
 import { CloseOutlined } from "@ant-design/icons-vue";
 import { t } from "@/locale";
 import { theme } from "ant-design-vue";
 import { AppConfig } from "@bindings/desktop/internal/appconst";
 import { formatLogLine } from "@/utils";
+import { useStickyLog } from "./stickyLog";
 
 const { token } = theme.useToken();
 
@@ -40,12 +44,12 @@ defineProps({
 const MAX_STATUS_LINES = 1000;
 
 const lines = ref([]);
-const displayText = computed(
-  () => lines.value.join("\n") || t("log.statusEmpty"),
-);
+let lineSeq = 0;
+const { el: contentEl, onScroll, follow, reset } = useStickyLog();
 
 function clearStatus() {
   lines.value = [];
+  reset();
 }
 
 let statusEventOff = null;
@@ -55,10 +59,11 @@ onMounted(async () => {
     statusEventOff = Events.On(appConst.LogTypeName_STATUS, (eventPayload) => {
       const line = formatLogLine(eventPayload.data);
       if (!line) return;
-      lines.value.push(line);
+      lines.value.push({ id: ++lineSeq, text: line });
       if (lines.value.length > MAX_STATUS_LINES) {
         lines.value.shift();
       }
+      follow();
     });
   } catch (e) {
     console.error("[StatusPanel] AppConfig() failed:", e);
@@ -133,6 +138,7 @@ onBeforeUnmount(() => {
     word-break: normal;
     color: v-bind("token.colorText");
     background: v-bind("token.colorFillAlter");
+    user-select: text;
   }
 }
 </style>

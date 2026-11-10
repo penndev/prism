@@ -187,6 +187,7 @@ techpowerup.com
 phoronix.com
 discourse.org
 fandom.com
+telegram.org
 
 ! [常用杂项]
 steam-chat.com

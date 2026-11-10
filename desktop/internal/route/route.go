@@ -24,6 +24,14 @@ func gatewayFor(route, v4, v6 netip.Prefix) net.IP {
 }
 
 func Start(options Options) error {
+	// 先记下 TUN。安装路由期间如果系统通知刷新，才不会把这张网卡当成物理出口。
+	dev := &tunDev{name: options.DevName}
+	if iface, err := net.InterfaceByName(options.DevName); err == nil {
+		dev.index = iface.Index
+	}
+	tun.Store(dev)
+	defer Refresh()
+
 	err := SetDevAddr(options.DevName, options.DevIP)
 	if err != nil {
 		return err
@@ -49,4 +57,11 @@ func Start(options Options) error {
 	}
 	setDevDNS(options.DevName)
 	return err
+}
+
+// Stop 撤掉 TUN 上的 DNS，并重新按物理网卡选出口。
+func Stop() {
+	RestoreDNS()
+	tun.Store(nil)
+	Refresh()
 }

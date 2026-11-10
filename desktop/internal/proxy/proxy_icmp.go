@@ -7,8 +7,8 @@ import (
 	"net/netip"
 	"time"
 
+	"desktop/internal/route"
 	"desktop/internal/tun"
-	"github.com/penndev/prism/transport/dialer"
 )
 
 const icmpDirectTimeout = 3 * time.Second
@@ -16,7 +16,7 @@ const icmpDirectTimeout = 3 * time.Second
 // openDirectICMP uses the physical source address selected by the direct UDP dialer,
 // so Windows' default route to the TUN cannot send the raw packet back into itself.
 func openDirectICMP(dst netip.Addr) (*net.IPConn, []byte, error) {
-	localIP := physicalSourceIP(dst)
+	localIP := route.SourceIP(dst)
 	if localIP == nil {
 		return nil, nil, fmt.Errorf("no physical source address for %s", dst)
 	}
@@ -29,26 +29,6 @@ func openDirectICMP(dst netip.Addr) (*net.IPConn, []byte, error) {
 		return nil, nil, fmt.Errorf("open direct ICMP socket: %w", err)
 	}
 	return conn, append([]byte(nil), localIP...), nil
-}
-
-func physicalSourceIP(dst netip.Addr) net.IP {
-	if d, ok := dialer.UDPDialer.(*dialer.BoundDialer); ok {
-		if dst.Is4() && d.LocalIPv4 != nil {
-			return d.LocalIPv4
-		}
-		if dst.Is6() && d.LocalIPv6 != nil {
-			return d.LocalIPv6
-		}
-	}
-	for _, nic := range physicalNics() {
-		if dst.Is4() && len(nic.v4) > 0 {
-			return nic.v4[0]
-		}
-		if dst.Is6() && len(nic.v6) > 0 {
-			return nic.v6[0]
-		}
-	}
-	return nil
 }
 
 // handleICMP sends echo requests using the host's normal routing and injects

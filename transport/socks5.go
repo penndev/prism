@@ -6,6 +6,7 @@ import (
 
 	"github.com/penndev/gopkg/socks5"
 	"github.com/penndev/gopkg/util"
+	"github.com/penndev/prism/transport/dialer"
 )
 
 // relaySocks5 在已建立的上游连接上完成 socks5 协商并转发。
@@ -35,7 +36,7 @@ func relaySocks5(conn, dialTcp net.Conn, user, pass, network, address string) er
 // socks5标准请求
 func Socks5(host, user, pass string) HandleConnect {
 	return func(conn net.Conn, network, address string) error {
-		dialTcp, err := dialProxy(host)
+		dialTcp, err := dialer.TCPDialer.Dial("tcp", host)
 		if err != nil {
 			return err
 		}
@@ -47,7 +48,7 @@ func Socks5(host, user, pass string) HandleConnect {
 func Socks5OverTLS(host, user, pass string, conf *tls.Config) HandleConnect {
 	tlsConf := tlsConfigFor(host, conf)
 	return func(conn net.Conn, network, address string) error {
-		dialTcp, err := dialProxy(host)
+		dialTcp, err := dialer.TCPDialer.Dial("tcp", host)
 		if err != nil {
 			return err
 		}

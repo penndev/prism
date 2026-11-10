@@ -16,8 +16,7 @@ import (
 type Proxy struct {
 	proxy.Server
 
-	// 远程代理信息，用于检查心跳。
-	// SetRemote 写、updateDialer 循环读，所以用原子指针。
+	// 远程代理信息。SetRemote 写，TUN 启动时读。
 	remoteURL atomic.Pointer[url.URL]
 	// tun用
 	dev *tun.Tun
@@ -33,8 +32,6 @@ func (p *Proxy) SetStart(host, user, pass string) error {
 	if p.HandleConnect == nil {
 		p.HandleConnect = p.handleConnectHook(localHandle)
 	}
-
-	go p.updateDialer()
 
 	internal.App.Event.Emit(
 		internal.AppConfig.LogTypeName_STATUS,

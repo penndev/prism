@@ -4,8 +4,6 @@ import (
 	"desktop/internal"
 	"net/netip"
 	"os"
-	"os/exec"
-	"syscall"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -20,7 +18,7 @@ var TUN_IP netip.Prefix
 var TUN_IP6 netip.Prefix
 var Routes []netip.Prefix
 
-// 自定义网卡GUID 方便wintun复用
+// 自定义网卡 GUID，方便 wintun 复用同一块网卡。
 func init() {
 	TUN_IP = netip.MustParsePrefix("172.19.0.1/32")
 	TUN_IP6 = netip.MustParsePrefix("fd19::1/128")
@@ -28,7 +26,6 @@ func init() {
 		netip.MustParsePrefix("0.0.0.0/0"),
 		netip.MustParsePrefix("::/0"),
 	}
-	// 设置tun设备名称标识和guid
 	tun.WintunTunnelType = TUN_NAME
 	tun.WintunStaticRequestedGUID = &windows.GUID{
 		Data1: 0x8ceeab57,
@@ -38,26 +35,13 @@ func init() {
 	}
 }
 
-func hideConsole(cmd *exec.Cmd) {
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		CreationFlags: windows.CREATE_NO_WINDOW,
-	}
-}
-
-// runElevated 用 ShellExecute runas 拉起自己。不经过 powershell / cmd，避免弹出命令行窗口。
 func runElevated() error {
 	exe, err := os.Executable()
 	if err != nil {
 		return err
 	}
-	verb, err := windows.UTF16PtrFromString("runas")
-	if err != nil {
-		return err
-	}
-	file, err := windows.UTF16PtrFromString(exe)
-	if err != nil {
-		return err
-	}
+	verb, _ := windows.UTF16PtrFromString("runas")
+	file, _ := windows.UTF16PtrFromString(exe)
 	// 字段顺序与 SHELLEXECUTEINFOW 一致。
 	info := struct {
 		cbSize       uint32
@@ -82,8 +66,7 @@ func runElevated() error {
 		nShow:  windows.SW_SHOWNORMAL,
 	}
 	info.cbSize = uint32(unsafe.Sizeof(info))
-	shell32 := windows.NewLazySystemDLL("shell32.dll")
-	r, _, callErr := shell32.NewProc("ShellExecuteExW").Call(uintptr(unsafe.Pointer(&info)))
+	r, _, callErr := windows.NewLazySystemDLL("shell32.dll").NewProc("ShellExecuteExW").Call(uintptr(unsafe.Pointer(&info)))
 	if info.hProcess != 0 {
 		windows.CloseHandle(windows.Handle(info.hProcess))
 	}
@@ -94,13 +77,16 @@ func runElevated() error {
 }
 
 func tunPermission() bool {
-	cmd := exec.Command("net", "session")
-	hideConsole(cmd)
-	if cmd.Run() == nil {
-		return true
+	var token windows.Token
+	if windows.OpenProcessToken(windows.CurrentProcess(), windows.TOKEN_QUERY, &token) == nil {
+		ok := token.IsElevated()
+		token.Close()
+		if ok {
+			return true
+		}
 	}
 	// 取消 UAC 时返回错误，当前进程继续；同意才退出，让提权后的实例接手。
-	if err := runElevated(); err != nil {
+	if runElevated() != nil {
 		return false
 	}
 	internal.App.Event.Emit(internal.AppConfig.EventNameServiceAppQuit, true)

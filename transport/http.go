@@ -10,6 +10,7 @@ import (
 	"net/url"
 
 	"github.com/penndev/gopkg/util"
+	"github.com/penndev/prism/transport/dialer"
 )
 
 func httpConnet(conn, remote net.Conn, user, pass, address string) error {
@@ -53,7 +54,7 @@ func Http(host, user, pass string) HandleConnect {
 		if network != "tcp" {
 			return localHandle(conn, network, address)
 		}
-		remote, err := dialProxy(host)
+		remote, err := dialer.TCPDialer.Dial("tcp", host)
 		if err != nil {
 			return err
 		}
@@ -67,7 +68,7 @@ func HttpOverTLS(host, user, pass string, conf *tls.Config) HandleConnect {
 		if network != "tcp" {
 			return localHandle(conn, network, address)
 		}
-		dialTCP, err := dialProxy(host)
+		dialTCP, err := dialer.TCPDialer.Dial("tcp", host)
 		if err != nil {
 			return err
 		}

@@ -16,7 +16,10 @@
         </a-button>
       </div>
     </div>
-    <pre class="panel-content">{{ displayText }}</pre>
+    <div ref="contentEl" class="panel-content" @scroll="onScroll">
+      <div v-for="line in lines" :key="line.id">{{ line.text }}</div>
+      <template v-if="lines.length === 0">{{ t(emptyKey) }}</template>
+    </div>
   </div>
 </template>
 
@@ -28,12 +31,15 @@ import { t } from "@/locale";
 import { theme } from "ant-design-vue";
 import { AppConfig } from "@bindings/desktop/internal/appconst";
 import { formatLogLine } from "@/utils";
+import { useStickyLog } from "./stickyLog";
 
 const { token } = theme.useToken();
 
 const MAX_LOG_LINES = 1000;
 
 const lines = ref([]);
+let lineSeq = 0;
+const { el: contentEl, onScroll, follow, reset } = useStickyLog();
 
 const props = defineProps({
   panelHeightPx: String,
@@ -49,12 +55,9 @@ const emptyKey = computed(() =>
   props.kind === "dns" ? "log.dnsEmpty" : "log.connectionEmpty",
 );
 
-const displayText = computed(
-  () => lines.value.join("\n") || t(emptyKey.value),
-);
-
 function clearLogs() {
   lines.value = [];
+  reset();
 }
 
 let connectionEventOff = null;
@@ -69,10 +72,11 @@ onMounted(async () => {
       (eventPayload) => {
         const line = formatLogLine(eventPayload.data);
         if (!line) return;
-        lines.value.push(line);
+        lines.value.push({ id: ++lineSeq, text: line });
         if (lines.value.length > MAX_LOG_LINES) {
           lines.value.shift();
         }
+        follow();
       },
     );
   } catch (e) {
@@ -148,6 +152,7 @@ onBeforeUnmount(() => {
     word-break: normal;
     color: v-bind("token.colorText");
     background: v-bind("token.colorFillAlter");
+    user-select: text;
   }
 }
 </style>
