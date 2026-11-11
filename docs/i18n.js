@@ -26,7 +26,8 @@ const messages = {
     macDesc: "Apple 芯片（arm64）安装包",
     androidPlay: "Google Play",
     androidApk: "APK",
-    iosDesc: "暂未提供",
+    iosDesc: "上架中",
+    iosBeta: "TestFlight 测试版",
     installWinToggle: "Windows 安装说明",
     installWinSteps:
       "<li>点上方 Windows 下载 <code>Prism-desktop-windows-amd64-installer.exe</code>。</li><li>运行安装向导，装完后从开始菜单打开 Prism。</li>",
@@ -163,7 +164,8 @@ const messages = {
     macDesc: "Apple silicon (arm64) installer",
     androidPlay: "Google Play",
     androidApk: "APK",
-    iosDesc: "Not available yet",
+    iosDesc: "App Store review",
+    iosBeta: "TestFlight beta",
     installWinToggle: "Windows installation",
     installWinSteps:
       "<li>Use Windows above to get <code>Prism-desktop-windows-amd64-installer.exe</code>.</li><li>Run the wizard, then open Prism from the Start menu.</li>",
