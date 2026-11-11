@@ -31,9 +31,25 @@ func init() {
 	TUN_IP = netip.MustParsePrefix("172.19.0.1/32")
 	TUN_IP6 = netip.MustParsePrefix("fd19::1/128")
 	Routes = []netip.Prefix{
-		netip.MustParsePrefix("0.0.0.0/1"),
+		// 0.0.0.0/8 不收不然就环路了。
+		// netip.MustParsePrefix("0.0.0.0/8"),
+		netip.MustParsePrefix("1.0.0.0/8"),
+		netip.MustParsePrefix("2.0.0.0/7"),
+		netip.MustParsePrefix("4.0.0.0/6"),
+		netip.MustParsePrefix("8.0.0.0/5"),
+		netip.MustParsePrefix("16.0.0.0/4"),
+		netip.MustParsePrefix("32.0.0.0/3"),
+		netip.MustParsePrefix("64.0.0.0/2"),
 		netip.MustParsePrefix("128.0.0.0/1"),
-		netip.MustParsePrefix("::/1"),
+		// ::/8 不收不然就环路了。
+		// netip.MustParsePrefix("::/8"),
+		netip.MustParsePrefix("100::/8"),
+		netip.MustParsePrefix("200::/7"),
+		netip.MustParsePrefix("400::/6"),
+		netip.MustParsePrefix("800::/5"),
+		netip.MustParsePrefix("1000::/4"),
+		netip.MustParsePrefix("2000::/3"),
+		netip.MustParsePrefix("4000::/2"),
 		netip.MustParsePrefix("8000::/1"),
 	}
 

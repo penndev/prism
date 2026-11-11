@@ -22,7 +22,7 @@ func TestEgress(t *testing.T) {
 		}
 		local := conn.LocalAddr().(*net.UDPAddr)
 		conn.Close()
-		if local.IP.Equal(net.ParseIP("172.19.0.1")) {
+		if local.IP.Equal(net.ParseIP("172.19.0.1")) || local.IP.Equal(net.ParseIP("198.18.0.1")) {
 			t.Fatalf("udp source is the tun address %s", local.IP)
 		}
 		t.Logf("udp local %s", local)

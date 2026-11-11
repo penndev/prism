@@ -111,12 +111,8 @@ func SetRouteAddr(addr netip.Prefix, gateway net.IP) error {
 
 	var lastErr error
 	for _, t := range tries {
-		internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "route "+strings.Join(t[1:], " "))
 		out, err := exec.Command(t[0], t[1:]...).CombinedOutput()
 		if err == nil {
-			if len(out) > 0 {
-				internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "route output: "+string(out))
-			}
 			return nil
 		}
 

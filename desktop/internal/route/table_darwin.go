@@ -27,7 +27,9 @@ func defaultRoutes(ipv6 bool) []routeCandidate {
 	var out []routeCandidate
 	for _, msg := range msgs {
 		rm, ok := msg.(*netroute.RouteMessage)
-		if !ok || rm.Err != nil {
+		// x/net 把 rt_msghdr 偏移 28 的 rtm_use 读成 errno。
+		// 默认路由一旦被用过，整条 0/0 会被当成错误丢掉，出口变成 none。
+		if !ok {
 			continue
 		}
 		if rm.Flags&unix.RTF_UP == 0 || rm.Flags&unix.RTF_GATEWAY == 0 || rm.Flags&skip != 0 {
