@@ -7,6 +7,16 @@ import (
 	"github.com/miekg/dns"
 )
 
+func TestIPv4PoolStartsAfterReservedSubnet(t *testing.T) {
+	pool, err := newIPv4Pool(FakeIPv4CIDR)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ip := pool.nextIP(); !ip.Equal(net.ParseIP("198.18.1.1")) {
+		t.Fatalf("first address %s", ip)
+	}
+}
+
 func TestAnswerFakeIPHasRRType(t *testing.T) {
 	SetNeedFake(func(string) bool { return true })
 	t.Cleanup(func() { SetNeedFake(nil) })

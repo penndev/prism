@@ -117,6 +117,18 @@ Section
     
     !insertmacro wails.files
 
+    ; 和 exe 放在同一目录。wintun 只从应用程序目录和 System32 加载。
+    ; 452 是 IMAGE_FILE_MACHINE_ARMNT，对应官方包里的 arm。
+    ${if} ${IsNativeAMD64}
+        File /oname=wintun.dll "..\wintun\bin\amd64\wintun.dll"
+    ${elseif} ${IsNativeARM64}
+        File /oname=wintun.dll "..\wintun\bin\arm64\wintun.dll"
+    ${elseif} ${IsNativeIA32}
+        File /oname=wintun.dll "..\wintun\bin\x86\wintun.dll"
+    ${elseif} ${IsNativeMachineArchitecture} 452
+        File /oname=wintun.dll "..\wintun\bin\arm\wintun.dll"
+    ${endif}
+
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
     CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
 

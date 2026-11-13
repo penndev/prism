@@ -131,6 +131,69 @@ func CurrentDNS(skipIface string) []string {
 	return parseResolvConf("/etc/resolv.conf")
 }
 
-func setDevDNS(tunName string) {}
-
-func RestoreDNS() {}
+// 给当前 DNS 加主机路由，压过网卡上的直连路由。网关用 utun 上的地址，网卡消失时路由一起删除。
+func setDevDNS(tunName string) {
+	iface, err := net.InterfaceByName(tunName)
+	if err != nil {
+		internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "dns route: "+err.Error())
+		return
+	}
+	addrs, err := iface.Addrs()
+	if err != nil {
+		internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "dns route: "+err.Error())
+		return
+	}
+	var gw4, gw6 net.IP
+	for _, a := range addrs {
+		ipnet, ok := a.(*net.IPNet)
+		if !ok {
+			continue
+		}
+		if v4 := ipnet.IP.To4(); v4 != nil {
+			gw4 = v4
+			continue
+		}
+		if ipnet.IP.IsGlobalUnicast() {
+			gw6 = ipnet.IP
+		}
+	}
+	cmd := exec.Command("scutil")
+	cmd.Stdin = strings.NewReader("open\nget State:/Network/Global/DNS\nd.show\nclose\n")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, fmt.Sprintf("dns route: %v, %s", err, out))
+		return
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+		ip := net.ParseIP(fields[len(fields)-1])
+		if ip == nil {
+			continue
+		}
+		var prefix netip.Prefix
+		var gw net.IP
+		if v4 := ip.To4(); v4 != nil {
+			if gw4 == nil || v4.Equal(gw4) {
+				continue
+			}
+			prefix = netip.PrefixFrom(netip.MustParseAddr(v4.String()), 32)
+			gw = gw4
+		} else {
+			if gw6 == nil || ip.Equal(gw6) {
+				continue
+			}
+			addr, ok := netip.AddrFromSlice(ip)
+			if !ok {
+				continue
+			}
+			prefix = netip.PrefixFrom(addr, 128)
+			gw = gw6
+		}
+		if err := SetRouteAddr(prefix, gw); err != nil {
+			internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, fmt.Sprintf("dns route %s: %v", ip, err))
+		}
+	}
+}

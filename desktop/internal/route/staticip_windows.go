@@ -169,15 +169,15 @@ func sockaddrIP(sa windows.SocketAddress) net.IP {
 }
 
 func setDevDNS(tunName string) {
-	servers := CurrentDNS(tunName)
-	if tunName == "" || len(servers) == 0 {
+	if tunName == "" {
 		return
 	}
+	// 固定成 198.18.0.1。它只匹配默认路由，系统发往这里的 DNS 会进 TUN。
 	args := []string{
 		"interface", "ipv4", "set", "dnsservers",
 		"name=" + tunName,
 		"source=static",
-		"address=" + servers[0],
+		"address=198.18.0.1",
 		"register=none",
 		"validate=no",
 	}
@@ -185,21 +185,6 @@ func setDevDNS(tunName string) {
 	hideConsole(cmd)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, fmt.Sprintf("set dns failed: %v, %s", err, out))
-		return
-	}
-	for i, s := range servers[1:] {
-		args := []string{
-			"interface", "ipv4", "add", "dnsservers",
-			"name=" + tunName,
-			"address=" + s,
-			fmt.Sprintf("index=%d", i+2),
-			"validate=no",
-		}
-		cmd := exec.Command("netsh", args...)
-		hideConsole(cmd)
-		if out, err := cmd.CombinedOutput(); err != nil {
-			internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, fmt.Sprintf("add dns failed: %v, %s", err, out))
-		}
 	}
 }
 
@@ -261,9 +246,6 @@ func systemDNSIPv4(skipIface string) []string {
 func CurrentDNS(skipIface string) []string {
 	return systemDNSIPv4(skipIface)
 }
-
-// RestoreDNS Windows 上 DNS 绑在 TUN 网卡，设备关闭后自动失效。
-func RestoreDNS() {}
 
 func sockaddrIPv4(sa windows.SocketAddress) net.IP {
 	if sa.Sockaddr == nil {

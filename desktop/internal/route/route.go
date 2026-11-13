@@ -59,9 +59,8 @@ func Start(options Options) error {
 	return err
 }
 
-// Stop 撤掉 TUN 上的 DNS，并重新按物理网卡选出口。
+// Stop 重新按物理网卡选出口。
 func Stop() {
-	RestoreDNS()
 	tun.Store(nil)
 	Refresh()
 }

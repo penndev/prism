@@ -59,8 +59,13 @@ func newIPv4Pool(cidr string) (*addressPool, error) {
 	if addressBits != 32 || prefixBits > 30 {
 		return nil, fmt.Errorf("fake IPv4 range is too small: %s", cidr)
 	}
-	first := binary.BigEndian.Uint32(ipv4) + 1
-	limit := binary.BigEndian.Uint32(ipv4) + (uint32(1) << uint(32-prefixBits)) - 1
+	base := binary.BigEndian.Uint32(ipv4)
+	first := base + 1
+	limit := base + (uint32(1) << uint(32-prefixBits)) - 1
+	// 198.18.0.0/24 留给 TUN 上的 DNS（198.18.0.1），分配从 198.18.1.1 开始。
+	if start := binary.BigEndian.Uint32(net.IPv4(198, 18, 1, 1).To4()); first < start && start < limit {
+		first = start
+	}
 	return &addressPool{nextIPv4: first, firstIPv4: first, limitIPv4: limit}, nil
 }
 

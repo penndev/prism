@@ -22,6 +22,4 @@ func CurrentDNS(skipIface string) []string {
 	return parseResolvConf("/etc/resolv.conf")
 }
 
-func setDevDNS(tunName string) {}
-
-func RestoreDNS() {}
+func setDevDNS(string) {}
