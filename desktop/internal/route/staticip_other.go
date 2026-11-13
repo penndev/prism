@@ -8,6 +8,8 @@ import (
 	"net"
 	"net/netip"
 	"runtime"
+
+	"github.com/miekg/dns"
 )
 
 func SetDevAddr(tunName string, prefix netip.Prefix) error {
@@ -18,8 +20,14 @@ func SetRouteAddr(addr netip.Prefix, gateway net.IP) error {
 	return fmt.Errorf("static route is not supported on %s", runtime.GOOS)
 }
 
-func CurrentDNS(skipIface string) []string {
-	return parseResolvConf("/etc/resolv.conf")
+func CurrentDNS(string) []string {
+	conf, err := dns.ClientConfigFromFile("/etc/resolv.conf")
+	if err != nil {
+		return nil
+	}
+	return conf.Servers
 }
+
+func RestoreDNS() {}
 
 func setDevDNS(string) {}

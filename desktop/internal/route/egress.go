@@ -5,7 +5,6 @@ import (
 	"net"
 	"net/netip"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -17,15 +16,17 @@ const fallbackDNS = "8.8.8.8"
 // Egress 是当前物理出口。某个地址族为 nil 表示没有可用的默认路由。
 type Egress struct {
 	V4, V6 *net.Interface
-	DNS    []string // 至少有一个元素
+	DNS    []string // Refresh 之后至少有一个
 }
 
+// 默认路由候选。metric 小的优先，相同则 order 小的优先。
 type routeCandidate struct {
 	index  int
 	metric uint64
-	order  int // metric 相同时，越小越优先
+	order  int
 }
 
+// tun 是我们自己的网卡。选物理出口时要跳过它。
 type tunDev struct {
 	name  string
 	index int
@@ -33,42 +34,46 @@ type tunDev struct {
 
 var (
 	current   atomic.Pointer[Egress]
+	dnsCursor atomic.Uint32
+	tun       atomic.Pointer[tunDev]
+
 	publishMu sync.Mutex
 	hook      func(prev, next *Egress)
-	dnsCursor atomic.Uint32
-
-	wake      = make(chan struct{}, 1)
 	watchMu   sync.Mutex
 	watchStop func()
-
-	tun atomic.Pointer[tunDev]
+	wake      = make(chan struct{}, 1)
 )
 
-// Iface 返回对应地址族的出口，s 为 nil 时也安全。
-func (s *Egress) Iface(ipv6 bool) *net.Interface {
-	if s == nil {
+// Iface 返回对应地址族的出口。e 为 nil 时也安全。
+func (e *Egress) Iface(ipv6 bool) *net.Interface {
+	if e == nil {
 		return nil
 	}
 	if ipv6 {
-		return s.V6
+		return e.V6
 	}
-	return s.V4
+	return e.V4
 }
 
-func (s *Egress) String() string {
-	label := func(i *net.Interface) string {
-		if i == nil {
-			return "none"
-		}
-		return i.Name + "/" + strconv.Itoa(i.Index)
+func (e *Egress) String() string {
+	switch {
+	case e.V4 == nil && e.V6 == nil:
+		return "egress none"
+	case e.V6 == nil:
+		return "egress " + e.V4.Name
+	case e.V4 == nil:
+		return "egress " + e.V6.Name + " v6"
+	case e.V4.Index == e.V6.Index:
+		return "egress " + e.V4.Name
+	default:
+		return "egress v4 " + e.V4.Name + " v6 " + e.V6.Name
 	}
-	return "egress v4 " + label(s.V4) + " v6 " + label(s.V6)
 }
 
 // Load 返回最近一次选出来的物理出口。还没刷新过时是 nil。
 func Load() *Egress { return current.Load() }
 
-// Watch 在路由或地址变化时重新选出口。fn 在每次发布时调用，prev 第一次为 nil。
+// Watch 在路由或地址变化时重新选出口。fn 在每次发布时调用，第一次 prev 为 nil。
 // 再次调用只换回调。配对的停止是 Unwatch。
 func Watch(fn func(prev, next *Egress)) {
 	watchMu.Lock()
@@ -77,7 +82,7 @@ func Watch(fn func(prev, next *Egress)) {
 	publishMu.Unlock()
 	if watchStop == nil {
 		done := make(chan struct{})
-		cancel := listenRouteChanges()
+		stopListen := listenRouteChanges()
 		go func() {
 			for {
 				select {
@@ -99,7 +104,7 @@ func Watch(fn func(prev, next *Egress)) {
 		}()
 		watchStop = func() {
 			close(done)
-			cancel()
+			stopListen()
 		}
 	}
 	watchMu.Unlock()
@@ -133,25 +138,51 @@ func Refresh() {
 	}
 }
 
+func signal() {
+	select {
+	case wake <- struct{}{}:
+	default:
+	}
+}
+
+func startRoutePoll() func() {
+	done := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				signal()
+			}
+		}
+	}()
+	return func() { close(done) }
+}
+
 // SourceIP 取出口网卡上与目标同地址族的一个全局单播地址。
 func SourceIP(dst netip.Addr) net.IP {
 	iface := current.Load().Iface(dst.Is6())
 	if iface == nil {
 		return nil
 	}
-	if ip := globalAddr(iface, dst.Is6()); ip.IsValid() {
-		return ip.AsSlice()
+	ip := globalAddr(iface, dst.Is6())
+	if !ip.IsValid() {
+		return nil
 	}
-	return nil
+	return ip.AsSlice()
 }
 
 // NextDNS 按当前出口的 DNS 列表轮询一个服务器。
 func NextDNS() string {
-	s := current.Load()
-	if s == nil || len(s.DNS) == 0 {
+	e := current.Load()
+	if e == nil {
 		return fallbackDNS
 	}
-	return s.DNS[int(dnsCursor.Add(1)-1)%len(s.DNS)]
+	i := int(dnsCursor.Add(1)-1) % len(e.DNS)
+	return e.DNS[i]
 }
 
 func pickDefault(ipv6 bool) *net.Interface {
@@ -161,11 +192,13 @@ func pickDefault(ipv6 bool) *net.Interface {
 	})
 	for _, c := range cands {
 		iface, err := net.InterfaceByIndex(c.index)
-		if err != nil ||
-			iface.Flags&net.FlagUp == 0 ||
-			iface.Flags&net.FlagLoopback != 0 ||
-			isOurTun(iface) ||
-			!globalAddr(iface, ipv6).IsValid() {
+		if err != nil {
+			continue
+		}
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		if isOurTun(iface) || !globalAddr(iface, ipv6).IsValid() {
 			continue
 		}
 		return iface
@@ -180,31 +213,38 @@ func globalAddr(iface *net.Interface, ipv6 bool) netip.Addr {
 		if !ok {
 			continue
 		}
-		if ip, ok := netip.AddrFromSlice(ipnet.IP); ok {
-			ip = ip.Unmap()
-			if ip.IsGlobalUnicast() && ip.Is6() == ipv6 {
-				return ip
-			}
+		ip, ok := netip.AddrFromSlice(ipnet.IP)
+		if !ok {
+			continue
+		}
+		ip = ip.Unmap()
+		if ip.IsGlobalUnicast() && ip.Is6() == ipv6 {
+			return ip
 		}
 	}
 	return netip.Addr{}
 }
 
 func isOurTun(iface *net.Interface) bool {
-	if t := tun.Load(); t != nil && t.index != 0 && t.index == iface.Index {
+	dev := tun.Load()
+	if dev == nil {
+		return false
+	}
+	if dev.index != 0 && dev.index == iface.Index {
 		return true
 	}
-	name := tunName()
-	return name != "" && strings.EqualFold(iface.Name, name)
+	return dev.name != "" && strings.EqualFold(iface.Name, dev.name)
 }
 
 func tunName() string {
-	if t := tun.Load(); t != nil {
-		return t.name
+	dev := tun.Load()
+	if dev == nil {
+		return ""
 	}
-	return ""
+	return dev.name
 }
 
+// 物理网卡上的 DNS 优先，没有再用系统当前的，最后退回 fallbackDNS。
 func egressDNS(v4, v6 *net.Interface) []string {
 	for _, iface := range []*net.Interface{v4, v6} {
 		if iface == nil {
@@ -218,24 +258,4 @@ func egressDNS(v4, v6 *net.Interface) []string {
 		return servers
 	}
 	return []string{fallbackDNS}
-}
-
-func signal() {
-	select {
-	case wake <- struct{}{}:
-	default:
-	}
-}
-
-func pollRouteChanges(done <-chan struct{}) {
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-done:
-			return
-		case <-ticker.C:
-			signal()
-		}
-	}
 }

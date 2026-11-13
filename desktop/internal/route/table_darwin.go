@@ -1,13 +1,31 @@
 package route
 
 import (
+	"net"
+	"os/exec"
+	"strings"
 	"time"
 
 	netroute "golang.org/x/net/route"
 	"golang.org/x/sys/unix"
 )
 
-func interfaceDNS(int) []string { return nil }
+// 改过系统 DNS 之后 scutil 里只剩 tunDNS。这里读网卡上的 DHCP 租约，Watch 才能拿到当前网络的上游。
+func interfaceDNS(index int) []string {
+	iface, err := net.InterfaceByIndex(index)
+	if err != nil {
+		return nil
+	}
+	opt, err := exec.Command("ipconfig", "getoption", iface.Name, "domain_name_server").CombinedOutput()
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, field := range strings.Fields(string(opt)) {
+		out = addServer(out, field)
+	}
+	return out
+}
 
 func defaultRoutes(ipv6 bool) []routeCandidate {
 	af := unix.AF_INET
@@ -61,9 +79,7 @@ func zeroAddr(a netroute.Addr, ipv6 bool) bool {
 func listenRouteChanges() (cancel func()) {
 	fd, err := unix.Socket(unix.AF_ROUTE, unix.SOCK_RAW, 0)
 	if err != nil {
-		done := make(chan struct{})
-		go pollRouteChanges(done)
-		return func() { close(done) }
+		return startRoutePoll()
 	}
 	done := make(chan struct{})
 	go func() {

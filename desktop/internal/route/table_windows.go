@@ -1,8 +1,6 @@
 package route
 
 import (
-	"desktop/internal"
-	"fmt"
 	"math"
 	"slices"
 	"sync"
@@ -17,7 +15,7 @@ func defaultRoutes(ipv6 bool) []routeCandidate {
 		family = uint16(windows.AF_INET6)
 	}
 	var table *windows.MibIpForwardTable2
-	if err := windows.GetIpForwardTable2(family, &table); err != nil || table == nil {
+	if err := windows.GetIpForwardTable2(family, &table); err != nil {
 		return nil
 	}
 	defer windows.FreeMibTable(unsafe.Pointer(table))
@@ -41,51 +39,38 @@ func defaultRoutes(ipv6 bool) []routeCandidate {
 func routeMetric(offset, ifIndex uint32, family uint16) uint64 {
 	row := windows.MibIpInterfaceRow{Family: family, InterfaceIndex: ifIndex}
 	if err := windows.GetIpInterfaceEntry(&row); err != nil {
-		if internal.App != nil {
-			internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, fmt.Sprintf("GetIpInterfaceEntry if=%d: %v", ifIndex, err))
-		}
+		status("GetIpInterfaceEntry if=%d: %v", ifIndex, err)
 		return math.MaxUint32/2 + uint64(offset)
 	}
 	return uint64(offset) + uint64(row.Metric)
 }
 
 func interfaceDNS(index int) []string {
-	size := uint32(15000)
-	buf := make([]byte, size)
-	for {
-		err := windows.GetAdaptersAddresses(
-			windows.AF_UNSPEC,
-			windows.GAA_FLAG_SKIP_ANYCAST|windows.GAA_FLAG_SKIP_MULTICAST,
-			0,
-			(*windows.IpAdapterAddresses)(unsafe.Pointer(&buf[0])),
-			&size,
-		)
-		if err == nil {
-			break
-		}
-		if err != windows.ERROR_BUFFER_OVERFLOW {
-			return nil
-		}
-		buf = make([]byte, size)
-	}
-
-	for aa := (*windows.IpAdapterAddresses)(unsafe.Pointer(&buf[0])); aa != nil; aa = aa.Next {
-		if int(aa.IfIndex) != index && int(aa.Ipv6IfIndex) != index {
-			continue
-		}
-		var servers []string
-		for dns := aa.FirstDnsServerAddress; dns != nil; dns = dns.Next {
-			ip := sockaddrIP(dns.Address)
-			if ip == nil || ip.IsLoopback() || ip.IsUnspecified() || ip.IsLinkLocalUnicast() {
-				continue
+	var servers []string
+	err := walkAdapters(
+		windows.AF_UNSPEC,
+		windows.GAA_FLAG_SKIP_ANYCAST|windows.GAA_FLAG_SKIP_MULTICAST,
+		func(aa *windows.IpAdapterAddresses) bool {
+			if int(aa.IfIndex) != index && int(aa.Ipv6IfIndex) != index {
+				return true
 			}
-			if s := ip.String(); !slices.Contains(servers, s) {
-				servers = append(servers, s)
+			for dns := aa.FirstDnsServerAddress; dns != nil; dns = dns.Next {
+				ip := sockaddrIP(dns.Address)
+				if ip == nil || ip.IsLoopback() || ip.IsUnspecified() || ip.IsLinkLocalUnicast() {
+					continue
+				}
+				s := ip.String()
+				if !slices.Contains(servers, s) {
+					servers = append(servers, s)
+				}
 			}
-		}
-		return servers
+			return false
+		},
+	)
+	if err != nil {
+		return nil
 	}
-	return nil
+	return servers
 }
 
 var (
@@ -111,9 +96,7 @@ func listenRouteChanges() (cancel func()) {
 		handles = append(handles, h)
 	}
 	if len(handles) == 0 {
-		done := make(chan struct{})
-		go pollRouteChanges(done)
-		return func() { close(done) }
+		return startRoutePoll()
 	}
 	return func() {
 		for _, h := range handles {
