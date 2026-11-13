@@ -94,7 +94,7 @@ func (p *Proxy) SetRemote(remote string) error {
 func (p *Proxy) SetMode(mode string) error {
 	internal.App.Event.Emit(
 		internal.AppConfig.LogTypeName_STATUS,
-		"SetMode-> "+mode,
+		"mode "+mode,
 	)
 	var err error
 	switch mode {

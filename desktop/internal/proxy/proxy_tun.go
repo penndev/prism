@@ -26,7 +26,7 @@ func (p *Proxy) closeTunDev() {
 	p.dev = nil
 	route.Stop()
 	network.Stop()
-	internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "tun dev close success")
+	internal.App.Event.Emit(internal.AppConfig.LogTypeName_STATUS, "tun closed")
 }
 
 func (p *Proxy) startTunDev() error {
