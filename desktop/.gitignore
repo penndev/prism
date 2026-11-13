@@ -9,3 +9,4 @@ build/linux/appimage/build
 build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
 *.syso
 dist
+!build/windows/wintun/bin
